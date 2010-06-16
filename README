@@ -1,0 +1,148 @@
+Clock and Network Simulator (clknetsim)
+=======================================
+
+clknetsim is a clock and network simulator designed for testing unmodified NTP
+servers and clients. The NTP applications have all necessary system functions
+related to networking and clocks replaced by LD_PRELOAD mechanism and are
+clients of clknetsim server which provides access to the virtual network and
+clocks.
+
+Limitations:
+- only chronyd and ntpd running on Linux are currently supported
+- the simulated system calls provide only a minimal functionality required by
+  supported clients
+- the virtual time advances only on select() timeout, this means the client
+  process sees the CPU as infinitely fast
+- adjtimex frequency and tick changes are immediate, the kernel has infinite HZ
+- adjtime and PLL updates are done in real one second intervals instead of
+  local clock intervals
+
+
+Usage
+-----
+
+The clknetsim server is started with two mandatory arguments, a configuration
+file describing the network and clocks, and the number of simulated nodes. The
+simulation is started when all clients are connected.
+
+The clients are started under a non-root user, with preloaded clknetsim.so and
+environment variable CLKNETSIM_NODE set to the number of the client.
+Optionally, environment variable CLKNETSIM_SOCKET can be set to the path of the
+unix domain socket which is used to connect to the server, clknetsim.sock in
+current directory is used by default.
+
+The virtual network uses IPv4 addresses 192.168.123.n where n is the number of
+the node. 192.168.123.255 is the broadcast address.
+
+At the end of the simulation clock and network statistics are printed.
+clknetsim has options which can be used to control for how long the
+simulation should run, or if frequency, offset or network log should be
+written. clknetsim -h prints a complete list.
+
+A minimal example how to start a simulation:
+
+$ ./clknetsim -o log.offset -l 100000 clknetsim.conf 2 &
+$ LD_PRELOAD=./clknetsim.so CLKNETSIM_NODE=1 chronyd -d -f chrony.conf &
+$ LD_PRELOAD=./clknetsim.so CLKNETSIM_NODE=2 ntpd -n -c ntp.conf &
+
+clknetsim.conf:
+node2_freq = (sum (* 1e-8 (normal)))
+node1_delay2 = (+ 1e-1 (* 1e-3 (exponential)))
+node2_delay1 = (+ 1e-1 (* 1e-3 (exponential)))
+
+chrony.conf:
+pidfile chronyd.pid
+local stratum 1
+allow
+
+ntp.conf:
+pidfile ntpd.pid
+server 192.168.123.1
+
+
+Configuration file
+------------------
+
+The configuration file is a text file containing a list of assignments, each
+specified on a separate line, and comments using # as delimiter. Each node has
+several variables that can be configured, they can be set either to a
+floating-point value or a number generating expression using a Lisp-style
+syntax.
+
+Variables:
+- nodeX_freq = float | expr
+  clock frequency in terms of gained seconds per second of real time, if an
+  expression is specified, the expression is evaluated and frequency updated
+  once per second, the allowed range is (-0.2, 0.2), default 0
+- nodeX_delayY = expr
+  network delay for packets sent from node X to node Y in seconds, the
+  expression is evaluated for each packet, a negative value means the packet is
+  dropped, no default (if not specified the packets are dropped)
+- nodeX_offset = float
+  starting offset in seconds, default 0
+- nodeX_start = float
+  time when will be the node started, in seconds, default 0
+- nodeX_shift_pll = integer
+  kernel PLL parameter, default 4
+- nodeX_pll_clamp = 1 | 0
+  kernel PLL parameter, default 0
+- nodeX_fll_mode2 = 1 | 0
+  kernel FLL parameter, default 0
+
+Functions and their parameters supported in the expressions:
+  (* [expr | float] ...) - multiplication
+  (+ [expr | float] ...) - addition
+  (sum expr)             - summation over consecutive expr evaluation
+  (uniform)              - random number generator with standard uniform
+                           distribution
+  (normal)               - random number generator with standard normal
+                           distribution
+  (exponential)          - random number generator with exponential distribution
+                           (lambda = 1)
+  (poisson lambda)       - random number generator with poisson distribution
+  (file "datafile")      - number generator reading floating-point values from
+                           the specified file in loop
+  (pulse high period)    - pulse wave generator
+  (sine period)          - sine wave generator
+  (triangle period)      - triangle wave generator
+
+An example:
+
+# node1 is an NTP server, it has an accurate and absolutely stable clock 
+node1_offset = 0
+node1_freq = 0
+
+# node2 is an NTP client, it starts with 0.1s offset and has
+# 0.01ppm/s frequency wander
+node2_offset = 0.1
+node2_freq = (sum (* 1e-8 (normal)))
+
+# network delays between the two nodes have 10ms mean and 100us
+# jitter in both directions
+node1_delay2 = (+ 9.9e-3 (* 100e-6 (exponential)))
+node2_delay1 = (+ 9.9e-3 (* 100e-6 (exponential)))
+
+
+Author
+------
+
+Miroslav Lichvar <mlichvar@redhat.com>
+
+
+License
+-------
+
+Copyright (C) 2010  Miroslav Lichvar <mlichvar@redhat.com>
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
