@@ -92,10 +92,8 @@ static void init() {
 
 	assert(sockfd >= 0);
 
-	if (_connect(sockfd, (struct sockaddr *)&s, sizeof (s))) {
-		fprintf(stderr, "Can't connect to clknetsim server.\n");
-		exit(1);
-	}
+	while (_connect(sockfd, (struct sockaddr *)&s, sizeof (s)) < 0)
+		usleep(100000);
 
 	initialized = 1;
 

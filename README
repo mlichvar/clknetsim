@@ -41,9 +41,9 @@ written. clknetsim -h prints a complete list.
 
 A minimal example how to start a simulation:
 
-$ ./clknetsim -o log.offset -l 100000 clknetsim.conf 2 &
 $ LD_PRELOAD=./clknetsim.so CLKNETSIM_NODE=1 chronyd -d -f chrony.conf &
 $ LD_PRELOAD=./clknetsim.so CLKNETSIM_NODE=2 ntpd -n -c ntp.conf &
+$ ./clknetsim -o log.offset -l 100000 clknetsim.conf 2
 
 clknetsim.conf:
 node2_freq = (sum (* 1e-8 (normal)))
