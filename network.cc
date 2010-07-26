@@ -227,17 +227,21 @@ bool Network::run(double time_limit) {
 			//min_timeout += 1e-12;
 			assert(min_timeout >= 0.0);
 
+			if (second_overflow)
+				time = floor(time + 1.0);
+			else
+				time += min_timeout;
+
 			for (i = 0; i < n; i++) {
 				nodes[i]->get_clock()->advance(min_timeout);
-				if (second_overflow)
+				if (second_overflow) {
 					nodes[i]->get_clock()->second_overflow();
+					nodes[i]->get_refclock()->update(time, nodes[i]->get_clock());
+				}
 			}
 
-			if (second_overflow) {
-				time = floor(time + 1.0);
+			if (second_overflow)
 				update_clock_stats();
-			} else
-				time += min_timeout;
 		} while (second_overflow && time < time_limit);
 
 		for (i = 0; i < n; i++)

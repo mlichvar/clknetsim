@@ -30,6 +30,7 @@
 #define REQ_SELECT 6
 #define REQ_SEND 7
 #define REQ_RECV 8
+#define REQ_GETREFTIME 9
 
 struct Request_header {
 	long request;
@@ -93,6 +94,13 @@ struct Reply_recv {
 	unsigned int from;
 	unsigned int len;
 	char data[MAX_NTP_PACKETSIZE];
+};
+
+struct Reply_getreftime {
+	double time;
+	double offset;
+	int valid;
+	int _pad;
 };
 
 #endif

@@ -79,7 +79,9 @@ bool load_config(const char *file, Network *network, unsigned int nodes) {
 			if (node2 >= nodes)
 				continue;
 			network->set_link_delay_generator(node, node2, generator.generate(arg));
-		} else
+		} else if (strncmp(var, "refclock", 8) == 0)
+			network->get_node(node)->get_refclock()->set_offset_generator(generator.generate(arg));
+		else
 			return false;
 	}
 

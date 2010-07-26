@@ -29,6 +29,7 @@ class Network;
 
 class Node {
 	Clock clock;
+	Refclock refclock;
 	Network *network;
 	int index;
 	int fd;
@@ -53,6 +54,7 @@ class Node {
 	void process_select(void *data);
 	void process_send(void *data);
 	void process_recv();
+	void process_getreftime();
 
 	void receive(struct Packet *packet);
 	void resume();
@@ -60,6 +62,7 @@ class Node {
 
 	double get_timeout() const;
 	Clock *get_clock();
+	Refclock *get_refclock();
 };
 
 #endif

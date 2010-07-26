@@ -62,4 +62,18 @@ public:
 	int adjtime(const struct timeval *delta, struct timeval *olddelta);
 };
 
+class Refclock {
+	double time;
+	double offset;
+	bool valid;
+
+	Generator *offset_generator;
+public:
+	Refclock();
+	~Refclock();
+	void set_offset_generator(Generator *gen);
+	void update(double time, const Clock *clock);
+	bool get_reftime(double *time, double *offset) const;
+};
+
 #endif

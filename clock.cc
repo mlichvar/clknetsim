@@ -259,3 +259,35 @@ int Clock::adjtime(const struct timeval *delta, struct timeval *olddelta) {
 	return 0;
 }
 
+Refclock::Refclock() {
+	time = 0.0;
+	offset = 0.0;
+	valid = false;
+	offset_generator = NULL;
+}
+
+Refclock::~Refclock() {
+	if (offset_generator)
+		delete offset_generator;
+}
+
+void Refclock::set_offset_generator(Generator *gen) {
+	if (offset_generator)
+		delete offset_generator;
+	offset_generator = gen;
+}
+
+void Refclock::update(double time, const Clock *clock) {
+	if (!offset_generator)
+		return;
+
+	this->time = time;
+	offset = clock->get_time() - time + offset_generator->generate();
+	valid = true;
+}
+
+bool Refclock::get_reftime(double *time, double *offset) const {
+	*time = this->time;
+	*offset = this->offset;
+	return valid;
+}

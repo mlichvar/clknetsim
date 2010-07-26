@@ -91,6 +91,9 @@ bool Node::process_fd() {
 		case REQ_RECV:
 			process_recv();
 			break;
+		case REQ_GETREFTIME:
+			process_getreftime();
+			break;
 		default:
 			assert(0);
 	}
@@ -231,6 +234,14 @@ void Node::receive(struct Packet *packet) {
 	}
 }
 
+void Node::process_getreftime() {
+	Reply_getreftime r;
+
+	r.valid = refclock.get_reftime(&r.time, &r.offset);
+	r._pad = 0;
+	reply(&r, sizeof (r), REQ_GETREFTIME);
+}
+
 void Node::resume() {
 	switch (pending_request) {
 		case REQ_SELECT:
@@ -275,4 +286,8 @@ double Node::get_timeout() const {
 
 Clock *Node::get_clock() {
 	return &clock;
+}
+
+Refclock *Node::get_refclock() {
+	return &refclock;
 }

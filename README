@@ -82,6 +82,8 @@ Variables:
   starting offset in seconds, default 0
 - nodeX_start = float
   time when will be the node started, in seconds, default 0
+- nodeX_refclock = expr
+  SHM refclock offset in seconds, no default (refclock disabled)
 - nodeX_shift_pll = integer
   kernel PLL parameter, default 4
 - nodeX_pll_clamp = 1 | 0
