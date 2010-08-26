@@ -654,3 +654,15 @@ int uname(struct utsname *buf) {
 	sprintf(buf->release, "2.6.33");
 	return 0;
 }
+
+void openlog(const char *ident, int option, int facility) {
+}
+
+void __syslog_chk(int priority, const char *format, ...) {
+}
+
+void syslog(int priority, const char *format, ...) {
+}
+
+void closelog(void) {
+}
