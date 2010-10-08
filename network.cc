@@ -341,7 +341,7 @@ void Network::send(struct Packet *packet) {
 	stats[packet->from].update_packet_stats(false, delay);
 
 	if (packet_log)
-		fprintf(packet_log, "%e %d %d %e\n", time, packet->from, packet->to, delay);
+		fprintf(packet_log, "%e %d %d %e\n", time, packet->from + 1, packet->to + 1, delay);
 
 	if (delay > 0.0) {
 		packet->receive_time = time + delay;
