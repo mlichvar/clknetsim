@@ -200,11 +200,11 @@ int Clock::adjtimex(struct timex *buf) {
 	struct timex t;
 
 	if (buf->modes & ADJ_FREQUENCY) {
-		if (buf->freq > ntp_timex.tolerance ||
-			buf->freq < -ntp_timex.tolerance) {
-			r = -1;
-		}
 		ntp_timex.freq = buf->freq;
+		if (ntp_timex.freq > MAXFREQ_SCALED)
+			ntp_timex.freq = MAXFREQ_SCALED;
+		else if (ntp_timex.freq < -MAXFREQ_SCALED)
+			ntp_timex.freq = -MAXFREQ_SCALED;
 	}
 	if (buf->modes & ADJ_MAXERROR)
 		ntp_timex.maxerror = buf->maxerror;
