@@ -262,13 +262,11 @@ void Network::update_clock_stats() {
 
 	if (offset_log) {
 		for (i = 0; i < n; i++)
-			fprintf(offset_log, " %.9f", nodes[i]->get_clock()->get_time() - time);
-		fprintf(offset_log, "\n");
+			fprintf(offset_log, "%.9f%c", nodes[i]->get_clock()->get_time() - time, i + 1 < n ? '\t' : '\n');
 	}
 	if (freq_log) {
 		for (i = 0; i < n; i++)
-			fprintf(freq_log, " %e", nodes[i]->get_clock()->get_total_freq() - 1.0);
-		fprintf(freq_log, "\n");
+			fprintf(freq_log, "%e%c", nodes[i]->get_clock()->get_total_freq() - 1.0, i + 1 < n ? '\t' : '\n');
 	}
 
 	for (i = 0; i < n; i++)
@@ -341,7 +339,7 @@ void Network::send(struct Packet *packet) {
 	stats[packet->from].update_packet_stats(false, delay);
 
 	if (packet_log)
-		fprintf(packet_log, "%e %d %d %e\n", time, packet->from + 1, packet->to + 1, delay);
+		fprintf(packet_log, "%e\t%d\t%d\t%e\n", time, packet->from + 1, packet->to + 1, delay);
 
 	if (delay > 0.0) {
 		packet->receive_time = time + delay;
