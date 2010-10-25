@@ -407,6 +407,8 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 			ntp_fd = sockfd;
 		else if (ntohl(in->sin_addr.s_addr) == BROADCAST_ADDR) 
 			ntp_broadcast_fd = sockfd;
+		else if (ntohl(in->sin_addr.s_addr) == INADDR_LOOPBACK)
+			return 0;
 		else
 			assert(0);
 	}
@@ -438,32 +440,42 @@ int ioctl(int d, unsigned long request, ...) {
 	va_list ap;
 	struct ifconf *conf;
 	struct ifreq *req;
-	int ret = -1;
+	int ret = 0;
 
 	va_start(ap, request);
 
 	if (request == SIOCGIFCONF) {
 		conf = va_arg(ap, struct ifconf *);
-		conf->ifc_len = sizeof (struct ifreq);
-		sprintf(conf->ifc_req->ifr_name, "eth0");
-		((struct sockaddr_in*)&conf->ifc_req->ifr_addr)->sin_addr.s_addr = htonl(BASE_ADDR + node);
-		conf->ifc_req->ifr_addr.sa_family = AF_INET;
-		ret = 0;
+		conf->ifc_len = sizeof (struct ifreq) * 2;
+		sprintf(conf->ifc_req[0].ifr_name, "lo");
+		sprintf(conf->ifc_req[1].ifr_name, "eth0");
+		((struct sockaddr_in*)&conf->ifc_req[0].ifr_addr)->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+		((struct sockaddr_in*)&conf->ifc_req[1].ifr_addr)->sin_addr.s_addr = htonl(BASE_ADDR + node);
+		conf->ifc_req[0].ifr_addr.sa_family = AF_INET;
+		conf->ifc_req[1].ifr_addr.sa_family = AF_INET;
 	} else if (request == SIOCGIFFLAGS) {
 		req = va_arg(ap, struct ifreq *);
-		req->ifr_flags = IFF_UP | IFF_BROADCAST;
-		ret = 0;
+		if (!strcmp(req->ifr_name, "lo"))
+			req->ifr_flags = IFF_UP | IFF_LOOPBACK;
+		else if (!strcmp(req->ifr_name, "eth0"))
+			req->ifr_flags = IFF_UP | IFF_BROADCAST;
+		else
+			req->ifr_flags = 0;
 	} else if (request == SIOCGIFBRDADDR) {
 		req = va_arg(ap, struct ifreq *);
 		((struct sockaddr_in*)&req->ifr_broadaddr)->sin_addr.s_addr = htonl(BROADCAST_ADDR);
 		req->ifr_broadaddr.sa_family = AF_INET;
-		ret = 0;
 	} else if (request == SIOCGIFNETMASK) {
 		req = va_arg(ap, struct ifreq *);
-		((struct sockaddr_in*)&req->ifr_netmask)->sin_addr.s_addr = htonl(NETMASK);
+		if (!strcmp(req->ifr_name, "lo"))
+			((struct sockaddr_in*)&req->ifr_netmask)->sin_addr.s_addr = htonl(0xff000000);
+		else if (!strcmp(req->ifr_name, "eth0"))
+			((struct sockaddr_in*)&req->ifr_netmask)->sin_addr.s_addr = htonl(NETMASK);
+		else
+			((struct sockaddr_in*)&req->ifr_netmask)->sin_addr.s_addr = 0;
 		req->ifr_netmask.sa_family = AF_INET;
-		ret = 0;
-	}
+	} else
+		ret = -1;
 
 	va_end(ap);
 	return ret;
