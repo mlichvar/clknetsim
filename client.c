@@ -54,7 +54,8 @@ static int initialized = 0;
 static int sockfd;
 static int select_called = 0;
 
-static int ntp_fd = 0;
+static int ntp_eth_fd = 0;
+static int ntp_any_fd = 0;
 static int ntp_broadcast_fd = 0;
 static int next_fd = 100;
 
@@ -307,8 +308,8 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	if (!initialized)
 		init();
 
-	assert(ntp_fd > 0);
-	assert(FD_ISSET(ntp_fd, readfds));
+	assert((ntp_eth_fd && FD_ISSET(ntp_eth_fd, readfds)) ||
+			(ntp_any_fd && FD_ISSET(ntp_any_fd, readfds)));
 
 	select_called = 1;
 	time = gettime();
@@ -338,7 +339,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	}
 
 	if (rep.ret == REPLY_SELECT_NORMAL || (rep.ret == REPLY_SELECT_BROADCAST && !ntp_broadcast_fd)) {
-		FD_SET(ntp_fd, readfds);
+		FD_SET(ntp_eth_fd ? ntp_eth_fd : ntp_any_fd, readfds);
 		return 1;
 	}
 
@@ -403,8 +404,10 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 	in = (struct sockaddr_in *)addr;
 
 	if (ntohs(in->sin_port) == NTP_PORT) {
-		if (ntohl(in->sin_addr.s_addr) == INADDR_ANY || ntohl(in->sin_addr.s_addr) == BASE_ADDR + node)
-			ntp_fd = sockfd;
+		if (ntohl(in->sin_addr.s_addr) == INADDR_ANY)
+			ntp_any_fd = sockfd;
+		else if (ntohl(in->sin_addr.s_addr) == BASE_ADDR + node)
+			ntp_eth_fd = sockfd;
 		else if (ntohl(in->sin_addr.s_addr) == BROADCAST_ADDR) 
 			ntp_broadcast_fd = sockfd;
 		else if (ntohl(in->sin_addr.s_addr) == INADDR_LOOPBACK)
@@ -487,7 +490,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 
 	struct sockaddr_in *sa;
 
-	if (sockfd != ntp_fd) {
+	if (sockfd != ntp_eth_fd && sockfd != ntp_any_fd) {
 		printf("sendmsg inval sockfd\n");
 		errno = EINVAL;
 		return -1;
@@ -536,7 +539,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	struct Reply_recv rep;
 	struct sockaddr_in *sa;
 
-	if (sockfd != ntp_fd && sockfd != ntp_broadcast_fd) {
+	if (sockfd != ntp_eth_fd && sockfd != ntp_any_fd && sockfd != ntp_broadcast_fd) {
 		errno = EINVAL;
 		return -1;
 	}
