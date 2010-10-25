@@ -61,7 +61,7 @@ static int next_fd = 100;
 static double local_time = 0.0;
 static int local_time_valid = 0;
 
-static timer_t timer;
+static timer_t timer = NULL + 123123;
 static int timer_enabled = 0;
 static double timer_timeout = 0.0;
 static double timer_interval = 0.0;
@@ -624,12 +624,33 @@ int timer_gettime(timer_t timerid, struct itimerspec *value) {
 	return 0;
 }
 
-#if 0
-int getitimer(int which, struct itimerval *curr_value) {
-	assert(0);
+#if 1
+int setitimer(__itimer_which_t which, const struct itimerval *new_value, struct itimerval *old_value) {
+	struct itimerspec timerspec;
+
+	assert(which == ITIMER_REAL && old_value == NULL);
+
+	timerspec.it_interval.tv_sec = new_value->it_interval.tv_sec;
+	timerspec.it_interval.tv_nsec = new_value->it_interval.tv_usec * 1000;
+	timerspec.it_value.tv_sec = new_value->it_value.tv_sec;
+	timerspec.it_value.tv_nsec = new_value->it_value.tv_usec * 1000;
+
+	return timer_settime(timer, 0, &timerspec, NULL);
 }
-int setitimer(int which, const struct itimerval *new_value, struct itimerval *old_value) {
-	assert(0);
+
+int getitimer(__itimer_which_t which, struct itimerval *curr_value) {
+	struct itimerspec timerspec;
+	int r;
+
+	assert(which == ITIMER_REAL);
+
+	r = timer_gettime(timer, &timerspec);
+	curr_value->it_interval.tv_sec = timerspec.it_interval.tv_sec;
+	curr_value->it_interval.tv_usec = timerspec.it_interval.tv_nsec / 1000;
+	curr_value->it_value.tv_sec = timerspec.it_value.tv_sec;
+	curr_value->it_value.tv_usec = timerspec.it_value.tv_nsec / 1000;
+
+	return r; 
 }
 #endif
 
