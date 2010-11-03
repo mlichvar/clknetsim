@@ -22,6 +22,7 @@
 #define SHIFT_FLL 2
 #define SCALE_FREQ 65536.0e6
 #define MAXFREQ_SCALED 32768000
+#define MAX_SLEWRATE 500
 
 #define MIN_FREQ 0.8
 #define MAX_FREQ 1.2
@@ -115,27 +116,27 @@ void Clock::second_overflow() {
 		tc = ntp_timex.constant + (nano == 1 ? 0 : 4); 
 		ntp_slew = ntp_timex.offset * nano / (1 << (ntp_shift_pll + tc));
 
-		if (ntp_slew > 500000)
-			ntp_slew = 500000;
-		else if (ntp_slew < -500000)
-			ntp_slew = -500000;
+		if (ntp_slew > MAX_SLEWRATE * 1000)
+			ntp_slew = MAX_SLEWRATE * 1000;
+		else if (ntp_slew < -MAX_SLEWRATE * 1000)
+			ntp_slew = -MAX_SLEWRATE * 1000;
 
 		ntp_timex.offset -= ntp_slew / nano;
 	}
 
 	if (ss_offset) {
 		if (ss_offset > 0) {
-			if (ss_offset > 500) {
-				ss_slew = 500;
-				ss_offset -= 500;
+			if (ss_offset > MAX_SLEWRATE) {
+				ss_slew = MAX_SLEWRATE;
+				ss_offset -= MAX_SLEWRATE;
 			} else {
 				ss_slew = ss_offset;
 				ss_offset = 0;
 			}
 		} else {
-			if (ss_offset < -500) {
-				ss_slew = -500;
-				ss_offset -= -500;
+			if (ss_offset < -MAX_SLEWRATE) {
+				ss_slew = -MAX_SLEWRATE;
+				ss_offset -= -MAX_SLEWRATE;
 			} else {
 				ss_slew = ss_offset;
 				ss_offset = 0;
