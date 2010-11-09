@@ -44,7 +44,6 @@
 #define BASE_ADDR 0xc0a87b01 /* 192.168.123.1 */
 #define BROADCAST_ADDR (BASE_ADDR | 0xff)
 #define NETMASK 0xffffff00
-#define SYSTEM_TIME_OFFSET 946684800 /* 0:00 01 Jan 2000 UTC */
 
 static int (*_socket)(int domain, int type, int protocol);
 static int (*_connect)(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
@@ -61,6 +60,8 @@ static int next_fd = 100;
 
 static double local_time = 0.0;
 static int local_time_valid = 0;
+
+static time_t system_time_offset = 946684800; /* 2000-01-01 0:00 UTC */
 
 static timer_t timer = NULL + 123123;
 static int timer_enabled = 0;
@@ -109,6 +110,10 @@ static void init() {
 	env = getenv("CLKNETSIM_SOCKET");
 	if (env)
 		snprintf(s.sun_path, sizeof (s.sun_path), "%s", env);
+
+	env = getenv("CLKNETSIM_START_DATE");
+	if (env)
+		system_time_offset = atol(env);
 
 	sockfd = _socket(AF_UNIX, SOCK_STREAM, 0);
 
@@ -200,10 +205,10 @@ static void fill_refclock_sample() {
 	shm_time.count++;
 	shm_time.clockTimeStampSec = floor(clock_time);
 	shm_time.clockTimeStampUSec = (clock_time - shm_time.clockTimeStampSec) * 1e6;
-	shm_time.clockTimeStampSec += SYSTEM_TIME_OFFSET;
+	shm_time.clockTimeStampSec += system_time_offset;
 	shm_time.receiveTimeStampSec = floor(receive_time);
 	shm_time.receiveTimeStampUSec = (receive_time - shm_time.receiveTimeStampSec) * 1e6;
-	shm_time.receiveTimeStampSec += SYSTEM_TIME_OFFSET;
+	shm_time.receiveTimeStampSec += system_time_offset;
 	shm_time.leap = 0;
 	shm_time.valid = 1;
 }
@@ -215,7 +220,7 @@ int gettimeofday(struct timeval *tv, struct timezone *tz) {
 
 	tv->tv_sec = floor(time);
 	tv->tv_usec = (time - tv->tv_sec) * 1e6;
-	tv->tv_sec += SYSTEM_TIME_OFFSET;
+	tv->tv_sec += system_time_offset;
 
 	/* chrony calibration routine hack */
 	if (!select_called)
@@ -233,7 +238,7 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 
 	tp->tv_sec = floor(time);
 	tp->tv_nsec = (time - tp->tv_sec) * 1e9;
-	tp->tv_sec += SYSTEM_TIME_OFFSET;
+	tp->tv_sec += system_time_offset;
 
 	/* ntpd calibration routine hack */
 	if (!select_called)
@@ -246,7 +251,7 @@ time_t time(time_t *t) {
 	time_t time;
 
 	time = floor(gettime());
-	time += SYSTEM_TIME_OFFSET;
+	time += system_time_offset;
 	if (t)
 		*t = time;
 	return time;
@@ -254,13 +259,13 @@ time_t time(time_t *t) {
 
 int settimeofday(const struct timeval *tv, const struct timezone *tz) {
 	assert(tv);
-	settime(tv->tv_sec - SYSTEM_TIME_OFFSET + tv->tv_usec / 1e6);
+	settime(tv->tv_sec - system_time_offset + tv->tv_usec / 1e6);
 	return 0;
 }
 
 int clock_settime(clockid_t which_clock, const struct timespec *tp) {
 	assert(tp && which_clock == CLOCK_REALTIME);
-	settime(tp->tv_sec - SYSTEM_TIME_OFFSET + tp->tv_nsec * 1e-9);
+	settime(tp->tv_sec - system_time_offset + tp->tv_nsec * 1e-9);
 	return 0;
 }
 

@@ -29,7 +29,9 @@ The clients are started under a non-root user, with preloaded clknetsim.so and
 environment variable CLKNETSIM_NODE set to the number of the client.
 Optionally, environment variable CLKNETSIM_SOCKET can be set to the path of the
 unix domain socket which is used to connect to the server, clknetsim.sock in
-current directory is used by default.
+current directory is used by default. CLKNETSIM_START_DATE variable can be used
+to specify in seconds since 1970 when should the simulated time start,
+946684800 by default (2000-01-01 0:00 UTC).
 
 The virtual network uses IPv4 addresses 192.168.123.n where n is the number of
 the node. 192.168.123.255 is the broadcast address.
