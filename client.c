@@ -696,6 +696,11 @@ int uname(struct utsname *buf) {
 	return 0;
 }
 
+int gethostname(char *name, size_t len) {
+	snprintf(name, len, "clknetsim-node%d", node + 1);
+	return 0;
+}
+
 void openlog(const char *ident, int option, int facility) {
 }
 
