@@ -23,6 +23,9 @@
 #define SCALE_FREQ 65536.0e6
 #define MAXFREQ_SCALED 32768000
 #define MAX_SLEWRATE 500
+#define BASE_TICK 10000
+#define MAX_TICK (BASE_TICK * 11 / 10)
+#define MIN_TICK (BASE_TICK * 9 / 10)
 
 #define MIN_FREQ 0.8
 #define MAX_FREQ 1.2
@@ -34,7 +37,7 @@ Clock::Clock() {
 	freq_generator = NULL;
 
 	memset(&ntp_timex, 0, sizeof(ntp_timex));
-	ntp_timex.tick = 10000;
+	ntp_timex.tick = BASE_TICK;
 	ntp_timex.tolerance = MAXFREQ_SCALED;
 	ntp_timex.precision = 1;
 
@@ -59,7 +62,7 @@ double Clock::get_time() const {
 double Clock::get_total_freq() const {
 	double timex_freq, adjtime_freq;
 
-	timex_freq = ntp_timex.tick / 10000.0 + ntp_timex.freq / SCALE_FREQ + ntp_slew / 1e9;
+	timex_freq = (double)ntp_timex.tick / BASE_TICK + ntp_timex.freq / SCALE_FREQ + ntp_slew / 1e9;
 	adjtime_freq = ss_slew / 1e6;
 	return freq * (timex_freq + adjtime_freq);
 }
@@ -221,7 +224,7 @@ int Clock::adjtimex(struct timex *buf) {
 	if (buf->modes & ADJ_NANO)
 		ntp_timex.status |= STA_NANO;
 	if (buf->modes & ADJ_TICK) {
-		if (buf->tick > 11000 || buf->tick < 9000) {
+		if (buf->tick > MAX_TICK || buf->tick < MIN_TICK) {
 			r = -1;
 		} else
 			ntp_timex.tick = buf->tick;
