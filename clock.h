@@ -45,6 +45,7 @@ public:
 	~Clock();
 	double get_time() const;
 	double get_total_freq() const;
+	double get_noslew_freq() const;
 	double get_real_interval(double local_interval) const;
 	double get_local_interval(double real_interval) const;
 

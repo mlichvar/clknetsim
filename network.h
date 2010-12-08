@@ -61,6 +61,7 @@ class Network {
 	FILE *offset_log;
 	FILE *freq_log;
 	FILE *packet_log;
+	bool report_noslew_freq;
 
 	void update_clock_stats();
 
@@ -71,6 +72,7 @@ class Network {
 	Node *get_node(unsigned int node);
 	void set_link_delay_generator(unsigned int from, unsigned int to, Generator *generator);
 	bool run(double time_limit);
+	void report_freq_noslew(bool enable);
 	void open_offset_log(const char *log);
 	void open_freq_log(const char *log);
 	void open_packet_log(const char *log);

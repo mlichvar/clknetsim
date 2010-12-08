@@ -60,6 +60,7 @@ Network::Network(const char *socket, unsigned int n) {
 	offset_log = NULL;
 	freq_log = NULL;
 	packet_log = NULL;
+	report_noslew_freq = false;
 
 	assert(n > 0);
 
@@ -266,11 +267,17 @@ void Network::update_clock_stats() {
 	}
 	if (freq_log) {
 		for (i = 0; i < n; i++)
-			fprintf(freq_log, "%e%c", nodes[i]->get_clock()->get_total_freq() - 1.0, i + 1 < n ? '\t' : '\n');
+			fprintf(freq_log, "%e%c", (report_noslew_freq ? nodes[i]->get_clock()->get_noslew_freq() : 
+						nodes[i]->get_clock()->get_total_freq()) - 1.0, i + 1 < n ? '\t' : '\n');
 	}
 
 	for (i = 0; i < n; i++)
-		stats[i].update_clock_stats(nodes[i]->get_clock()->get_time() - time, nodes[i]->get_clock()->get_total_freq() - 1.0);
+		stats[i].update_clock_stats(nodes[i]->get_clock()->get_time() - time, (report_noslew_freq ?
+					nodes[i]->get_clock()->get_noslew_freq() : nodes[i]->get_clock()->get_total_freq()) - 1.0);
+}
+
+void Network::report_freq_noslew(bool enable) {
+	report_noslew_freq = enable;
 }
 
 void Network::open_offset_log(const char *log) {
