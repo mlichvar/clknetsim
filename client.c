@@ -142,14 +142,13 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 		memcpy(buf + sizeof (struct Request_header), request_data, reqlen);
 	reqlen += sizeof (struct Request_header);
 
-	sent = send(sockfd, buf, reqlen, 0);
-	assert(sent == reqlen);
-
-	received = recv(sockfd, reply, replylen, 0);
-	if (received <= 0) {
+	if ((sent = send(sockfd, buf, reqlen, 0)) <= 0 ||
+			(received = recv(sockfd, reply, replylen, 0)) <= 0) {
 		fprintf(stderr, "clknetsim connection closed.\n");
 		exit(0);
 	}
+
+	assert(sent == reqlen);
 	assert(received == replylen);
 }
 
