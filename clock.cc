@@ -44,7 +44,8 @@ Clock::Clock() {
 	ntp_shift_pll = 4;
 	ntp_flags = 0;
 	ntp_update_interval = 0;
-	ntp_slew = 0;
+	ntp_offset = 0.0;
+	ntp_slew = 0.0;
 
 	ss_offset = 0;
 	ss_slew = 0;
@@ -62,7 +63,7 @@ double Clock::get_time() const {
 double Clock::get_total_freq() const {
 	double timex_freq, adjtime_freq;
 
-	timex_freq = (double)ntp_timex.tick / BASE_TICK + ntp_timex.freq / SCALE_FREQ + ntp_slew / 1e9;
+	timex_freq = (double)ntp_timex.tick / BASE_TICK + ntp_timex.freq / SCALE_FREQ + ntp_slew;
 	adjtime_freq = ss_slew / 1e6;
 	return freq * (timex_freq + adjtime_freq);
 }
@@ -119,19 +120,21 @@ void Clock::second_overflow() {
 		set_freq(freq_generator->generate());
 	
 	if (ntp_timex.status & STA_PLL) {
-		int tc, nano;
-
 		ntp_update_interval++;
-		nano = ntp_timex.status & STA_NANO ? 1 : 1000;
-		tc = ntp_timex.constant + (nano == 1 ? 0 : 4); 
-		ntp_slew = ntp_timex.offset * nano / (1 << (ntp_shift_pll + tc));
+		ntp_slew = ntp_offset / (1 << (ntp_shift_pll +
+			ntp_timex.constant + (ntp_timex.status & STA_NANO ? 0 : 4)));
 
-		if (ntp_slew > MAX_SLEWRATE * 1000)
-			ntp_slew = MAX_SLEWRATE * 1000;
-		else if (ntp_slew < -MAX_SLEWRATE * 1000)
-			ntp_slew = -MAX_SLEWRATE * 1000;
+		if (ntp_slew > MAX_SLEWRATE / 1e6)
+			ntp_slew = MAX_SLEWRATE / 1e6;
+		else if (ntp_slew < -MAX_SLEWRATE / 1e6)
+			ntp_slew = -MAX_SLEWRATE / 1e6;
 
-		ntp_timex.offset -= ntp_slew / nano;
+		ntp_offset -= ntp_slew;
+
+		if (ntp_timex.status & STA_NANO)
+			ntp_timex.offset = ntp_offset * 1e9;
+		else
+			ntp_timex.offset = ntp_offset * 1e6;
 	}
 
 	if (ss_offset) {
@@ -156,23 +159,26 @@ void Clock::second_overflow() {
 		ss_slew = 0;
 }
 
-void Clock::update_ntp_freq(long offset) {
+void Clock::update_ntp_offset(long offset) {
 	double fll_adj, pll_adj, new_offset, old_offset, tc, t;
 
-	if (!(ntp_timex.status & STA_PLL))
-		return;
 	if (ntp_timex.status & STA_FREQHOLD)
 		ntp_update_interval = 0;
 
 	if (ntp_timex.status & STA_NANO) {
 		new_offset = offset / 1e9;
-		old_offset = ntp_timex.offset / 1e9;
 		tc = 1 << ntp_timex.constant;
 	} else {
 		new_offset = offset / 1e6;
-		old_offset = ntp_timex.offset / 1e6;
 		tc = 1 << (ntp_timex.constant + 4);
 	}
+
+	ntp_timex.offset = offset;
+	old_offset = ntp_offset;
+	ntp_offset = new_offset;
+
+	if (!(ntp_timex.status & STA_PLL))
+		return;
 
 	if (old_offset && ntp_update_interval >= MINSEC &&
 		(ntp_timex.status & STA_FLL || ntp_update_interval > MAXSEC)) {
@@ -239,8 +245,7 @@ int Clock::adjtimex(struct timex *buf) {
 
 	if ((buf->modes & ADJ_OFFSET_SINGLESHOT) != ADJ_OFFSET_SINGLESHOT) {
 		if (buf->modes & ADJ_OFFSET) {
-			update_ntp_freq(buf->offset);
-			ntp_timex.offset = buf->offset;
+			update_ntp_offset(buf->offset);
 		}
 	}
 

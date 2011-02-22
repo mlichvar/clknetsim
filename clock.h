@@ -35,7 +35,8 @@ class Clock {
 	int ntp_shift_pll;
 	int ntp_flags;
 	long ntp_update_interval;
-	long ntp_slew;
+	double ntp_offset;
+	double ntp_slew;
 
 	long ss_offset;
 	long ss_slew;
@@ -58,7 +59,7 @@ public:
 	void advance(double real_interval);
 	void second_overflow();
 
-	void update_ntp_freq(long offset);
+	void update_ntp_offset(long offset);
 	int adjtimex(struct timex *buf);
 	int adjtime(const struct timeval *delta, struct timeval *olddelta);
 };
