@@ -171,7 +171,7 @@ int main(int argc, char **argv) {
 
 	fprintf(stderr, "Running simulation...");
 
-	if (reset) {
+	if (reset && reset < limit) {
 		r = network->run(reset);
 		network->reset_stats();
 	} else
