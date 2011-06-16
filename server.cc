@@ -152,14 +152,6 @@ int main(int argc, char **argv) {
 
 	network = new Network(socket, nodes);
 	
-	if (!load_config(config, network, nodes)) {
-		fprintf(stderr, "Couldn't parse config %s\n", config);
-		return 1;
-	}
-
-	if (!network->prepare_clients())
-		return 1;
-
 	if (offset_log)
 		network->open_offset_log(offset_log);
 	if (freq_log)
@@ -168,6 +160,14 @@ int main(int argc, char **argv) {
 		network->open_packet_log(packet_log);
 	if (noslew)
 		network->report_freq_noslew(true);
+
+	if (!load_config(config, network, nodes)) {
+		fprintf(stderr, "Couldn't parse config %s\n", config);
+		return 1;
+	}
+
+	if (!network->prepare_clients())
+		return 1;
 
 	fprintf(stderr, "Running simulation...");
 

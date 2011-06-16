@@ -143,6 +143,8 @@ bool Network::prepare_clients() {
 
 	close(sockfd);
 
+	tick_second();
+
 	return true;
 }
 
