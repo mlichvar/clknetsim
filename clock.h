@@ -57,7 +57,7 @@ public:
 	void set_ntp_flag(int enable, int flag);
 
 	void advance(double real_interval);
-	void second_overflow();
+	void tick_second();
 
 	void update_ntp_offset(long offset);
 	int adjtimex(struct timex *buf);

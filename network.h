@@ -63,6 +63,7 @@ class Network {
 	FILE *packet_log;
 	bool report_noslew_freq;
 
+	void tick_second();
 	void update_clock_stats();
 
 	public:

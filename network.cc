@@ -233,16 +233,11 @@ bool Network::run(double time_limit) {
 			else
 				time += min_timeout;
 
-			for (i = 0; i < n; i++) {
+			for (i = 0; i < n; i++)
 				nodes[i]->get_clock()->advance(min_timeout);
-				if (second_overflow) {
-					nodes[i]->get_clock()->second_overflow();
-					nodes[i]->get_refclock()->update(time, nodes[i]->get_clock());
-				}
-			}
 
 			if (second_overflow)
-				update_clock_stats();
+				tick_second();
 		} while (second_overflow && time < time_limit);
 
 		for (i = 0; i < n; i++)
@@ -256,6 +251,17 @@ bool Network::run(double time_limit) {
 	}
 
 	return true;
+}
+
+void Network::tick_second() {
+	int i, n = nodes.size();
+
+	for (i = 0; i < n; i++) {
+		nodes[i]->get_clock()->tick_second();
+		nodes[i]->get_refclock()->update(time, nodes[i]->get_clock());
+	}
+
+	update_clock_stats();
 }
 
 void Network::update_clock_stats() {

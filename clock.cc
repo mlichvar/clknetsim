@@ -115,7 +115,7 @@ void Clock::advance(double real_interval) {
 	time += get_local_interval(real_interval);
 }
 
-void Clock::second_overflow() {
+void Clock::tick_second() {
 	if (freq_generator)
 		set_freq(freq_generator->generate());
 	
