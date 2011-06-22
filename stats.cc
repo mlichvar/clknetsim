@@ -37,6 +37,7 @@ void Stats::reset() {
 	packets_out_sum2 = 0.0;
 	packets_in = 0;
 	packets_out = 0;
+	wakeups = 0;
 }
 
 Stats::~Stats() {
@@ -70,6 +71,10 @@ void Stats::update_packet_stats(bool incoming, double delay) {
 	}
 }
 
+void Stats::update_wakeup_stats() {
+	wakeups++;
+}
+
 void Stats::print(int verbosity) const {
 	if (verbosity <= 0)
 		return;
@@ -94,4 +99,6 @@ void Stats::print(int verbosity) const {
 		printf("RMS outgoing packet delay: \t%e\n", (double)sqrt(packets_out_sum2 / packets_out));
 		printf("Mean outgoing packet interval: \t%e\n", (double)samples / packets_out);
 	}
+	if (wakeups)
+		printf("Mean wakeup interval:          \t%e\n", (double)samples / wakeups);
 }

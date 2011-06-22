@@ -36,12 +36,15 @@ class Stats {
 	unsigned long packets_in;
 	unsigned long packets_out;
 
+	unsigned long wakeups;
+
 	public:
 	Stats();
 	~Stats();
 	void reset();
 	void update_clock_stats(double offset, double freq);
 	void update_packet_stats(bool incoming, double delay);
+	void update_wakeup_stats();
 	void print(int verbosity) const;
 };
 

@@ -179,6 +179,8 @@ bool Network::run(double time_limit) {
 		for (i = 0, waiting = 0; i < n; i++)
 			if (nodes[i]->waiting())
 				waiting++;
+			else 
+				stats[i].update_wakeup_stats();
 
 		while (waiting < n) {
 #if 1
