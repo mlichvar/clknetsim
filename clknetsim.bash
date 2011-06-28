@@ -94,7 +94,7 @@ generate_config2() {
 }
 
 generate_config3() {
-    local topnodes=$1 nodes=$2 offset=$3 freqexpr=$4 delayexpr=$5 i
+    local topnodes=$1 nodes=$2 offset=$3 freqexpr=$4 delayexpr=$5 i j
 
     for i in `seq $[$topnodes + 1] $nodes`; do
 	echo "node${i}_offset = $offset"
