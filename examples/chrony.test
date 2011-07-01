@@ -1,0 +1,16 @@
+#!/bin/bash
+
+CLKNETSIM_PATH=..
+. ../clknetsim.bash
+
+generate_config1 2 0.01 "(sum (* 1e-9 (normal)))" "(+ 1e-3 (* 1e-3 (exponential)))" "" "(* 1e-4 (normal))"
+
+start_client 1 chrony "local stratum 1"
+start_client 2 chrony "server 192.168.123.1 minpoll 6 maxpoll 6
+refclock SHM 0"
+
+start_server 2 -v 2 -o log.offset -f log.freq -g log.rawfreq -p log.packets -r 2000 -l 40000
+
+cat tmp/stats
+
+rm -rf tmp

@@ -1,0 +1,21 @@
+#!/bin/bash
+
+CLKNETSIM_PATH=..
+. ../clknetsim.bash
+
+generate_config1 3 0.01 "(sum (* 1e-9 (normal)))" "(+ 1e-3 (* 1e-3 (exponential)))"
+echo "node2_shift_pll = 2" >> tmp/conf
+
+start_client 1 ntp "server 127.127.1.0"
+start_client 2 ntp "server 192.168.123.1 minpoll 6 maxpoll 6"
+start_client 3 ntp "server 192.168.123.1 minpoll 6 maxpoll 6"
+
+start_server 3 -v 2 -o log.offset -r 2000 -l 40000
+
+cat tmp/stats
+
+echo
+get_stat 'RMS offset'
+get_stat 'RMS frequency'
+
+rm -rf tmp
