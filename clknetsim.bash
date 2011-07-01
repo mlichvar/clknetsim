@@ -124,4 +124,9 @@ get_stat() {
     fi
 }
 
+if [ -z "$CLKNETSIM_PATH" ]; then
+    echo CLKNETSIM_PATH not set 2>&1
+    exit 1
+fi
+
 [ -d tmp ] || mkdir tmp
