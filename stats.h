@@ -29,6 +29,10 @@ class Stats {
 	double freq_abs_sum;
 	double freq_sum;
 	double freq_abs_max;
+	double rawfreq_sum2;
+	double rawfreq_abs_sum;
+	double rawfreq_sum;
+	double rawfreq_abs_max;
 	unsigned long samples;
 
 	double packets_in_sum2;
@@ -42,7 +46,7 @@ class Stats {
 	Stats();
 	~Stats();
 	void reset();
-	void update_clock_stats(double offset, double freq);
+	void update_clock_stats(double offset, double freq, double rawfreq);
 	void update_packet_stats(bool incoming, double delay);
 	void update_wakeup_stats();
 	void print(int verbosity) const;

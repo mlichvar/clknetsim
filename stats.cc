@@ -32,6 +32,10 @@ void Stats::reset() {
 	freq_abs_sum = 0.0;
 	freq_sum = 0.0;
 	freq_abs_max = 0.0;
+	rawfreq_sum2 = 0.0;
+	rawfreq_abs_sum = 0.0;
+	rawfreq_sum = 0.0;
+	rawfreq_abs_max = 0.0;
 	samples = 0;
 	packets_in_sum2 = 0.0;
 	packets_out_sum2 = 0.0;
@@ -43,7 +47,7 @@ void Stats::reset() {
 Stats::~Stats() {
 }
 
-void Stats::update_clock_stats(double offset, double freq) {
+void Stats::update_clock_stats(double offset, double freq, double rawfreq) {
 	offset_sum2 += offset * offset;
 	offset_abs_sum += fabs(offset);
 	offset_sum += offset;
@@ -55,6 +59,12 @@ void Stats::update_clock_stats(double offset, double freq) {
 	freq_sum += freq;
 	if (freq_abs_max < fabs(freq))
 		freq_abs_max = fabs(freq);
+
+	rawfreq_sum2 += rawfreq * rawfreq;
+	rawfreq_abs_sum += fabs(rawfreq);
+	rawfreq_sum += rawfreq;
+	if (rawfreq_abs_max < fabs(rawfreq))
+		rawfreq_abs_max = fabs(rawfreq);
 
 	samples++;
 }
@@ -91,6 +101,10 @@ void Stats::print(int verbosity) const {
 	printf("Maximum absolute frequency:    \t%e\n", freq_abs_max);
 	printf("Mean absolute frequency:       \t%e\n", freq_abs_sum / samples);
 	printf("Mean frequency:                \t%e\n", freq_sum / samples);
+	printf("RMS raw frequency:             \t%e\n", sqrt(rawfreq_sum2 / samples));
+	printf("Maximum absolute raw frequency:\t%e\n", rawfreq_abs_max);
+	printf("Mean absolute raw frequency:   \t%e\n", rawfreq_abs_sum / samples);
+	printf("Mean raw frequency:            \t%e\n", rawfreq_sum / samples);
 	if (packets_in) {
 		printf("RMS incoming packet delay: \t%e\n", (double)sqrt(packets_in_sum2 / packets_in));
 		printf("Mean incoming packet interval: \t%e\n", (double)samples / packets_in);

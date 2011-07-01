@@ -91,15 +91,16 @@ bool load_config(const char *file, Network *network, unsigned int nodes) {
 }
 
 int main(int argc, char **argv) {
-	int nodes, help = 0, verbosity = 2, noslew = 0;
+	int nodes, help = 0, verbosity = 2;
 	double limit = 10000.0, reset = 0.0;
-	const char *offset_log = NULL, *freq_log = NULL, *packet_log = NULL, *config, *socket = "clknetsim.sock";
+	const char *offset_log = NULL, *freq_log = NULL, *rawfreq_log = NULL,
+	      *packet_log = NULL, *config, *socket = "clknetsim.sock";
 
 	int r, opt;
 	Network *network;
 	Generator_generator gen;
 
-	while ((opt = getopt(argc, argv, "l:r:o:f:p:ns:v:h")) != -1) {
+	while ((opt = getopt(argc, argv, "l:r:o:f:g:p:s:v:h")) != -1) {
 		switch (opt) {
 			case 'l':
 				limit = atof(optarg);
@@ -113,11 +114,11 @@ int main(int argc, char **argv) {
 			case 'f':
 				freq_log = optarg;
 				break;
+			case 'g':
+				rawfreq_log = optarg;
+				break;
 			case 'p':
 				packet_log = optarg;
-				break;
-			case 'n':
-				noslew = 1;
 				break;
 			case 's':
 				socket = optarg;
@@ -137,8 +138,8 @@ int main(int argc, char **argv) {
 		printf("       -r secs       reset stats after secs (default 0)\n");
 		printf("       -o file       log time offsets to file\n");
 		printf("       -f file       log frequency offsets to file\n");
+		printf("       -g file       log raw (w/o slew) frequency offsets to file\n");
 		printf("       -p file       log packet delays to file\n");
-		printf("       -n            omit clock slew in frequency log and stats\n");
 		printf("       -s socket     set server socket name (default clknetsim.sock)\n");
 		printf("       -v level      set verbosity level (default 2)\n");
 		printf("       -h            print usage\n");
@@ -156,10 +157,10 @@ int main(int argc, char **argv) {
 		network->open_offset_log(offset_log);
 	if (freq_log)
 		network->open_freq_log(freq_log);
+	if (rawfreq_log)
+		network->open_rawfreq_log(rawfreq_log);
 	if (packet_log)
 		network->open_packet_log(packet_log);
-	if (noslew)
-		network->report_freq_noslew(true);
 
 	if (!load_config(config, network, nodes)) {
 		fprintf(stderr, "Couldn't parse config %s\n", config);

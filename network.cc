@@ -59,8 +59,8 @@ Network::Network(const char *socket, unsigned int n) {
 	socket_name = socket;
 	offset_log = NULL;
 	freq_log = NULL;
+	rawfreq_log = NULL;
 	packet_log = NULL;
-	report_noslew_freq = false;
 
 	assert(n > 0);
 
@@ -88,6 +88,8 @@ Network::~Network() {
 		fclose(offset_log);
 	if (freq_log)
 		fclose(freq_log);
+	if (rawfreq_log)
+		fclose(rawfreq_log);
 	if (packet_log)
 		fclose(packet_log);
 }
@@ -277,17 +279,17 @@ void Network::update_clock_stats() {
 	}
 	if (freq_log) {
 		for (i = 0; i < n; i++)
-			fprintf(freq_log, "%e%c", (report_noslew_freq ? nodes[i]->get_clock()->get_raw_freq() : 
-						nodes[i]->get_clock()->get_total_freq()) - 1.0, i + 1 < n ? '\t' : '\n');
+			fprintf(freq_log, "%e%c", nodes[i]->get_clock()->get_total_freq() - 1.0, i + 1 < n ? '\t' : '\n');
+	}
+	if (rawfreq_log) {
+		for (i = 0; i < n; i++)
+			fprintf(rawfreq_log, "%e%c", nodes[i]->get_clock()->get_raw_freq() - 1.0, i + 1 < n ? '\t' : '\n');
 	}
 
 	for (i = 0; i < n; i++)
-		stats[i].update_clock_stats(nodes[i]->get_clock()->get_time() - time, (report_noslew_freq ?
-					nodes[i]->get_clock()->get_raw_freq() : nodes[i]->get_clock()->get_total_freq()) - 1.0);
-}
-
-void Network::report_freq_noslew(bool enable) {
-	report_noslew_freq = enable;
+		stats[i].update_clock_stats(nodes[i]->get_clock()->get_time() - time,
+				nodes[i]->get_clock()->get_total_freq() - 1.0,
+				nodes[i]->get_clock()->get_raw_freq() - 1.0);
 }
 
 void Network::open_offset_log(const char *log) {
@@ -296,6 +298,10 @@ void Network::open_offset_log(const char *log) {
 
 void Network::open_freq_log(const char *log) {
 	freq_log = fopen(log, "w");
+}
+
+void Network::open_rawfreq_log(const char *log) {
+	rawfreq_log = fopen(log, "w");
 }
 
 void Network::open_packet_log(const char *log) {
