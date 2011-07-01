@@ -68,7 +68,7 @@ double Clock::get_total_freq() const {
 	return freq * (timex_freq + adjtime_freq);
 }
 
-double Clock::get_noslew_freq() const {
+double Clock::get_raw_freq() const {
 	double timex_freq;
 
 	timex_freq = (double)ntp_timex.tick / BASE_TICK + ntp_timex.freq / SCALE_FREQ;

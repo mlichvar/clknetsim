@@ -277,13 +277,13 @@ void Network::update_clock_stats() {
 	}
 	if (freq_log) {
 		for (i = 0; i < n; i++)
-			fprintf(freq_log, "%e%c", (report_noslew_freq ? nodes[i]->get_clock()->get_noslew_freq() : 
+			fprintf(freq_log, "%e%c", (report_noslew_freq ? nodes[i]->get_clock()->get_raw_freq() : 
 						nodes[i]->get_clock()->get_total_freq()) - 1.0, i + 1 < n ? '\t' : '\n');
 	}
 
 	for (i = 0; i < n; i++)
 		stats[i].update_clock_stats(nodes[i]->get_clock()->get_time() - time, (report_noslew_freq ?
-					nodes[i]->get_clock()->get_noslew_freq() : nodes[i]->get_clock()->get_total_freq()) - 1.0);
+					nodes[i]->get_clock()->get_raw_freq() : nodes[i]->get_clock()->get_total_freq()) - 1.0);
 }
 
 void Network::report_freq_noslew(bool enable) {
