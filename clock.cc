@@ -124,10 +124,12 @@ void Clock::tick_second() {
 		ntp_slew = ntp_offset / (1 << (ntp_shift_pll +
 			ntp_timex.constant + (ntp_timex.status & STA_NANO ? 0 : 4)));
 
+#if 0
 		if (ntp_slew > MAX_SLEWRATE / 1e6)
 			ntp_slew = MAX_SLEWRATE / 1e6;
 		else if (ntp_slew < -MAX_SLEWRATE / 1e6)
 			ntp_slew = -MAX_SLEWRATE / 1e6;
+#endif
 
 		ntp_offset -= ntp_slew;
 
