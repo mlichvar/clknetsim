@@ -61,7 +61,7 @@ static int next_fd = 100;
 static double local_time = 0.0;
 static int local_time_valid = 0;
 
-static time_t system_time_offset = 946684800; /* 2000-01-01 0:00 UTC */
+static time_t system_time_offset = 1262304000; /* 2010-01-01 0:00 UTC */
 
 static timer_t timer = NULL + 123123;
 static int timer_enabled = 0;
