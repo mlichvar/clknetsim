@@ -28,24 +28,24 @@ start_client() {
 	    echo "allow" >> tmp/conf.$node
 	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
 	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
-	    chronyd$suffix -d -f tmp/conf.$node $opts &> tmp/log.$node &
+	    $client_wrapper chronyd$suffix -d -f tmp/conf.$node $opts &> tmp/log.$node &
 	    ;;
 	ntp|ntpd)
 	    echo "restrict default" >> tmp/conf.$node
 	    echo "logconfig=syncstatus +allevents" >> tmp/conf.$node
 	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
 	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
-	    ntpd$suffix -n -c tmp/conf.$node -l tmp/log.$node $opts &> tmp/log.$node.err &
+	    $client_wrapper ntpd$suffix -n -c tmp/conf.$node -l tmp/log.$node $opts &> tmp/log.$node.err &
 	    ;;
 	ntpq)
 	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
 	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
-	    ntpq -c 'rv 0' -c ass -c 'mrv 1 1' $config &> tmp/log.$node &
+	    $client_wrapper ntpq -c 'rv 0' -c ass -c 'mrv 1 1' $config &> tmp/log.$node &
 	    ;;
 	ntpdate)
 	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
 	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
-	    ntpdate $config &> tmp/log.$node &
+	    $client_wrapper ntpdate $config &> tmp/log.$node &
             ;;
     esac
     client_pids="$client_pids $!"
