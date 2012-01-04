@@ -105,6 +105,7 @@ int main(int argc, char **argv) {
 	double limit = 10000.0, reset = 0.0;
 	const char *offset_log = NULL, *freq_log = NULL, *rawfreq_log = NULL,
 	      *packet_log = NULL, *config, *socket = "clknetsim.sock";
+	struct timeval tv;
 
 	int r, opt;
 	Network *network;
@@ -163,7 +164,8 @@ int main(int argc, char **argv) {
 	config = argv[optind];
 	nodes = atoi(argv[optind + 1]);
 
-	srandom(time(NULL));
+	gettimeofday(&tv, NULL);
+	srandom(tv.tv_sec ^ tv.tv_usec);
 
 	if (generate_only) {
 		run_generator(argv[optind], nodes);
