@@ -63,6 +63,10 @@ start_server() {
     client_pids=" "
 }
 
+generate_seq() {
+    $CLKNETSIM_PATH/clknetsim -G "$@"
+}
+
 generate_config1() {
     local nodes=$1 offset=$2 freqexpr=$3 delayexprup=$4 delayexprdown=$5 refclockexpr=$6 i
 
