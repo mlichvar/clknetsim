@@ -55,19 +55,34 @@ eof = False
 paused = False
 game_mode = False
 
+delay_lines = []
 while True:
-    line1 = delay_file.readline()
-    line2 = delay_file.readline()
-    if line1 == "" or line2 == "":
+    line = delay_file.readline()
+    if line == "":
         break
-    line1 = line1.split()
-    line2 = line2.split()
-    if line1[2] != "1" or line2[1] != "1" or line1[1] != line2[2]:
+    line = line.split()
+    if line[2] == "1":
+        idx = int(line[1])
+    elif line[1] == "1":
+        idx = int(line[2])
+    else:
         continue
-    delay1 = float(line1[3])
-    delay2 = float(line2[3])
-    delays.append((int(line1[1]), int(float(line2[0])), (delay1 - delay2) / 2, (delay1 + delay2) / 2))
+    while len(delay_lines) < idx + 1:
+        delay_lines.append([])
+    delay_lines[idx].append(line)
+
 delay_file.close()
+
+for i in range(len(delay_lines)):
+    delays.append([])
+
+    last_line = []
+    for line in delay_lines[i]:
+        if len(last_line) == 4 and len(line) == 4 and last_line[2] == "1" and line[1] == "1":
+            delay1 = float(last_line[3])
+            delay2 = float(line[3])
+            delays[i].append((int(float(line[0])), (delay1 - delay2) / 2, (delay1 + delay2) / 2))
+        last_line = line
 
 while True:
     event = pygame.event.wait()
@@ -158,18 +173,16 @@ while True:
     y = maxy / 2 + offsets[0][offset_lock] * yscale
 
     def get_delays(time):
-        index = len(delays) - 1
-        while time >= 0 and index >= 0:
-            while delays[index][1] > time:
-                index -= 1
-            while delays[index][1] == time and delays[index][0] != delays_shown:
-                index -= 1
-            if delays[index][1] != time:
+        d = delays[delays_shown]
+        idx = len(d) - 1
+        while time >= 0 and idx >= 0:
+            while d[idx][0] > time and idx > 0:
+                idx -= 1
+            if d[idx][0] != time:
                 yield (False, 0, 0)
             else:
-                yield (True, delays[index][2], delays[index][3])
+                yield (True, d[idx][1], d[idx][2])
             time -= 1
-
 
     for freq, offset, (delay_valid, delay_center, delay_size) in zip(freqs, offsets, get_delays(time)):
         x -= xscale
