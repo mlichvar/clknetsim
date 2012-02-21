@@ -159,6 +159,16 @@ void Clock::tick_second() {
 		}
 	} else
 		ss_slew = 0;
+
+	if (ntp_timex.status & (STA_INS | STA_DEL)) {
+		if ((time_t)time % 86400 == 0) {
+			if (ntp_timex.status & STA_INS)
+				time -= 1.0;
+			else
+				time += 1.0;
+			ntp_timex.status &= ~(STA_INS|STA_DEL);
+		}
+	}
 }
 
 void Clock::update_ntp_offset(long offset) {
