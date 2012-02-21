@@ -47,6 +47,7 @@
 
 static int (*_socket)(int domain, int type, int protocol);
 static int (*_connect)(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+static ssize_t (*_recvmsg)(int sockfd, struct msghdr *msg, int flags);
 
 static unsigned int node;
 static int initialized = 0;
@@ -99,6 +100,7 @@ static void init() {
 
 	_socket = (int (*)(int domain, int type, int protocol))dlsym(RTLD_NEXT, "socket");
 	_connect = (int (*)(int sockfd, const struct sockaddr *addr, socklen_t addrlen))dlsym(RTLD_NEXT, "connect");
+	_recvmsg = (ssize_t (*)(int sockfd, struct msghdr *msg, int flags))dlsym(RTLD_NEXT, "recvmsg");
 
 	env = getenv("CLKNETSIM_NODE");
 	if (!env) {
@@ -544,10 +546,8 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	struct Reply_recv rep;
 	struct sockaddr_in *sa;
 
-	if (sockfd != ntp_eth_fd && sockfd != ntp_any_fd && sockfd != ntp_broadcast_fd) {
-		errno = EINVAL;
-		return -1;
-	}
+	if (sockfd != ntp_eth_fd && sockfd != ntp_any_fd && sockfd != ntp_broadcast_fd)
+		return _recvmsg(sockfd, msg, flags);
 
 	if (!initialized)
 		init();
