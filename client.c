@@ -599,6 +599,13 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *
 	return ret;
 }
 
+ssize_t recv(int sockfd, void *buf, size_t len, int flags) {
+	struct sockaddr_in sa;
+	socklen_t addrlen = sizeof (sa);
+
+	return recvfrom(sockfd, buf, len, flags, (struct sockaddr *)&sa, &addrlen);
+}
+
 int timer_create(clockid_t which_clock, struct sigevent *timer_event_spec, timer_t *created_timer_id) {
 	assert(which_clock == CLOCK_REALTIME && timer_event_spec == NULL);
 	timer = *created_timer_id;
