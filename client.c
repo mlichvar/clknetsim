@@ -522,7 +522,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 
 	make_request(REQ_SEND, &req, sizeof (req), &rep, sizeof (rep));
 
-	return 0;
+	return req.len;
 }
 
 ssize_t sendto(int sockfd, const void *buf, size_t len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen) {
