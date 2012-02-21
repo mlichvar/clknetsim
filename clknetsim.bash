@@ -47,6 +47,11 @@ start_client() {
 	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
 	    $client_wrapper ntpdate $config &> tmp/log.$node &
             ;;
+	busybox)
+	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
+	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
+	    $client_wrapper busybox ntpd -ddd -n -p $config &> tmp/log.$node &
+	    ;;
     esac
     client_pids="$client_pids $!"
 }
