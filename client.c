@@ -312,7 +312,8 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	if (!initialized)
 		init();
 
-	assert((ntp_eth_fd && FD_ISSET(ntp_eth_fd, readfds)) ||
+	assert(timeout || timer_enabled ||
+			(ntp_eth_fd && FD_ISSET(ntp_eth_fd, readfds)) ||
 			(ntp_any_fd && FD_ISSET(ntp_any_fd, readfds)));
 
 	select_called = 1;
