@@ -408,7 +408,7 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 	       
 	in = (struct sockaddr_in *)addr;
 
-	if (ntohs(in->sin_port) == NTP_PORT) {
+	if (ntohs(in->sin_port) == NTP_PORT || ntohs(in->sin_port) == 0) {
 		if (ntohl(in->sin_addr.s_addr) == INADDR_ANY)
 			ntp_any_fd = sockfd;
 		else if (ntohl(in->sin_addr.s_addr) == BASE_ADDR + node)
