@@ -57,7 +57,7 @@ static int select_called = 0;
 static int ntp_eth_fd = 0;
 static int ntp_any_fd = 0;
 static int ntp_broadcast_fd = 0;
-static int next_fd = 100;
+static int next_fd = 0;
 
 static double local_time = 0.0;
 static int local_time_valid = 0;
@@ -389,7 +389,7 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 
 int socket(int domain, int type, int protocol) {
 	if (domain == AF_INET && SOCK_DGRAM)
-		return next_fd++;
+		return (next_fd++ % 500) + 100;
 	errno = EINVAL;
 	return -1;
 }
