@@ -361,7 +361,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	return 0;
 }
 
-#if 0
+#if 1
 int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 	struct timeval tv;
 	int r, maxfd = 0;
