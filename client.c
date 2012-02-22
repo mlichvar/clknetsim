@@ -242,8 +242,10 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 	tp->tv_sec += system_time_offset;
 
 	/* ntpd calibration routine hack */
-	if (!select_called)
-		tp->tv_nsec += (random() % 2) * 101;
+	if (!select_called) {
+		static int x = 0;
+		tp->tv_nsec += x++ * 101;
+	}
 
 	return 0;
 }
