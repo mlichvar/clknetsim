@@ -19,6 +19,7 @@
 
 #define MINSEC 256
 #define MAXSEC 2048
+#define MAXTIMECONST 10
 #define SHIFT_FLL 2
 #define SCALE_FREQ 65536.0e6
 #define MAXFREQ_SCALED 32768000
@@ -248,6 +249,10 @@ int Clock::adjtimex(struct timex *buf) {
 		ntp_timex.constant = buf->constant;
 		if (!(ntp_timex.status & STA_NANO))
 			ntp_timex.constant += 4;
+		if (ntp_timex.constant > MAXTIMECONST)
+			ntp_timex.constant = MAXTIMECONST;
+		if (ntp_timex.constant < 0)
+			ntp_timex.constant = 0;
 	}
 	if (buf->modes & ADJ_TICK) {
 		if (buf->tick > MAX_TICK || buf->tick < MIN_TICK) {
