@@ -122,7 +122,7 @@ void Clock::tick_second() {
 	if (ntp_timex.status & STA_PLL) {
 		ntp_update_interval++;
 		ntp_slew = ntp_offset / (1 << (ntp_shift_pll +
-			ntp_timex.constant + (ntp_timex.status & STA_NANO ? 0 : 4)));
+			ntp_timex.constant));
 
 #if 0
 		if (ntp_slew > MAX_SLEWRATE / 1e6)
@@ -177,14 +177,12 @@ void Clock::update_ntp_offset(long offset) {
 	if (ntp_timex.status & STA_FREQHOLD)
 		ntp_update_interval = 0;
 
-	if (ntp_timex.status & STA_NANO) {
+	if (ntp_timex.status & STA_NANO)
 		new_offset = offset / 1e9;
-		tc = 1 << ntp_timex.constant;
-	} else {
+	else
 		new_offset = offset / 1e6;
-		tc = 1 << (ntp_timex.constant + 4);
-	}
 
+	tc = 1 << ntp_timex.constant;
 	ntp_timex.offset = offset;
 	old_offset = ntp_offset;
 	ntp_offset = new_offset;
@@ -242,12 +240,15 @@ int Clock::adjtimex(struct timex *buf) {
 			ntp_update_interval = 0;
 		ntp_timex.status = buf->status & 0xff;
 	}
-	if (buf->modes & ADJ_TIMECONST)
-		ntp_timex.constant = buf->constant;
 	if (buf->modes & ADJ_MICRO)
 		ntp_timex.status &= ~STA_NANO;
 	if (buf->modes & ADJ_NANO)
 		ntp_timex.status |= STA_NANO;
+	if (buf->modes & ADJ_TIMECONST) {
+		ntp_timex.constant = buf->constant;
+		if (!(ntp_timex.status & STA_NANO))
+			ntp_timex.constant += 4;
+	}
 	if (buf->modes & ADJ_TICK) {
 		if (buf->tick > MAX_TICK || buf->tick < MIN_TICK) {
 			r = -1;
