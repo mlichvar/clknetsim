@@ -60,6 +60,7 @@ static int ntp_broadcast_fd = 0;
 static int next_fd = 0;
 
 static double local_time = 0.0;
+static double local_mono_time = 0.0;
 static int local_time_valid = 0;
 
 static time_t system_time_offset = 1262304000; /* 2010-01-01 0:00 UTC */
@@ -163,10 +164,16 @@ static double gettime() {
 	if (!local_time_valid) {
 		make_request(REQ_GETTIME, NULL, 0, &r, sizeof (r));
 		local_time = r.time;
+		local_mono_time = r.mono_time;
 		local_time_valid = 1;
 	}
 
 	return local_time;
+}
+
+static double getmonotime() {
+	gettime();
+	return local_mono_time;
 }
 
 static void settime(double time) {
@@ -233,13 +240,22 @@ int gettimeofday(struct timeval *tv, struct timezone *tz) {
 int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 	double time;
 
-	assert(which_clock == CLOCK_REALTIME);
-
-	time = gettime() + 0.5e-9;
+	switch (which_clock) {
+		case CLOCK_REALTIME:
+			time = gettime() + 0.5e-9;
+			break;
+		case CLOCK_MONOTONIC:
+			time = getmonotime() + 0.5e-9;
+			break;
+		default:
+			assert(0);
+	}
 
 	tp->tv_sec = floor(time);
 	tp->tv_nsec = (time - tp->tv_sec) * 1e9;
-	tp->tv_sec += system_time_offset;
+	
+	if (which_clock == CLOCK_REALTIME)
+		tp->tv_sec += system_time_offset;
 
 	/* ntpd calibration routine hack */
 	if (!select_called) {

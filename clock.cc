@@ -33,6 +33,7 @@
 
 Clock::Clock() {
 	time = 0.0;
+	mono_time = 0.0;
 	freq = 1.0;
 
 	freq_generator = NULL;
@@ -59,6 +60,10 @@ Clock::~Clock() {
 
 double Clock::get_time() const {
 	return time;
+}
+
+double Clock::get_monotime() const {
+	return mono_time;
 }
 
 double Clock::get_total_freq() const {
@@ -113,7 +118,10 @@ void Clock::set_ntp_flag(int enable, int flag) {
 }
 
 void Clock::advance(double real_interval) {
-	time += get_local_interval(real_interval);
+	double local_interval = get_local_interval(real_interval); 
+
+	time += local_interval;
+	mono_time += local_interval;
 }
 
 void Clock::tick_second() {

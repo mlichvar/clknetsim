@@ -116,6 +116,7 @@ void Node::process_gettime() {
 	Reply_gettime r;
 
 	r.time = clock.get_time();
+	r.mono_time = clock.get_monotime();
 	reply(&r, sizeof (r), REQ_GETTIME);
 }
 

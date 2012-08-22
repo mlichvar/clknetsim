@@ -46,6 +46,7 @@ struct Request_register {
 
 struct Reply_gettime {
 	double time;
+	double mono_time;
 };
 
 struct Request_settime {
