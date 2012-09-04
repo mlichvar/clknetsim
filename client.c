@@ -51,6 +51,7 @@ static int (*_open)(const char *pathname, int flags);
 static int (*_socket)(int domain, int type, int protocol);
 static int (*_connect)(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 static ssize_t (*_recvmsg)(int sockfd, struct msghdr *msg, int flags);
+static int (*_usleep)(useconds_t usec);
 
 static unsigned int node;
 static int initialized = 0;
@@ -109,6 +110,7 @@ static void init() {
 	_socket = (int (*)(int domain, int type, int protocol))dlsym(RTLD_NEXT, "socket");
 	_connect = (int (*)(int sockfd, const struct sockaddr *addr, socklen_t addrlen))dlsym(RTLD_NEXT, "connect");
 	_recvmsg = (ssize_t (*)(int sockfd, struct msghdr *msg, int flags))dlsym(RTLD_NEXT, "recvmsg");
+	_usleep = (int (*)(useconds_t usec))dlsym(RTLD_NEXT, "usleep");
 
 	env = getenv("CLKNETSIM_NODE");
 	if (!env) {
@@ -130,7 +132,7 @@ static void init() {
 	assert(sockfd >= 0);
 
 	while (_connect(sockfd, (struct sockaddr *)&s, sizeof (s)) < 0)
-		usleep(100000);
+		_usleep(100000);
 
 	initialized = 1;
 
@@ -330,6 +332,11 @@ int ntp_adjtime(struct timex *buf) {
 	return adjtimex(buf);
 }
 
+int clock_adjtime(clockid_t id, struct timex *tx) {
+	assert(id == CLOCK_REALTIME);
+	return adjtimex(tx);
+}
+
 int adjtime(const struct timeval *delta, struct timeval *olddelta) {
 	struct Request_adjtime req;
 	struct Reply_adjtime rep;
@@ -426,6 +433,19 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 	return r;
 }
 #endif
+
+int usleep(useconds_t usec) {
+	struct timeval tv;
+	int r;
+
+	tv.tv_sec = usec / 1000000;
+	tv.tv_usec = usec % 1000000;
+
+	r = select(0, NULL, NULL, NULL, &tv);
+	assert(r == 0);
+
+	return 0;
+}
 
 int open(const char *pathname, int flags) {
 	if (!strcmp(pathname, "/dev/ptp0"))

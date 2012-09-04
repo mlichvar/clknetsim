@@ -1,0 +1,15 @@
+#!/bin/bash
+
+CLKNETSIM_PATH=..
+. ../clknetsim.bash
+
+echo "node1_freq = (sum (* 1e-9 (normal)))" > tmp/conf
+echo "node1_refclock = (* 1e-6 (normal))" >> tmp/conf
+
+start_client 1 phc2sys ""
+
+start_server 1 -v 2 -o log.offset -f log.freq -r 1000 -l 4000
+
+cat tmp/stats
+
+rm -rf tmp
