@@ -64,7 +64,7 @@ start_client() {
 start_server() {
     local nodes=$1
     shift
-    $CLKNETSIM_PATH/clknetsim "$@" -s tmp/sock tmp/conf $nodes > tmp/stats 2> tmp/log
+    $server_wrapper $CLKNETSIM_PATH/clknetsim "$@" -s tmp/sock tmp/conf $nodes > tmp/stats 2> tmp/log
     if [ $? -ne 0 ]; then
         echo clknetsim failed 1>&2
         exit 1
