@@ -354,7 +354,8 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 
 	fill_refclock_sample();
 
-	FD_ZERO(readfds);
+	if (readfds)
+		FD_ZERO(readfds);
 
 	if (timer_enabled && time >= timer_timeout) {
 		timer_timeout += timer_interval;
