@@ -78,6 +78,7 @@ public:
 	void set_offset_generator(Generator *gen);
 	void update(double time, const Clock *clock);
 	bool get_reftime(double *time, double *offset) const;
+	void get_refoffsets(double *offsets, int size);
 };
 
 #endif

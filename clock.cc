@@ -333,3 +333,10 @@ bool Refclock::get_reftime(double *time, double *offset) const {
 	*offset = this->offset;
 	return valid;
 }
+
+void Refclock::get_refoffsets(double *offsets, int size) {
+	int i;
+
+	for (i = 0; i < size; i++)
+		offsets[i] = offset_generator->generate();
+}

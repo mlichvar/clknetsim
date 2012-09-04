@@ -31,6 +31,7 @@
 #define REQ_SEND 7
 #define REQ_RECV 8
 #define REQ_GETREFTIME 9
+#define REQ_GETREFOFFSETS 10
 
 struct Request_header {
 	long request;
@@ -47,6 +48,7 @@ struct Request_register {
 struct Reply_gettime {
 	double time;
 	double mono_time;
+	double network_time;
 };
 
 struct Request_settime {
@@ -102,6 +104,12 @@ struct Reply_getreftime {
 	double offset;
 	int valid;
 	int _pad;
+};
+
+#define REPLY_GETREFOFFSETS_SIZE 1024
+
+struct Reply_getrefoffsets {
+	double offsets[REPLY_GETREFOFFSETS_SIZE];
 };
 
 #endif

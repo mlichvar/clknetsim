@@ -44,7 +44,10 @@
 #define BASE_ADDR 0xc0a87b01 /* 192.168.123.1 */
 #define BROADCAST_ADDR (BASE_ADDR | 0xff)
 #define NETMASK 0xffffff00
+#define PHC_FD 1000
+#define PHC_CLOCKID ((~(clockid_t)PHC_FD << 3) | 3)
 
+static int (*_open)(const char *pathname, int flags);
 static int (*_socket)(int domain, int type, int protocol);
 static int (*_connect)(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 static ssize_t (*_recvmsg)(int sockfd, struct msghdr *msg, int flags);
@@ -62,6 +65,7 @@ static int next_fd = 0;
 static double local_time = 0.0;
 static double local_mono_time = 0.0;
 static int local_time_valid = 0;
+static double network_time = 0.0;
 
 static time_t system_time_offset = 1262304000; /* 2010-01-01 0:00 UTC */
 
@@ -88,6 +92,8 @@ static struct shmTime {
 
 static int refclock_shm_enabled = 0;
 static double refclock_time = 0.0;
+static struct Reply_getrefoffsets refclock_offsets;
+static int refclock_offsets_used = REPLY_GETREFOFFSETS_SIZE;
 
 static void make_request(int request_id, const void *request_data, int reqlen, void *reply, int replylen);
 
@@ -99,6 +105,7 @@ static void init() {
 
 	assert(!initialized);
 
+	_open = (int (*)(const char *pathname, int flags))dlsym(RTLD_NEXT, "open");
 	_socket = (int (*)(int domain, int type, int protocol))dlsym(RTLD_NEXT, "socket");
 	_connect = (int (*)(int sockfd, const struct sockaddr *addr, socklen_t addrlen))dlsym(RTLD_NEXT, "connect");
 	_recvmsg = (ssize_t (*)(int sockfd, struct msghdr *msg, int flags))dlsym(RTLD_NEXT, "recvmsg");
@@ -166,6 +173,7 @@ static double gettime() {
 		local_time = r.time;
 		local_mono_time = r.mono_time;
 		local_time_valid = 1;
+		network_time = r.network_time;
 	}
 
 	return local_time;
@@ -174,6 +182,15 @@ static double gettime() {
 static double getmonotime() {
 	gettime();
 	return local_mono_time;
+}
+
+static double getphctime() {
+	gettime();
+	if (refclock_offsets_used >= REPLY_GETREFOFFSETS_SIZE) {
+		make_request(REQ_GETREFOFFSETS, NULL, 0, &refclock_offsets, sizeof (refclock_offsets));
+		refclock_offsets_used = 0;
+	}
+	return network_time - refclock_offsets.offsets[refclock_offsets_used++];
 }
 
 static void settime(double time) {
@@ -242,19 +259,23 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 
 	switch (which_clock) {
 		case CLOCK_REALTIME:
-			time = gettime() + 0.5e-9;
+			time = gettime();
 			break;
 		case CLOCK_MONOTONIC:
-			time = getmonotime() + 0.5e-9;
+			time = getmonotime();
+			break;
+		case PHC_CLOCKID:
+			time = getphctime();
 			break;
 		default:
 			assert(0);
 	}
 
+	time += 0.5e-9;
 	tp->tv_sec = floor(time);
 	tp->tv_nsec = (time - tp->tv_sec) * 1e9;
 	
-	if (which_clock == CLOCK_REALTIME)
+	if (which_clock == CLOCK_REALTIME || which_clock == PHC_CLOCKID)
 		tp->tv_sec += system_time_offset;
 
 	/* ntpd calibration routine hack */
@@ -405,6 +426,13 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 	return r;
 }
 #endif
+
+int open(const char *pathname, int flags) {
+	if (!strcmp(pathname, "/dev/ptp0"))
+		return PHC_FD;
+
+	return _open(pathname, flags);
+}
 
 int socket(int domain, int type, int protocol) {
 	if (domain == AF_INET && SOCK_DGRAM)

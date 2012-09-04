@@ -94,6 +94,9 @@ bool Node::process_fd() {
 		case REQ_GETREFTIME:
 			process_getreftime();
 			break;
+		case REQ_GETREFOFFSETS:
+			process_getrefoffsets();
+			break;
 		default:
 			assert(0);
 	}
@@ -117,6 +120,7 @@ void Node::process_gettime() {
 
 	r.time = clock.get_time();
 	r.mono_time = clock.get_monotime();
+	r.network_time = network->get_time();
 	reply(&r, sizeof (r), REQ_GETTIME);
 }
 
@@ -241,6 +245,13 @@ void Node::process_getreftime() {
 	r.valid = refclock.get_reftime(&r.time, &r.offset);
 	r._pad = 0;
 	reply(&r, sizeof (r), REQ_GETREFTIME);
+}
+
+void Node::process_getrefoffsets() {
+	Reply_getrefoffsets r;
+
+	refclock.get_refoffsets(r.offsets, REPLY_GETREFOFFSETS_SIZE);
+	reply(&r, sizeof (r), REQ_GETREFOFFSETS);
 }
 
 void Node::resume() {
