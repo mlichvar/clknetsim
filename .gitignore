@@ -1,0 +1,5 @@
+/*.o
+/.deps
+/clknetsim
+/clknetsim.so
+/tests*
