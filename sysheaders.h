@@ -14,6 +14,9 @@
 #include <stdlib.h>
 
 #ifdef __linux__
+#ifndef ADJ_SETOFFSET
+#define ADJ_SETOFFSET           0x0100  /* add 'time' to current time */
+#endif
 #ifndef ADJ_MICRO
 #define ADJ_MICRO               0x1000  /* select microsecond resolution */
 #endif

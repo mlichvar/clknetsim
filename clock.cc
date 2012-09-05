@@ -20,6 +20,7 @@
 #define MINSEC 256
 #define MAXSEC 2048
 #define MAXTIMECONST 10
+#define MAXMAXERROR 16000000
 #define SHIFT_FLL 2
 #define SCALE_FREQ 65536.0e6
 #define MAXFREQ_SCALED 32768000
@@ -268,11 +269,17 @@ int Clock::adjtimex(struct timex *buf) {
 		} else
 			ntp_timex.tick = buf->tick;
 	}
-
 	if ((buf->modes & ADJ_OFFSET_SINGLESHOT) != ADJ_OFFSET_SINGLESHOT) {
 		if (buf->modes & ADJ_OFFSET) {
 			update_ntp_offset(buf->offset);
 		}
+	}
+	if (buf->modes & ADJ_SETOFFSET) {
+		if (ntp_timex.status & STA_NANO)
+			time += buf->time.tv_sec + buf->time.tv_usec * 1e-9;
+		else
+			time += buf->time.tv_sec + buf->time.tv_usec * 1e-6;
+		ntp_timex.maxerror = MAXMAXERROR;
 	}
 
 	t = ntp_timex;
