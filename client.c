@@ -88,7 +88,9 @@ static struct shmTime {
   int    precision;
   int    nsamples;
   int    valid;
-  int    dummy[10]; 
+  int    clockTimeStampNSec;
+  int    receiveTimeStampNSec;
+  int    dummy[8]; 
 } shm_time;
 
 static int refclock_shm_enabled = 0;
@@ -232,9 +234,11 @@ static void fill_refclock_sample() {
 	shm_time.count++;
 	shm_time.clockTimeStampSec = floor(clock_time);
 	shm_time.clockTimeStampUSec = (clock_time - shm_time.clockTimeStampSec) * 1e6;
+	shm_time.clockTimeStampNSec = (clock_time - shm_time.clockTimeStampSec) * 1e9;
 	shm_time.clockTimeStampSec += system_time_offset;
 	shm_time.receiveTimeStampSec = floor(receive_time);
 	shm_time.receiveTimeStampUSec = (receive_time - shm_time.receiveTimeStampSec) * 1e6;
+	shm_time.receiveTimeStampNSec = (receive_time - shm_time.receiveTimeStampSec) * 1e9;
 	shm_time.receiveTimeStampSec += system_time_offset;
 	shm_time.leap = 0;
 	shm_time.valid = 1;
