@@ -37,6 +37,7 @@
 #include <net/if.h>
 #include <stdarg.h>
 #include <signal.h>
+#include <ifaddrs.h>
 
 #include "protocol.h"
 
@@ -560,6 +561,41 @@ int ioctl(int d, unsigned long request, ...) {
 
 	va_end(ap);
 	return ret;
+}
+
+int getifaddrs(struct ifaddrs **ifap) {
+	static struct sockaddr_in addrs[5];
+	static struct ifaddrs ifaddrs[2];
+	uint32_t sin_addrs[5] = {INADDR_LOOPBACK, 0xff000000, BASE_ADDR + node, NETMASK, BROADCAST_ADDR};
+	int i;
+       
+	ifaddrs[0] = (struct ifaddrs){
+		.ifa_next = &ifaddrs[1],
+		.ifa_name = "lo",
+		.ifa_flags = IFF_UP | IFF_LOOPBACK,
+		.ifa_addr = (struct sockaddr *)&addrs[0],
+		.ifa_netmask = (struct sockaddr *)&addrs[1]
+	};
+
+	ifaddrs[1] = (struct ifaddrs){
+		.ifa_name = "eth0",
+		.ifa_flags = IFF_UP | IFF_BROADCAST,
+		.ifa_addr = (struct sockaddr *)&addrs[2],
+		.ifa_netmask = (struct sockaddr *)&addrs[3],
+		.ifa_broadaddr = (struct sockaddr *)&addrs[4]
+	};
+
+	for (i = 0; i < 5; i++)
+		addrs[i] = (struct sockaddr_in){
+			.sin_addr.s_addr = htonl(sin_addrs[i]),
+			.sin_family = AF_INET
+		};
+
+	*ifap = ifaddrs;
+	return 0;
+}
+
+void freeifaddrs(struct ifaddrs *ifa) {
 }
 
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
