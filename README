@@ -1,45 +1,64 @@
 Clock and Network Simulator (clknetsim)
 =======================================
 
-clknetsim is a clock and network simulator designed for testing unmodified NTP
-servers and clients. The NTP applications have all necessary system functions
-related to networking and clocks replaced by LD_PRELOAD mechanism and are
-clients of clknetsim server which provides access to the virtual network and
-clocks.
+clknetsim is a tool designed to test programs which synchronize the system
+clock, either over network or from a hardware reference clock. It simulates a
+system or a number of systems connected to each other in a network and the
+tested programs discipline the simulated system clocks. It can be used to
+quickly test how well the programs control the system clocks in various
+conditions or to test the network protocols.
+
+The tested programs are not modified in order to be included in the simulation,
+but they have some system calls redirected by a clknetsim library, which is
+loaded by the LD_PRELOAD feature of the dynamic linker, to a clknetsim server,
+which runs the simulation and collects several statistics about each client.
+The server and the clients run on a single host, they communicate via a UNIX
+domain socket. The simulation runs as fast as the host system is capable of,
+with two simulated systems it is usually three or four orders of magnitude
+faster than real time.
+
+Supported programs:
+- chronyd (http://chrony.tuxfamily.org/)
+- ntpd from NTP (http://www.ntp.org/)
+- ntpd from busybox (http://www.busybox.net/)
+- phc2sys from linuxptp (http://linuxptp.sourceforge.net/)
 
 Limitations:
-- only chronyd and ntpd running on Linux are currently supported
-- the simulated system calls provide only a minimal functionality required by
-  supported clients
-- the virtual time advances only on select() timeout, this means the client
-  process sees the CPU as infinitely fast
-- adjtimex frequency and tick changes are immediate, the kernel has infinite HZ
-- adjtime and PLL updates are done in real one second intervals instead of
-  local clock intervals
+- only Linux is supported
+- the fake system calls implement only a minimal functionality required to
+  keep the supported clients working
+- the simulated system clock advances only on select(), poll() or usleep()
+  calls, this means the client sees the CPU as infinitely fast
+- adjtimex() frequency and tick changes happen immediately, the kernel has
+  infinite HZ
+- adjtime() and PLL updates happen in one second intervals in the simulated
+  time instead of the uncorrected simulated system time, all clocks are updated
+  at the same time
 
 
 Usage
 -----
 
-The clknetsim server is started with two mandatory arguments, a configuration
-file describing the network and clocks, and the number of simulated nodes. The
-simulation is started when all clients are connected.
+The clknetsim server is started with two required arguments, the first one is
+path to a configuration file describing the network and clocks and the second
+argument is the number of simulated nodes. The simulation is started when all
+clients are connected.
 
 The clients are started under a non-root user, with preloaded clknetsim.so and
-environment variable CLKNETSIM_NODE set to the number of the client.
-Optionally, environment variable CLKNETSIM_SOCKET can be set to the path of the
-unix domain socket which is used to connect to the server, clknetsim.sock in
-current directory is used by default. CLKNETSIM_START_DATE variable can be used
-to specify in seconds since 1970 when should the simulated time start,
-946684800 by default (2000-01-01 0:00 UTC).
+the environment variable CLKNETSIM_NODE set to the number of the client.
+Optionally, the environment variable CLKNETSIM_SOCKET can be set to the path of
+the UNIX domain socket which is used to connect to the server, clknetsim.sock
+in current directory is used by default. The CLKNETSIM_START_DATE variable can
+be used to specify in seconds since 1970 when should the simulated time start,
+1262304000 by default (2010-01-01 0:00 UTC).
 
 The virtual network uses IPv4 addresses 192.168.123.n where n is the number of
 the node. 192.168.123.255 is the broadcast address.
 
 At the end of the simulation clock and network statistics are printed.
 clknetsim has options which can be used to control for how long the
-simulation should run, or if frequency, offset or network log should be
-written. clknetsim -h prints a complete list.
+simulation should run, or if the frequency, offset or network log should be
+written. clknetsim -h prints a complete list of available options.
 
 A minimal example how to start a simulation:
 
@@ -61,37 +80,57 @@ ntp.conf:
 pidfile ntpd.pid
 server 192.168.123.1
 
+The clknetsim.bash file contains bash functions which can create the
+configuration in several network settings, start the simulation, stop the
+clients and process the results. The examples subdirectory contains an example
+script for each supported client. The above example can be written in a bash
+script as:
+
+CLKNETSIM_PATH=.
+. ./clknetsim.bash
+
+generate_config1 2 0.0 "(sum (* 1e-8 (normal)))" "(+ 1e-1 (* 1e-3 (exponential)))"
+start_client 1 chrony "local stratum 1"
+start_client 2 ntp "server 192.168.123.1"
+start_server 2 -o log.offset -l 100000
+
+cat tmp/stats
+
 
 Configuration file
 ------------------
 
 The configuration file is a text file containing a list of assignments, each
 specified on a separate line, and comments using # as delimiter. Each node has
-several variables that can be configured, they can be set either to a
-floating-point value or a number generating expression using a Lisp-style
-syntax.
+several variables, which configure the system clock, the reference clock and
+the network delays to other nodes in the network. They can be set either to an
+integer value, a floating-point value or a number generating expression written
+in a Lisp-style syntax.
 
 Variables:
 - nodeX_freq = float | expr
-  clock frequency in terms of gained seconds per second of real time, if an
-  expression is specified, the expression is evaluated and frequency updated
-  once per second, the allowed range is (-0.2, 0.2), default 0
+  the system clock frequency error in terms of gained seconds per second of
+  simulated time, if an expression is specified, the expression is evaluated and
+  frequency updated once per simulated second, the allowed range is (-0.2, 0.2),
+  the default is 0
 - nodeX_delayY = expr
-  network delay for packets sent from node X to node Y in seconds, the
-  expression is evaluated for each packet, a negative value means the packet is
-  dropped, no default (if not specified the packets are dropped)
+  the network delay for packets sent from node X to node Y in seconds, the
+  expression is evaluated for each sent packet, a negative value means the
+  packet will be dropped, there is no default (packets are dropped)
 - nodeX_offset = float
-  starting offset in seconds, default 0
+  the initial time error of the system clock in seconds, the default is 0
 - nodeX_start = float
-  time when will be the node started, in seconds, default 0
+  the time in seconds when will be the node started, the default is 0
 - nodeX_refclock = expr
-  SHM refclock offset in seconds, no default (refclock disabled)
+  the reference clock time error in seconds, the clock can be accessed by the
+  client via shared memory (NTP SHM protocol) or as a PTP hardware clock (PHC)
+  via the clock_gettime() function, there is no default (the clock is disabled)
 - nodeX_shift_pll = integer
-  kernel PLL parameter, default 4
+  kernel PLL parameter, the default is 4
 - nodeX_pll_clamp = 1 | 0
-  kernel PLL parameter, default 0
+  kernel PLL parameter, the default is 0
 - nodeX_fll_mode2 = 1 | 0
-  kernel FLL parameter, default 0
+  kernel FLL parameter, the default is 0
 
 Functions and their parameters supported in the expressions:
   (* [expr | float] ...) - multiplication
@@ -105,7 +144,7 @@ Functions and their parameters supported in the expressions:
                            (lambda = 1)
   (poisson lambda)       - random number generator with poisson distribution
   (file "datafile")      - number generator reading floating-point values from
-                           the specified file in loop
+                           the specified file in an inifinite loop
   (pulse high period)    - pulse wave generator
   (sine period)          - sine wave generator
   (triangle period)      - triangle wave generator
@@ -136,7 +175,7 @@ Miroslav Lichvar <mlichvar@redhat.com>
 License
 -------
 
-Copyright (C) 2010  Miroslav Lichvar <mlichvar@redhat.com>
+Copyright (C) 2010, 2011, 2012  Miroslav Lichvar <mlichvar@redhat.com>
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
