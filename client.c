@@ -828,6 +828,12 @@ void __syslog_chk(int priority, const char *format, ...) {
 }
 
 void syslog(int priority, const char *format, ...) {
+	va_list ap;
+
+	va_start(ap, format);
+	vfprintf(stderr, format, ap);
+	va_end(ap);
+	fprintf(stderr, "\n");
 }
 
 void closelog(void) {
