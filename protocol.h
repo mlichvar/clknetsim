@@ -80,6 +80,7 @@ struct Request_select {
 #define REPLY_SELECT_TIMEOUT 0
 #define REPLY_SELECT_NORMAL 1
 #define REPLY_SELECT_BROADCAST 2
+#define REPLY_SELECT_TERMINATE 3
 
 struct Reply_select {
 	int ret;

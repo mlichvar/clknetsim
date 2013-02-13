@@ -160,7 +160,7 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 	if ((sent = send(sockfd, buf, reqlen, 0)) <= 0 ||
 			(received = recv(sockfd, reply, replylen, 0)) <= 0) {
 		fprintf(stderr, "clknetsim connection closed.\n");
-		exit(0);
+		exit(1);
 	}
 
 	assert(sent == reqlen);
@@ -389,6 +389,12 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 
 	if (readfds)
 		FD_ZERO(readfds);
+
+	if (rep.ret == REPLY_SELECT_TERMINATE) {
+		kill(getpid(), SIGTERM);
+		errno = EINTR;
+		return -1;
+	}
 
 	if (timer_enabled && time >= timer_timeout) {
 		timer_timeout += timer_interval;

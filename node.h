@@ -36,6 +36,7 @@ class Node {
 	int pending_request;
 	double select_timeout;
 	double start_time;
+	bool terminate;
 
 	vector<struct Packet *> incoming_packets;
 

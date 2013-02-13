@@ -25,12 +25,21 @@ Node::Node(int index, Network *network) {
 	fd = -1;
 	pending_request = REQ_REGISTER;
 	start_time = 0.0;
+	terminate = false;
 }
 
 Node::~Node() {
 	while (!incoming_packets.empty()) {
 		delete incoming_packets.back();
 		incoming_packets.pop_back();
+	}
+
+	terminate = true;
+
+	if (waiting())
+		resume();
+	while (process_fd()) {
+		assert(!waiting());
 	}
 
 	if (fd >= 0)
@@ -155,7 +164,10 @@ void Node::process_select(void *data) {
 	Request_select *req = (Request_select *)data;
 	Reply_select rep;
 
-	if (incoming_packets.size() > 0) {
+	if (terminate) {
+		rep.ret = REPLY_SELECT_TERMINATE;
+		reply(&rep, sizeof (rep), REQ_SELECT);
+	} else if (incoming_packets.size() > 0) {
 		rep.ret = incoming_packets.back()->broadcast ? REPLY_SELECT_BROADCAST : REPLY_SELECT_NORMAL;
 		reply(&rep, sizeof (rep), REQ_SELECT);
 #ifdef DEBUG
@@ -175,10 +187,14 @@ void Node::process_select(void *data) {
 void Node::process_send(void *data) {
 	Request_send *req = (Request_send *)data;
 	Reply_empty rep = { 0 };
-	struct Packet *packet = new struct Packet;
+	struct Packet *packet;
 
 	assert(req->len <= sizeof (packet->data));
 
+	if (terminate)
+		return;
+
+	packet = new struct Packet;
 	packet->broadcast = req->to == (unsigned int)-1;
 	packet->from = index;
 	packet->to = req->to;
@@ -257,7 +273,10 @@ void Node::process_getrefoffsets() {
 void Node::resume() {
 	switch (pending_request) {
 		case REQ_SELECT:
-			if (select_timeout - clock.get_time() <= 0.0) {
+			if (terminate) {
+				Reply_select rep = { REPLY_SELECT_TERMINATE };
+				reply(&rep, sizeof (rep), REQ_SELECT);
+			} else if (select_timeout - clock.get_time() <= 0.0) {
 				assert(select_timeout - clock.get_time() > -1e-10);
 				Reply_select rep = { REPLY_SELECT_TIMEOUT };
 				reply(&rep, sizeof (rep), REQ_SELECT);
@@ -267,7 +286,7 @@ void Node::resume() {
 			}
 			break;
 		case REQ_REGISTER:
-			if (start_time - network->get_time() <= 0.0) {
+			if (start_time - network->get_time() <= 0.0 || terminate) {
 				Reply_empty rep = { 0 };
 				reply(&rep, sizeof (rep), REQ_REGISTER);
 #ifdef DEBUG
