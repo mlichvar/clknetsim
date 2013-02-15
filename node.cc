@@ -177,7 +177,7 @@ void Node::process_select(void *data) {
 		select_timeout = req->timeout;
 		if (select_timeout < 0.0)
 			select_timeout = 1e20;
-		select_timeout += clock.get_time();
+		select_timeout += clock.get_monotime();
 #ifdef DEBUG
 		printf("suspending select in %d at %f\n", index, clock.get_time());
 #endif
@@ -276,8 +276,8 @@ void Node::resume() {
 			if (terminate) {
 				Reply_select rep = { REPLY_SELECT_TERMINATE };
 				reply(&rep, sizeof (rep), REQ_SELECT);
-			} else if (select_timeout - clock.get_time() <= 0.0) {
-				assert(select_timeout - clock.get_time() > -1e-10);
+			} else if (select_timeout - clock.get_monotime() <= 0.0) {
+				assert(select_timeout - clock.get_monotime() > -1e-10);
 				Reply_select rep = { REPLY_SELECT_TIMEOUT };
 				reply(&rep, sizeof (rep), REQ_SELECT);
 #ifdef DEBUG
@@ -307,7 +307,7 @@ bool Node::waiting() const {
 double Node::get_timeout() const {
 	switch (pending_request) {
 		case REQ_SELECT:
-			return clock.get_real_interval(select_timeout - clock.get_time());
+			return clock.get_real_interval(select_timeout - clock.get_monotime());
 		case REQ_REGISTER:
 			return start_time - network->get_time();
 		default:
