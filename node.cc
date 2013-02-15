@@ -176,7 +176,7 @@ void Node::process_select(void *data) {
 	} else {
 		select_timeout = req->timeout;
 		if (select_timeout < 0.0)
-			select_timeout = 1e20;
+			select_timeout = 0.0;
 		select_timeout += clock.get_monotime();
 #ifdef DEBUG
 		printf("suspending select in %d at %f\n", index, clock.get_time());

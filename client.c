@@ -375,7 +375,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	if (timeout)
 		req.timeout = timeout->tv_sec + (timeout->tv_usec + 1) / 1e6;
 	else
-		req.timeout = -1;
+		req.timeout = 1e20;
 
 	if (timer_enabled && (req.timeout <= 0.0 || time + req.timeout > timer_timeout))
 		req.timeout = timer_timeout - time;
