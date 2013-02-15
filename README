@@ -125,6 +125,9 @@ Variables:
   the reference clock time error in seconds, the clock can be accessed by the
   client via shared memory (NTP SHM protocol) or as a PTP hardware clock (PHC)
   via the clock_gettime() function, there is no default (the clock is disabled)
+- nodeX_step = expr
+  the extra time step applied once per second in seconds, there is no default
+  (no extra steps are applied)
 - nodeX_shift_pll = integer
   kernel PLL parameter, the default is 4
 - nodeX_pll_clamp = 1 | 0

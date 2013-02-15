@@ -67,7 +67,9 @@ bool load_config(const char *file, Network *network, unsigned int nodes) {
 				network->get_node(node)->get_clock()->set_freq_generator(generator.generate(arg));
 			else
 				network->get_node(node)->get_clock()->set_freq(atof(arg));
-		} else if (strncmp(var, "shift_pll", 9) == 0)
+		} else if (strncmp(var, "step", 4) == 0)
+			network->get_node(node)->get_clock()->set_step_generator(generator.generate(arg));
+		else if (strncmp(var, "shift_pll", 9) == 0)
 			network->get_node(node)->get_clock()->set_ntp_shift_pll(atoi(arg));
 		else if (strncmp(var, "fll_mode2", 9) == 0)
 			network->get_node(node)->get_clock()->set_ntp_flag(atoi(arg), CLOCK_NTP_FLL_MODE2);

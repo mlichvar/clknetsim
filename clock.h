@@ -31,6 +31,7 @@ class Clock {
 	double freq;
 
 	Generator *freq_generator;
+	Generator *step_generator;
 
 	struct timex ntp_timex;
 	int ntp_shift_pll;
@@ -53,8 +54,10 @@ public:
 	double get_local_interval(double real_interval) const;
 
 	void set_freq_generator(Generator *gen);
+	void set_step_generator(Generator *gen);
 	void set_freq(double freq);
 	void set_time(double time);
+	void step_time(double step);
 	void set_ntp_shift_pll(int shift);
 	void set_ntp_flag(int enable, int flag);
 

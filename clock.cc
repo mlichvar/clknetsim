@@ -38,6 +38,7 @@ Clock::Clock() {
 	freq = 1.0;
 
 	freq_generator = NULL;
+	step_generator = NULL;
 
 	memset(&ntp_timex, 0, sizeof(ntp_timex));
 	ntp_timex.tick = BASE_TICK;
@@ -57,6 +58,8 @@ Clock::Clock() {
 Clock::~Clock() {
 	if (freq_generator)
 		delete freq_generator;
+	if (step_generator)
+		delete step_generator;
 }
 
 double Clock::get_time() const {
@@ -96,6 +99,12 @@ void Clock::set_freq_generator(Generator *gen) {
 	freq_generator = gen;
 }
 
+void Clock::set_step_generator(Generator *gen) {
+	if (step_generator)
+		delete step_generator;
+	step_generator = gen;
+}
+
 void Clock::set_freq(double freq) {
 	this->freq = freq + 1.0;
 	if (!(this->freq > MIN_FREQ && this->freq < MAX_FREQ)) {
@@ -106,6 +115,10 @@ void Clock::set_freq(double freq) {
 
 void Clock::set_time(double time) {
 	this->time = time;
+}
+
+void Clock::step_time(double step) {
+	this->time += step;
 }
 
 void Clock::set_ntp_shift_pll(int shift) {
@@ -128,6 +141,8 @@ void Clock::advance(double real_interval) {
 void Clock::tick_second() {
 	if (freq_generator)
 		set_freq(freq_generator->generate());
+	if (step_generator)
+		step_time(step_generator->generate());
 	
 	if (ntp_timex.status & STA_PLL) {
 		ntp_update_interval++;
