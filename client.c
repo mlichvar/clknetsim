@@ -458,6 +458,22 @@ int usleep(useconds_t usec) {
 	return 0;
 }
 
+int nanosleep(const struct timespec *req, struct timespec *rem) {
+	struct timeval tv;
+	int r;
+
+	tv.tv_sec = req->tv_sec;
+	tv.tv_usec = req->tv_nsec / 1000 + 1;
+
+	r = select(0, NULL, NULL, NULL, &tv);
+	assert(r == 0);
+
+	if (rem)
+		rem->tv_sec = rem->tv_nsec = 0;
+
+	return 0;
+}
+
 int open(const char *pathname, int flags) {
 	if (!strcmp(pathname, "/dev/ptp0"))
 		return PHC_FD;
