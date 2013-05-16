@@ -474,6 +474,13 @@ int nanosleep(const struct timespec *req, struct timespec *rem) {
 	return 0;
 }
 
+int clock_nanosleep(clockid_t clock_id, int flags,
+		const struct timespec *request,
+		struct timespec *remain) {
+	assert(clock_id == CLOCK_MONOTONIC || clock_id == CLOCK_REALTIME);
+	return nanosleep(request, remain);
+}
+
 int open(const char *pathname, int flags) {
 	if (!strcmp(pathname, "/dev/ptp0"))
 		return PHC_FD;
