@@ -47,7 +47,6 @@ class Packet_queue {
 
 class Network {
 	double time;
-	double time_limit;
 
 	const char *socket_name;
 	vector<Node *> nodes;
@@ -56,8 +55,6 @@ class Network {
 	
 	Packet_queue packet_queue;
 
-	//edges;
-	
 	FILE *offset_log;
 	FILE *freq_log;
 	FILE *rawfreq_log;
