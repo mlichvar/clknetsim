@@ -138,12 +138,15 @@ void Clock::advance(double real_interval) {
 	mono_time += local_interval;
 }
 
-void Clock::tick_second() {
+void Clock::update(bool second) {
 	if (freq_generator)
 		set_freq(freq_generator->generate());
 	if (step_generator)
 		step_time(step_generator->generate());
 	
+	if (!second)
+		return;
+
 	if (ntp_timex.status & STA_PLL) {
 		ntp_update_interval++;
 		ntp_slew = ntp_offset / (1 << (ntp_shift_pll +

@@ -47,6 +47,8 @@ class Packet_queue {
 
 class Network {
 	double time;
+	unsigned int update_rate;
+	unsigned int update_count;
 
 	const char *socket_name;
 	vector<Node *> nodes;
@@ -60,11 +62,11 @@ class Network {
 	FILE *rawfreq_log;
 	FILE *packet_log;
 
-	void tick_second();
+	void update();
 	void update_clock_stats();
 
 	public:
-	Network(const char *socket, unsigned int n);
+	Network(const char *socket, unsigned int n, unsigned int rate);
 	~Network();
 	bool prepare_clients();
 	Node *get_node(unsigned int node);

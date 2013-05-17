@@ -111,8 +111,8 @@ Variables:
 - nodeX_freq = float | expr
   the system clock frequency error in terms of gained seconds per second of
   simulated time, if an expression is specified, the expression is evaluated and
-  frequency updated once per simulated second, the allowed range is (-0.2, 0.2),
-  the default is 0
+  frequency updated once per simulated second (or at the rate specified with
+  the -R option), the allowed range is (-0.2, 0.2), the default is 0
 - nodeX_delayY = expr
   the network delay for packets sent from node X to node Y in seconds, the
   expression is evaluated for each sent packet, a negative value means the
@@ -126,8 +126,8 @@ Variables:
   client via shared memory (NTP SHM protocol) or as a PTP hardware clock (PHC)
   via the clock_gettime() function, there is no default (the clock is disabled)
 - nodeX_step = expr
-  the extra time step applied once per second in seconds, there is no default
-  (no extra steps are applied)
+  the extra time step applied once per second (or at the rate specified with
+  the -R option) in seconds, there is no default (no extra steps are applied)
 - nodeX_shift_pll = integer
   kernel PLL parameter, the default is 4
 - nodeX_pll_clamp = 1 | 0

@@ -54,9 +54,11 @@ double Packet_queue::get_timeout(double time) const {
 	return 1e20;
 }
 
-Network::Network(const char *socket, unsigned int n) {
+Network::Network(const char *socket, unsigned int n, unsigned int rate) {
        	time = 0.0;
 	socket_name = socket;
+	update_rate = rate;
+	update_count = 0;
 	offset_log = NULL;
 	freq_log = NULL;
 	rawfreq_log = NULL;
@@ -145,7 +147,7 @@ bool Network::prepare_clients() {
 
 	close(sockfd);
 
-	tick_second();
+	update();
 
 	return true;
 }
@@ -167,9 +169,10 @@ void Network::set_link_delay_generator(unsigned int from, unsigned int to, Gener
 }
 
 bool Network::run(double time_limit) {
-	int i, n = nodes.size(), waiting, second_overflow;
+	int i, n = nodes.size(), waiting;
+	bool pending_update;
 	struct pollfd pollfds[n];
-	double min_timeout, timeout;
+	double min_timeout, timeout, next_update;
 
 	for (i = 0; i < n; i++) {
 		pollfds[i].fd = nodes[i]->get_fd();
@@ -224,27 +227,28 @@ bool Network::run(double time_limit) {
 			if (timeout <= min_timeout)
 				min_timeout = timeout;
 
-			timeout = floor(time + 1.0) - time;
-			second_overflow = 0;
+			next_update = floor(time) + (double)(update_count + 1) / update_rate;
+			timeout = next_update - time;
 			if (timeout <= min_timeout) {
 				min_timeout = timeout;
-				second_overflow = 1;
-			}
+				pending_update = true;
+			} else
+				pending_update = false;
 
 			//min_timeout += 1e-12;
 			assert(min_timeout >= 0.0);
 
-			if (second_overflow)
-				time = floor(time + 1.0);
+			if (pending_update)
+				time = next_update;
 			else
 				time += min_timeout;
 
 			for (i = 0; i < n; i++)
 				nodes[i]->get_clock()->advance(min_timeout);
 
-			if (second_overflow)
-				tick_second();
-		} while (second_overflow && time < time_limit);
+			if (pending_update)
+				update();
+		} while (pending_update && time < time_limit);
 
 		for (i = 0; i < n; i++)
 			nodes[i]->resume();
@@ -259,11 +263,14 @@ bool Network::run(double time_limit) {
 	return true;
 }
 
-void Network::tick_second() {
+void Network::update() {
 	int i, n = nodes.size();
 
+	update_count++;
+	update_count %= update_rate;
+
 	for (i = 0; i < n; i++) {
-		nodes[i]->get_clock()->tick_second();
+		nodes[i]->get_clock()->update(update_count == 0);
 		nodes[i]->get_refclock()->update(time, nodes[i]->get_clock());
 	}
 
