@@ -38,6 +38,7 @@
 #include <stdarg.h>
 #include <signal.h>
 #include <ifaddrs.h>
+#include <linux/ptp_clock.h>
 
 #include "protocol.h"
 
@@ -585,8 +586,13 @@ int ioctl(int d, unsigned long request, ...) {
 		else
 			((struct sockaddr_in*)&req->ifr_netmask)->sin_addr.s_addr = 0;
 		req->ifr_netmask.sa_family = AF_INET;
-	} else
+#ifdef PTP_CLOCK_GETCAPS
+	} else if (request == PTP_CLOCK_GETCAPS && d == PHC_FD) {
+#endif
+	} else {
 		ret = -1;
+		errno = EINVAL;
+	}
 
 	va_end(ap);
 	return ret;
