@@ -572,10 +572,13 @@ int ioctl(int d, unsigned long request, ...) {
 		else if (!strcmp(req->ifr_name, "eth0"))
 			req->ifr_flags = IFF_UP | IFF_BROADCAST;
 		else
-			req->ifr_flags = 0;
+			ret = -1, errno = EINVAL;
 	} else if (request == SIOCGIFBRDADDR) {
 		req = va_arg(ap, struct ifreq *);
-		((struct sockaddr_in*)&req->ifr_broadaddr)->sin_addr.s_addr = htonl(BROADCAST_ADDR);
+		if (!strcmp(req->ifr_name, "eth0"))
+			((struct sockaddr_in*)&req->ifr_broadaddr)->sin_addr.s_addr = htonl(BROADCAST_ADDR);
+		else
+			ret = -1, errno = EINVAL;
 		req->ifr_broadaddr.sa_family = AF_INET;
 	} else if (request == SIOCGIFNETMASK) {
 		req = va_arg(ap, struct ifreq *);
@@ -584,7 +587,7 @@ int ioctl(int d, unsigned long request, ...) {
 		else if (!strcmp(req->ifr_name, "eth0"))
 			((struct sockaddr_in*)&req->ifr_netmask)->sin_addr.s_addr = htonl(NETMASK);
 		else
-			((struct sockaddr_in*)&req->ifr_netmask)->sin_addr.s_addr = 0;
+			ret = -1, errno = EINVAL;
 		req->ifr_netmask.sa_family = AF_INET;
 #ifdef PTP_CLOCK_GETCAPS
 	} else if (request == PTP_CLOCK_GETCAPS && d == PHC_FD) {
