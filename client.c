@@ -368,7 +368,8 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	if (!initialized)
 		init();
 
-	assert(timeout || timer_enabled ||
+	assert((timeout && (timeout->tv_sec > 0 || timeout->tv_usec > 0)) ||
+			timer_enabled ||
 			(ntp_eth_fd && FD_ISSET(ntp_eth_fd, readfds)) ||
 			(ntp_any_fd && FD_ISSET(ntp_any_fd, readfds)));
 
@@ -380,7 +381,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	else
 		req.timeout = 1e20;
 
-	if (timer_enabled && (req.timeout <= 0.0 || time + req.timeout > timer_timeout))
+	if (timer_enabled && time + req.timeout > timer_timeout)
 		req.timeout = timer_timeout - time;
 
 	make_request(REQ_SELECT, &req, sizeof (req), &rep, sizeof (rep));
