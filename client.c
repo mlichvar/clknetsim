@@ -422,7 +422,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 
 #if 1
 int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
-	struct timeval tv;
+	struct timeval tv, *ptv = NULL;
 	int r, maxfd = 0;
 	nfds_t i;
 	fd_set rfds;
@@ -436,10 +436,13 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 				maxfd = fds[i].fd;
 		}
 
-	tv.tv_sec = timeout / 1000;
-	tv.tv_usec = (timeout % 1000) * 1000;
+	if (timeout >= 0) {
+		tv.tv_sec = timeout / 1000;
+		tv.tv_usec = (timeout % 1000) * 1000;
+		ptv = &tv;
+	}
 
-	r = select(maxfd, &rfds, NULL, NULL, &tv);
+	r = select(maxfd, &rfds, NULL, NULL, ptv);
 
 	for (i = 0; i < nfds; i++)
 		fds[i].revents = r > 0 && FD_ISSET(fds[i].fd, &rfds) ? POLLIN : 0;
