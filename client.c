@@ -49,6 +49,7 @@
 #define PHC_FD 1000
 #define PHC_CLOCKID ((~(clockid_t)PHC_FD << 3) | 3)
 
+static FILE *(*_fopen)(const char *path, const char *mode);
 static int (*_open)(const char *pathname, int flags);
 static int (*_socket)(int domain, int type, int protocol);
 static int (*_connect)(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
@@ -110,6 +111,7 @@ static void init() {
 
 	assert(!initialized);
 
+	_fopen = (FILE *(*)(const char *path, const char *mode))dlsym(RTLD_NEXT, "fopen");
 	_open = (int (*)(const char *pathname, int flags))dlsym(RTLD_NEXT, "open");
 	_socket = (int (*)(int domain, int type, int protocol))dlsym(RTLD_NEXT, "socket");
 	_connect = (int (*)(int sockfd, const struct sockaddr *addr, socklen_t addrlen))dlsym(RTLD_NEXT, "connect");
@@ -480,6 +482,15 @@ int clock_nanosleep(clockid_t clock_id, int flags,
 		struct timespec *remain) {
 	assert(clock_id == CLOCK_MONOTONIC || clock_id == CLOCK_REALTIME);
 	return nanosleep(request, remain);
+}
+
+FILE *fopen(const char *path, const char *mode) {
+	if (!strcmp(path, "/proc/net/if_inet6")) {
+		errno = ENOENT;
+		return NULL;
+	}
+
+	return _fopen(path, mode);
 }
 
 int open(const char *pathname, int flags) {
