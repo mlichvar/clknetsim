@@ -600,6 +600,16 @@ int ioctl(int d, unsigned long request, ...) {
 		else
 			ret = -1, errno = EINVAL;
 		req->ifr_netmask.sa_family = AF_INET;
+	} else if (request == SIOCGIFHWADDR) {
+		char mac[IFHWADDRLEN] = {0x12, 0x23, 0x45, 0x67, 0x78, node};
+		req = va_arg(ap, struct ifreq *);
+		if (!strcmp(req->ifr_name, "lo"))
+			memset((&req->ifr_hwaddr)->sa_data, 0, sizeof (mac));
+		else if (!strcmp(req->ifr_name, "eth0"))
+			memcpy((&req->ifr_hwaddr)->sa_data, mac, sizeof (mac));
+		else
+			ret = -1, errno = EINVAL;
+		req->ifr_netmask.sa_family = AF_UNSPEC;
 #ifdef PTP_CLOCK_GETCAPS
 	} else if (request == PTP_CLOCK_GETCAPS && d == PHC_FD) {
 #endif
