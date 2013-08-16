@@ -35,7 +35,7 @@ start_client() {
 	    echo "logconfig=syncstatus +allevents" >> tmp/conf.$node
 	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
 	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
-	    $client_wrapper ntpd$suffix -n -c tmp/conf.$node -l tmp/log.$node $opts &> tmp/log.$node.err &
+	    $client_wrapper ntpd$suffix -n -c tmp/conf.$node $opts &> tmp/log.$node &
 	    ;;
 	ntpq)
 	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
