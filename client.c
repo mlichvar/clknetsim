@@ -576,6 +576,14 @@ int ioctl(int d, unsigned long request, ...) {
 		((struct sockaddr_in*)&conf->ifc_req[1].ifr_addr)->sin_addr.s_addr = htonl(BASE_ADDR + node);
 		conf->ifc_req[0].ifr_addr.sa_family = AF_INET;
 		conf->ifc_req[1].ifr_addr.sa_family = AF_INET;
+	} else if (request == SIOCGIFINDEX) {
+		req = va_arg(ap, struct ifreq *);
+		if (!strcmp(req->ifr_name, "lo"))
+			req->ifr_ifindex = 0;
+		else if (!strcmp(req->ifr_name, "eth0"))
+			req->ifr_ifindex = 1;
+		else
+			ret = -1, errno = EINVAL;
 	} else if (request == SIOCGIFFLAGS) {
 		req = va_arg(ap, struct ifreq *);
 		if (!strcmp(req->ifr_name, "lo"))
