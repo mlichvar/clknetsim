@@ -105,7 +105,7 @@ static int refclock_offsets_used = REPLY_GETREFOFFSETS_SIZE;
 
 static void make_request(int request_id, const void *request_data, int reqlen, void *reply, int replylen);
 
-static void init() {
+static void init(void) {
 	struct Request_register req;
 	struct Reply_empty rep;
 	struct sockaddr_un s = {AF_UNIX, "clknetsim.sock"};
@@ -172,7 +172,7 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 	assert(received == replylen);
 }
 
-static double gettime() {
+static double gettime(void) {
 	struct Reply_gettime r;
 
 	if (!initialized)
@@ -189,12 +189,12 @@ static double gettime() {
 	return local_time;
 }
 
-static double getmonotime() {
+static double getmonotime(void) {
 	gettime();
 	return local_mono_time;
 }
 
-static double getphctime() {
+static double getphctime(void) {
 	gettime();
 	if (refclock_offsets_used >= REPLY_GETREFOFFSETS_SIZE) {
 		make_request(REQ_GETREFOFFSETS, NULL, 0, &refclock_offsets, sizeof (refclock_offsets));
@@ -216,7 +216,7 @@ static void settime(double time) {
 	local_time_valid = 0;
 }
 
-static void fill_refclock_sample() {
+static void fill_refclock_sample(void) {
 	struct Reply_getreftime r;
 	double clock_time, receive_time;
 
