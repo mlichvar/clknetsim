@@ -50,6 +50,8 @@
 #define PHC_CLOCKID ((~(clockid_t)PHC_FD << 3) | 3)
 #define MIN_SOCKET_FD 100
 #define MAX_SOCKET_FD 199
+#define MAX_TIMERS 20
+#define BASE_TIMER_ID 0xC1230123
 
 static FILE *(*_fopen)(const char *path, const char *mode);
 static int (*_open)(const char *pathname, int flags);
@@ -75,10 +77,16 @@ static double network_time = 0.0;
 
 static time_t system_time_offset = 1262304000; /* 2010-01-01 0:00 UTC */
 
-static timer_t timer = NULL + 123123;
-static int timer_enabled = 0;
-static double timer_timeout = 0.0;
-static double timer_interval = 0.0;
+struct timer {
+	int used;
+	int armed;
+	double timeout;
+	double interval;
+};
+
+static struct timer timers[MAX_TIMERS];
+
+static timer_t itimer_real_id;
 
 #define SHMKEY 0x4e545030
 
@@ -248,6 +256,42 @@ static void fill_refclock_sample(void) {
 	shm_time.valid = 1;
 }
 
+static int get_first_timer(void) {
+	int i, r = -1;
+
+	for (i = 0; i < MAX_TIMERS; i++) {
+		if (!timers[i].used || !timers[i].armed)
+			continue;
+		if (r < 0 || timers[r].timeout > timers[i].timeout)
+			r = i;
+	}
+
+	return r;
+}
+
+static int get_free_timer(void) {
+	int i;
+
+	for (i = 0; i < MAX_TIMERS; i++) {
+		if (!timers[i].used)
+			return i;
+	}
+
+	return -1;
+}
+
+static timer_t get_timerid(int timer) {
+	return (timer_t)((long)timer + BASE_TIMER_ID);
+}
+
+static int get_timer(timer_t timerid) {
+	int t = (long)timerid - BASE_TIMER_ID;
+
+	if (t >= 0 && t < MAX_TIMERS && timers[t].used)
+		return t;
+	return -1;
+}
+
 int gettimeofday(struct timeval *tv, struct timezone *tz) {
 	double time;
 
@@ -364,12 +408,15 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	struct Request_select req;
 	struct Reply_select rep;
 	double time;
+	int timer;
 
 	if (!initialized)
 		init();
 
+	timer = get_first_timer();
+
 	assert((timeout && (timeout->tv_sec > 0 || timeout->tv_usec > 0)) ||
-			timer_enabled ||
+			timer >= 0 ||
 			(ntp_eth_fd && FD_ISSET(ntp_eth_fd, readfds)) ||
 			(ntp_any_fd && FD_ISSET(ntp_any_fd, readfds)));
 
@@ -381,8 +428,8 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	else
 		req.timeout = 1e20;
 
-	if (timer_enabled && time + req.timeout > timer_timeout)
-		req.timeout = timer_timeout - time;
+	if (timer >= 0 && time + req.timeout > timers[timer].timeout)
+		req.timeout = timers[timer].timeout - time;
 
 	make_request(REQ_SELECT, &req, sizeof (req), &rep, sizeof (rep));
 
@@ -400,8 +447,8 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 		return -1;
 	}
 
-	if (timer_enabled && time >= timer_timeout) {
-		timer_timeout += timer_interval;
+	if (timer >= 0 && time >= timers[timer].timeout) {
+		timers[timer].timeout += timers[timer].interval;
 		kill(getpid(), SIGALRM);
 		errno = EINTR;
 		return -1;
@@ -789,34 +836,73 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags) {
 }
 
 int timer_create(clockid_t which_clock, struct sigevent *timer_event_spec, timer_t *created_timer_id) {
+	int t;
+
 	assert(which_clock == CLOCK_REALTIME && timer_event_spec == NULL);
-	timer = *created_timer_id;
+
+	t = get_free_timer();
+	if (t < 0) {
+		assert(0);
+		errno = ENOMEM;
+		return -1;
+	}
+
+	timers[t].used = 1;
+	*created_timer_id = get_timerid(t);
+
+	return 0;
+}
+
+int timer_delete(timer_t timerid) {
+	int t = get_timer(timerid);
+
+	if (t < 0) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	timers[t].used = 0;
+
 	return 0;
 }
 
 int timer_settime(timer_t timerid, int flags, const struct itimerspec *value, struct itimerspec *ovalue) {
-	assert(flags == 0 && value && ovalue == NULL);
-	assert(timerid == timer);
+	int t = get_timer(timerid);
 
-	timer_enabled = 1;
-	timer_timeout = getmonotime() + value->it_value.tv_sec + value->it_value.tv_nsec * 1e-9;
-	timer_interval = value->it_interval.tv_sec + value->it_interval.tv_nsec * 1e-9;
+	assert(flags == 0 && value && ovalue == NULL);
+	assert(value->it_interval.tv_sec || value->it_interval.tv_nsec);
+
+	if (t < 0) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	timers[t].armed = 1;
+	timers[t].timeout = getmonotime() + value->it_value.tv_sec + value->it_value.tv_nsec * 1e-9;
+	timers[t].interval = value->it_interval.tv_sec + value->it_interval.tv_nsec * 1e-9;
 
 	return 0;
 }
 
 int timer_gettime(timer_t timerid, struct itimerspec *value) {
 	double timeout;
+	int t = get_timer(timerid);
 
-	assert(timerid == timer);
-	if (!timer_enabled)
+	if (t < 0) {
+		errno = EINVAL;
 		return -1;
+	}
 
-	timeout = timer_timeout - getmonotime();
-	value->it_value.tv_sec = timeout;
-	value->it_value.tv_nsec = (timeout - value->it_value.tv_sec) * 1e9;
-	value->it_interval.tv_sec = timer_interval;
-	value->it_interval.tv_nsec = (timer_interval - value->it_interval.tv_sec) * 1e9;
+	if (timers[t].armed) {
+		timeout = timers[t].timeout - getmonotime();
+		value->it_value.tv_sec = timeout;
+		value->it_value.tv_nsec = (timeout - value->it_value.tv_sec) * 1e9;
+	} else {
+		value->it_value.tv_sec = 0;
+		value->it_value.tv_nsec = 0;
+	}
+	value->it_interval.tv_sec = timers[t].interval;
+	value->it_interval.tv_nsec = (timers[t].interval - value->it_interval.tv_sec) * 1e9;
 
 	return 0;
 }
@@ -827,12 +913,15 @@ int setitimer(__itimer_which_t which, const struct itimerval *new_value, struct 
 
 	assert(which == ITIMER_REAL && old_value == NULL);
 
+	if (get_timer(itimer_real_id) < 0)
+		timer_create(CLOCK_REALTIME, NULL, &itimer_real_id);
+
 	timerspec.it_interval.tv_sec = new_value->it_interval.tv_sec;
 	timerspec.it_interval.tv_nsec = new_value->it_interval.tv_usec * 1000;
 	timerspec.it_value.tv_sec = new_value->it_value.tv_sec;
 	timerspec.it_value.tv_nsec = new_value->it_value.tv_usec * 1000;
 
-	return timer_settime(timer, 0, &timerspec, NULL);
+	return timer_settime(itimer_real_id, 0, &timerspec, NULL);
 }
 
 int getitimer(__itimer_which_t which, struct itimerval *curr_value) {
@@ -841,7 +930,7 @@ int getitimer(__itimer_which_t which, struct itimerval *curr_value) {
 
 	assert(which == ITIMER_REAL);
 
-	r = timer_gettime(timer, &timerspec);
+	r = timer_gettime(itimer_real_id, &timerspec);
 	curr_value->it_interval.tv_sec = timerspec.it_interval.tv_sec;
 	curr_value->it_interval.tv_usec = timerspec.it_interval.tv_nsec / 1000;
 	curr_value->it_value.tv_sec = timerspec.it_value.tv_sec;
