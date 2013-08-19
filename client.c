@@ -292,6 +292,15 @@ static int get_timer(timer_t timerid) {
 	return -1;
 }
 
+static void rearm_timer(int timer)
+{
+	assert(timers[timer].armed);
+	if (timers[timer].interval > 0.0)
+		timers[timer].timeout += timers[timer].interval;
+	else
+		timers[timer].armed = 0;
+}
+
 int gettimeofday(struct timeval *tv, struct timezone *tz) {
 	double time;
 
@@ -448,7 +457,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	}
 
 	if (timer >= 0 && time >= timers[timer].timeout) {
-		timers[timer].timeout += timers[timer].interval;
+		rearm_timer(timer);
 		kill(getpid(), SIGALRM);
 		errno = EINTR;
 		return -1;
@@ -870,16 +879,19 @@ int timer_settime(timer_t timerid, int flags, const struct itimerspec *value, st
 	int t = get_timer(timerid);
 
 	assert(flags == 0 && value && ovalue == NULL);
-	assert(value->it_interval.tv_sec || value->it_interval.tv_nsec);
 
 	if (t < 0) {
 		errno = EINVAL;
 		return -1;
 	}
 
-	timers[t].armed = 1;
-	timers[t].timeout = getmonotime() + value->it_value.tv_sec + value->it_value.tv_nsec * 1e-9;
-	timers[t].interval = value->it_interval.tv_sec + value->it_interval.tv_nsec * 1e-9;
+	if (value->it_value.tv_sec || value->it_value.tv_nsec) {
+		timers[t].armed = 1;
+		timers[t].timeout = getmonotime() + value->it_value.tv_sec + value->it_value.tv_nsec * 1e-9;
+		timers[t].interval = value->it_interval.tv_sec + value->it_interval.tv_nsec * 1e-9;
+	} else {
+		timers[t].armed = 0;
+	}
 
 	return 0;
 }
