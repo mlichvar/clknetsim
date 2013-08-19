@@ -212,8 +212,6 @@ static void settime(double time) {
 	make_request(REQ_SETTIME, &req, sizeof (req), &rep, sizeof (rep));
 
 	local_time_valid = 0;
-	if (timer_enabled)
-		timer_timeout += gettime() - time;
 }
 
 static void fill_refclock_sample() {
@@ -374,7 +372,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 			(ntp_any_fd && FD_ISSET(ntp_any_fd, readfds)));
 
 	select_called = 1;
-	time = gettime();
+	time = getmonotime();
 
 	if (timeout)
 		req.timeout = timeout->tv_sec + (timeout->tv_usec + 1) / 1e6;
@@ -387,7 +385,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	make_request(REQ_SELECT, &req, sizeof (req), &rep, sizeof (rep));
 
 	local_time_valid = 0;
-	time = gettime();
+	time = getmonotime();
 
 	fill_refclock_sample();
 
@@ -795,7 +793,7 @@ int timer_settime(timer_t timerid, int flags, const struct itimerspec *value, st
 	assert(timerid == timer);
 
 	timer_enabled = 1;
-	timer_timeout = gettime() + value->it_value.tv_sec + value->it_value.tv_nsec * 1e-9;
+	timer_timeout = getmonotime() + value->it_value.tv_sec + value->it_value.tv_nsec * 1e-9;
 	timer_interval = value->it_interval.tv_sec + value->it_interval.tv_nsec * 1e-9;
 
 	return 0;
@@ -808,7 +806,7 @@ int timer_gettime(timer_t timerid, struct itimerspec *value) {
 	if (!timer_enabled)
 		return -1;
 
-	timeout = timer_timeout - gettime();
+	timeout = timer_timeout - getmonotime();
 	value->it_value.tv_sec = timeout;
 	value->it_value.tv_nsec = (timeout - value->it_value.tv_sec) * 1e9;
 	value->it_interval.tv_sec = timer_interval;
