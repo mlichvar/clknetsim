@@ -48,6 +48,8 @@
 #define NETMASK 0xffffff00
 #define PHC_FD 1000
 #define PHC_CLOCKID ((~(clockid_t)PHC_FD << 3) | 3)
+#define MIN_SOCKET_FD 100
+#define MAX_SOCKET_FD 199
 
 static FILE *(*_fopen)(const char *path, const char *mode);
 static int (*_open)(const char *pathname, int flags);
@@ -64,7 +66,7 @@ static int select_called = 0;
 static int ntp_eth_fd = 0;
 static int ntp_any_fd = 0;
 static int ntp_broadcast_fd = 0;
-static int next_fd = 0;
+static int last_socket_fd = MIN_SOCKET_FD - 1;
 
 static double local_time = 0.0;
 static double local_mono_time = 0.0;
@@ -503,8 +505,12 @@ int open(const char *pathname, int flags) {
 }
 
 int socket(int domain, int type, int protocol) {
-	if (domain == AF_INET && SOCK_DGRAM)
-		return (next_fd++ % 500) + 100;
+	if (domain == AF_INET && SOCK_DGRAM) {
+		last_socket_fd++;
+		if (last_socket_fd > MAX_SOCKET_FD)
+			last_socket_fd = MIN_SOCKET_FD;
+		return last_socket_fd;
+	}
 	errno = EINVAL;
 	return -1;
 }
