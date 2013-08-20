@@ -57,6 +57,7 @@
 
 static FILE *(*_fopen)(const char *path, const char *mode);
 static int (*_open)(const char *pathname, int flags);
+static int (*_close)(int fd);
 static int (*_socket)(int domain, int type, int protocol);
 static int (*_connect)(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 static ssize_t (*_recvmsg)(int sockfd, struct msghdr *msg, int flags);
@@ -129,6 +130,7 @@ static void init(void) {
 
 	_fopen = (FILE *(*)(const char *path, const char *mode))dlsym(RTLD_NEXT, "fopen");
 	_open = (int (*)(const char *pathname, int flags))dlsym(RTLD_NEXT, "open");
+	_close = (int (*)(int fd))dlsym(RTLD_NEXT, "close");
 	_socket = (int (*)(int domain, int type, int protocol))dlsym(RTLD_NEXT, "socket");
 	_connect = (int (*)(int sockfd, const struct sockaddr *addr, socklen_t addrlen))dlsym(RTLD_NEXT, "connect");
 	_recvmsg = (ssize_t (*)(int sockfd, struct msghdr *msg, int flags))dlsym(RTLD_NEXT, "recvmsg");
@@ -590,6 +592,27 @@ int open(const char *pathname, int flags) {
 		return PHC_FD;
 
 	return _open(pathname, flags);
+}
+
+int close(int fd) {
+	int t;
+
+	if (fd == PHC_FD) {
+		return 0;
+	} else if (fd == ntp_any_fd) {
+		ntp_any_fd = 0;
+		return 0;
+	} else if (fd == ntp_eth_fd) {
+		ntp_eth_fd = 0;
+		return 0;
+	} else if (fd == ntp_broadcast_fd) {
+		ntp_broadcast_fd = 0;
+		return 0;
+	} else if ((t = get_timer_from_fd(fd)) >= 0) {
+		return timer_delete(get_timerid(t));
+	}
+
+	return _close(fd);
 }
 
 int socket(int domain, int type, int protocol) {
