@@ -39,6 +39,7 @@
 #include <signal.h>
 #include <ifaddrs.h>
 #include <linux/ptp_clock.h>
+#include <sys/timerfd.h>
 
 #include "protocol.h"
 
@@ -52,6 +53,7 @@
 #define MAX_SOCKET_FD 199
 #define MAX_TIMERS 20
 #define BASE_TIMER_ID 0xC1230123
+#define BASE_TIMER_FD 200
 
 static FILE *(*_fopen)(const char *path, const char *mode);
 static int (*_open)(const char *pathname, int flags);
@@ -77,9 +79,13 @@ static double network_time = 0.0;
 
 static time_t system_time_offset = 1262304000; /* 2010-01-01 0:00 UTC */
 
+#define TIMER_TYPE_SIGNAL 1
+#define TIMER_TYPE_FD 2
+
 struct timer {
 	int used;
 	int armed;
+	int type;
 	double timeout;
 	double interval;
 };
@@ -256,19 +262,6 @@ static void fill_refclock_sample(void) {
 	shm_time.valid = 1;
 }
 
-static int get_first_timer(void) {
-	int i, r = -1;
-
-	for (i = 0; i < MAX_TIMERS; i++) {
-		if (!timers[i].used || !timers[i].armed)
-			continue;
-		if (r < 0 || timers[r].timeout > timers[i].timeout)
-			r = i;
-	}
-
-	return r;
-}
-
 static int get_free_timer(void) {
 	int i;
 
@@ -284,12 +277,39 @@ static timer_t get_timerid(int timer) {
 	return (timer_t)((long)timer + BASE_TIMER_ID);
 }
 
-static int get_timer(timer_t timerid) {
+static int get_timer_from_id(timer_t timerid) {
 	int t = (long)timerid - BASE_TIMER_ID;
 
 	if (t >= 0 && t < MAX_TIMERS && timers[t].used)
 		return t;
 	return -1;
+}
+
+static int get_timerfd(int timer) {
+	return timer + BASE_TIMER_FD;
+}
+
+static int get_timer_from_fd(int fd) {
+	int t = fd - BASE_TIMER_FD;
+
+	if (t >= 0 && t < MAX_TIMERS && timers[t].used)
+		return t;
+	return -1;
+}
+
+static int get_first_timer(fd_set *timerfds) {
+	int i, r = -1;
+
+	for (i = 0; i < MAX_TIMERS; i++) {
+		if (!timers[i].used || !timers[i].armed)
+			continue;
+		if (timers[i].type == TIMER_TYPE_FD && !FD_ISSET(get_timerfd(i), timerfds))
+			continue;
+		if (r < 0 || timers[r].timeout > timers[i].timeout)
+			r = i;
+	}
+
+	return r;
 }
 
 static void rearm_timer(int timer)
@@ -422,7 +442,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	if (!initialized)
 		init();
 
-	timer = get_first_timer();
+	timer = get_first_timer(readfds);
 
 	assert((timeout && (timeout->tv_sec > 0 || timeout->tv_usec > 0)) ||
 			timer >= 0 ||
@@ -462,9 +482,17 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 
 	if (rep.ret == REPLY_SELECT_TIMEOUT && timer >= 0 && time >= timers[timer].timeout) {
 		rearm_timer(timer);
-		kill(getpid(), SIGALRM);
-		errno = EINTR;
-		return -1;
+		switch (timers[timer].type) {
+			case TIMER_TYPE_SIGNAL:
+				kill(getpid(), SIGALRM);
+				errno = EINTR;
+				return -1;
+			case TIMER_TYPE_FD:
+				FD_SET(get_timerfd(timer), readfds);
+				return 1;
+			default:
+				assert(0);
+		}
 	}
 
 	if (rep.ret == REPLY_SELECT_NORMAL || (rep.ret == REPLY_SELECT_BROADCAST && !ntp_broadcast_fd)) {
@@ -861,13 +889,14 @@ int timer_create(clockid_t which_clock, struct sigevent *timer_event_spec, timer
 	}
 
 	timers[t].used = 1;
+	timers[t].type = TIMER_TYPE_SIGNAL;
 	*created_timer_id = get_timerid(t);
 
 	return 0;
 }
 
 int timer_delete(timer_t timerid) {
-	int t = get_timer(timerid);
+	int t = get_timer_from_id(timerid);
 
 	if (t < 0) {
 		errno = EINVAL;
@@ -880,7 +909,7 @@ int timer_delete(timer_t timerid) {
 }
 
 int timer_settime(timer_t timerid, int flags, const struct itimerspec *value, struct itimerspec *ovalue) {
-	int t = get_timer(timerid);
+	int t = get_timer_from_id(timerid);
 
 	assert(flags == 0 && value && ovalue == NULL);
 
@@ -902,7 +931,7 @@ int timer_settime(timer_t timerid, int flags, const struct itimerspec *value, st
 
 int timer_gettime(timer_t timerid, struct itimerspec *value) {
 	double timeout;
-	int t = get_timer(timerid);
+	int t = get_timer_from_id(timerid);
 
 	if (t < 0) {
 		errno = EINVAL;
@@ -929,7 +958,7 @@ int setitimer(__itimer_which_t which, const struct itimerval *new_value, struct 
 
 	assert(which == ITIMER_REAL && old_value == NULL);
 
-	if (get_timer(itimer_real_id) < 0)
+	if (get_timer_from_id(itimer_real_id) < 0)
 		timer_create(CLOCK_REALTIME, NULL, &itimer_real_id);
 
 	timerspec.it_interval.tv_sec = new_value->it_interval.tv_sec;
@@ -955,6 +984,34 @@ int getitimer(__itimer_which_t which, struct itimerval *curr_value) {
 	return r; 
 }
 #endif
+
+int timerfd_create(int clockid, int flags) {
+	int t;
+
+	assert((clockid == CLOCK_REALTIME || clockid == CLOCK_MONOTONIC) && !flags);
+
+	t = get_free_timer();
+	if (t < 0) {
+		assert(0);
+		errno = ENOMEM;
+		return -1;
+	}
+
+	timers[t].used = 1;
+	timers[t].type = TIMER_TYPE_FD;
+
+	return get_timerfd(t);
+}
+
+int timerfd_settime(int fd, int flags, const struct itimerspec *new_value, struct itimerspec *old_value) {
+	assert(!flags);
+
+	return timer_settime(get_timerid(get_timer_from_fd(fd)), 0, new_value, old_value);
+}
+
+int timerfd_gettime(int fd, struct itimerspec *curr_value) {
+	return timer_gettime(get_timerid(get_timer_from_fd(fd)), curr_value);
+}
 
 int shmget(key_t key, size_t size, int shmflg) {
 	if (key == SHMKEY)
