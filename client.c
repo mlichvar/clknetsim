@@ -65,7 +65,7 @@ static int (*_usleep)(useconds_t usec);
 
 static unsigned int node;
 static int initialized = 0;
-static int sockfd;
+static int clknetsim_fd;
 static int precision_hack = 1;
 
 static int ntp_eth_fd = 0;
@@ -151,11 +151,11 @@ static void init(void) {
 	if (env)
 		system_time_offset = atol(env);
 
-	sockfd = _socket(AF_UNIX, SOCK_STREAM, 0);
+	clknetsim_fd = _socket(AF_UNIX, SOCK_STREAM, 0);
 
-	assert(sockfd >= 0);
+	assert(clknetsim_fd >= 0);
 
-	while (_connect(sockfd, (struct sockaddr *)&s, sizeof (s)) < 0)
+	while (_connect(clknetsim_fd, (struct sockaddr *)&s, sizeof (s)) < 0)
 		_usleep(100000);
 
 	initialized = 1;
@@ -178,8 +178,8 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 		memcpy(buf + sizeof (struct Request_header), request_data, reqlen);
 	reqlen += sizeof (struct Request_header);
 
-	if ((sent = send(sockfd, buf, reqlen, 0)) <= 0 ||
-			(received = recv(sockfd, reply, replylen, 0)) <= 0) {
+	if ((sent = send(clknetsim_fd, buf, reqlen, 0)) <= 0 ||
+			(received = recv(clknetsim_fd, reply, replylen, 0)) <= 0) {
 		fprintf(stderr, "clknetsim connection closed.\n");
 		exit(1);
 	}
