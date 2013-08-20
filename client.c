@@ -456,7 +456,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 		return -1;
 	}
 
-	if (timer >= 0 && time >= timers[timer].timeout) {
+	if (rep.ret == REPLY_SELECT_TIMEOUT && timer >= 0 && time >= timers[timer].timeout) {
 		rearm_timer(timer);
 		kill(getpid(), SIGALRM);
 		errno = EINTR;
