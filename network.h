@@ -31,6 +31,7 @@ struct Packet {
 	int broadcast;
 	unsigned int from;
 	unsigned int to;
+	unsigned int port;
 	unsigned int len;
 	char data[MAX_NTP_PACKETSIZE];
 };

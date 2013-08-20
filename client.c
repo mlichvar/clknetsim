@@ -498,11 +498,13 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	}
 
 	if (rep.ret == REPLY_SELECT_NORMAL || (rep.ret == REPLY_SELECT_BROADCAST && !ntp_broadcast_fd)) {
+		assert(rep.port == NTP_PORT);
 		FD_SET(ntp_eth_fd ? ntp_eth_fd : ntp_any_fd, readfds);
 		return 1;
 	}
 
 	if (rep.ret == REPLY_SELECT_BROADCAST && ntp_broadcast_fd) {
+		assert(rep.port == NTP_PORT);
 		FD_SET(ntp_broadcast_fd, readfds);
 		return 1;
 	}
@@ -810,6 +812,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 		req.to = -1; /* broadcast */
 	else
 		req.to = ntohl(sa->sin_addr.s_addr) - BASE_ADDR;
+	req.port = NTP_PORT;
 	req.len = msg->msg_iov[0].iov_len;
 	memcpy(req.data, msg->msg_iov[0].iov_base, req.len);
 

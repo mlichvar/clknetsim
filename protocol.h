@@ -84,18 +84,21 @@ struct Request_select {
 
 struct Reply_select {
 	int ret;
+	unsigned int port; /* for NORMAL or BROADCAST */
 };
 
 #define MAX_NTP_PACKETSIZE 1000
 
 struct Request_send {
 	unsigned int to;
+	unsigned int port;
 	unsigned int len;
 	char data[MAX_NTP_PACKETSIZE];
 };
 
 struct Reply_recv {
 	unsigned int from;
+	unsigned int port;
 	unsigned int len;
 	char data[MAX_NTP_PACKETSIZE];
 };

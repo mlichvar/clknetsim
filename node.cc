@@ -166,9 +166,11 @@ void Node::process_select(void *data) {
 
 	if (terminate) {
 		rep.ret = REPLY_SELECT_TERMINATE;
+		rep.port = 0;
 		reply(&rep, sizeof (rep), REQ_SELECT);
 	} else if (incoming_packets.size() > 0) {
 		rep.ret = incoming_packets.back()->broadcast ? REPLY_SELECT_BROADCAST : REPLY_SELECT_NORMAL;
+		rep.port = incoming_packets.back()->port;
 		reply(&rep, sizeof (rep), REQ_SELECT);
 #ifdef DEBUG
 		printf("returning select immediately in %d at %f\n", index, clock.get_time());
@@ -198,6 +200,7 @@ void Node::process_send(void *data) {
 	packet->broadcast = req->to == (unsigned int)-1;
 	packet->from = index;
 	packet->to = req->to;
+	packet->port = req->port;
 	packet->len = req->len;
 	memcpy(packet->data, req->data, req->len);
 	network->send(packet);
@@ -211,6 +214,7 @@ void Node::process_recv() {
 
 	if (incoming_packets.empty()) {
 		rep.from = -1;
+		rep.port = 0;
 		rep.len = 0;
 		memset(rep.data, 0, sizeof (rep.data));
 		reply(&rep, sizeof (rep), REQ_RECV);
@@ -221,6 +225,7 @@ void Node::process_recv() {
 	packet = incoming_packets.back();
 
 	rep.from = packet->from;
+	rep.port = packet->port;
 	rep.len = packet->len;
 
 	assert(packet->len <= sizeof (rep.data));
@@ -248,6 +253,7 @@ void Node::receive(struct Packet *packet) {
 	if (pending_request == REQ_SELECT) {
 		Reply_select rep;
 		rep.ret = incoming_packets.back()->broadcast ? REPLY_SELECT_BROADCAST : REPLY_SELECT_NORMAL;
+		rep.port = incoming_packets.back()->port;
 		reply(&rep, sizeof (rep), REQ_SELECT);
 #ifdef DEBUG
 		printf("resuming select in %d at %f\n", index, clock.get_time());
@@ -274,11 +280,11 @@ void Node::resume() {
 	switch (pending_request) {
 		case REQ_SELECT:
 			if (terminate) {
-				Reply_select rep = { REPLY_SELECT_TERMINATE };
+				Reply_select rep = { REPLY_SELECT_TERMINATE, 0 };
 				reply(&rep, sizeof (rep), REQ_SELECT);
 			} else if (select_timeout - clock.get_monotime() <= 0.0) {
 				assert(select_timeout - clock.get_monotime() > -1e-10);
-				Reply_select rep = { REPLY_SELECT_TIMEOUT };
+				Reply_select rep = { REPLY_SELECT_TIMEOUT, 0 };
 				reply(&rep, sizeof (rep), REQ_SELECT);
 #ifdef DEBUG
 				printf("resuming select in %d at %f\n", index, clock.get_time());

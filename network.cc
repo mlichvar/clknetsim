@@ -369,18 +369,18 @@ void Network::send(struct Packet *packet) {
 	stats[packet->from].update_packet_stats(false, delay);
 
 	if (packet_log)
-		fprintf(packet_log, "%e\t%d\t%d\t%e\n", time, packet->from + 1, packet->to + 1, delay);
+		fprintf(packet_log, "%e\t%d\t%d\t%e\t%d\n", time, packet->from + 1, packet->to + 1, delay, packet->port);
 
 	if (delay > 0.0) {
 		packet->receive_time = time + delay;
 		packet_queue.insert(packet);
 		stats[packet->to].update_packet_stats(true, delay);
 #ifdef DEBUG
-		printf("sending packet from %d to %d at %f delay %f\n", packet->from, packet->to, time, delay);
+		printf("sending packet from %d to %d:%d at %f delay %f\n", packet->from, packet->to, packet->port, time, delay);
 #endif
 	} else {
 #ifdef DEBUG
-		printf("dropping packet from %d to %d at %f\n", packet->from, packet->to, time);
+		printf("dropping packet from %d to %d:%d at %f\n", packet->from, packet->to, packet->port, time);
 #endif
 		delete packet;
 	}
