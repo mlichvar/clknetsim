@@ -63,7 +63,7 @@ static int (*_usleep)(useconds_t usec);
 static unsigned int node;
 static int initialized = 0;
 static int sockfd;
-static int select_called = 0;
+static int precision_hack = 1;
 
 static int ntp_eth_fd = 0;
 static int ntp_any_fd = 0;
@@ -310,8 +310,8 @@ int gettimeofday(struct timeval *tv, struct timezone *tz) {
 	tv->tv_usec = (time - tv->tv_sec) * 1e6;
 	tv->tv_sec += system_time_offset;
 
-	/* chrony calibration routine hack */
-	if (!select_called)
+	/* chrony clock precision routine hack */
+	if (precision_hack)
 		tv->tv_usec += random() % 2;
 
 	return 0;
@@ -341,8 +341,8 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 	if (which_clock == CLOCK_REALTIME || which_clock == PHC_CLOCKID)
 		tp->tv_sec += system_time_offset;
 
-	/* ntpd calibration routine hack */
-	if (!select_called) {
+	/* ntpd clock precision routine hack */
+	if (precision_hack) {
 		static int x = 0;
 		tp->tv_nsec += x++ * 101;
 	}
@@ -429,7 +429,6 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 			(ntp_eth_fd && FD_ISSET(ntp_eth_fd, readfds)) ||
 			(ntp_any_fd && FD_ISSET(ntp_any_fd, readfds)));
 
-	select_called = 1;
 	time = getmonotime();
 
 	if (timeout)
@@ -444,6 +443,11 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 
 	local_time_valid = 0;
 	time = getmonotime();
+
+	if (time >= 0.1 || timer >= 0 ||
+			(ntp_eth_fd && FD_ISSET(ntp_eth_fd, readfds)) ||
+			(ntp_any_fd && FD_ISSET(ntp_any_fd, readfds)))
+		precision_hack = 0;
 
 	fill_refclock_sample();
 
