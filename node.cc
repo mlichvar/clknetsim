@@ -193,17 +193,16 @@ void Node::process_send(void *data) {
 
 	assert(req->len <= sizeof (packet->data));
 
-	if (terminate)
-		return;
-
-	packet = new struct Packet;
-	packet->broadcast = req->to == (unsigned int)-1;
-	packet->from = index;
-	packet->to = req->to;
-	packet->port = req->port;
-	packet->len = req->len;
-	memcpy(packet->data, req->data, req->len);
-	network->send(packet);
+	if (!terminate) {
+		packet = new struct Packet;
+		packet->broadcast = req->to == (unsigned int)-1;
+		packet->from = index;
+		packet->to = req->to;
+		packet->port = req->port;
+		packet->len = req->len;
+		memcpy(packet->data, req->data, req->len);
+		network->send(packet);
+	}
 
 	reply(&rep, sizeof (rep), REQ_SEND);
 }
