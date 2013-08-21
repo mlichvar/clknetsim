@@ -439,17 +439,23 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	struct Request_select req;
 	struct Reply_select rep;
 	double time;
-	int timer;
+	int timer, any_fd_set;
 
 	if (!initialized)
 		init();
 
 	timer = get_first_timer(readfds);
 
+	if (ntp_eth_fd || ntp_any_fd) {
+		assert(!ntp_eth_fd || FD_ISSET(ntp_eth_fd, readfds));
+		assert(!ntp_any_fd || FD_ISSET(ntp_any_fd, readfds));
+		any_fd_set = 1;
+	} else {
+		any_fd_set = 0;
+	}
+
 	assert((timeout && (timeout->tv_sec > 0 || timeout->tv_usec > 0)) ||
-			timer >= 0 ||
-			(ntp_eth_fd && FD_ISSET(ntp_eth_fd, readfds)) ||
-			(ntp_any_fd && FD_ISSET(ntp_any_fd, readfds)));
+			timer >= 0 || any_fd_set);
 
 	time = getmonotime();
 
@@ -466,9 +472,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	local_time_valid = 0;
 	time = getmonotime();
 
-	if (time >= 0.1 || timer >= 0 ||
-			(ntp_eth_fd && FD_ISSET(ntp_eth_fd, readfds)) ||
-			(ntp_any_fd && FD_ISSET(ntp_any_fd, readfds)))
+	if (time >= 0.1 || timer >= 0 || any_fd_set)
 		precision_hack = 0;
 
 	fill_refclock_sample();
