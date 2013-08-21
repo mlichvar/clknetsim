@@ -87,20 +87,20 @@ struct Reply_select {
 	unsigned int port; /* for NORMAL or BROADCAST */
 };
 
-#define MAX_NTP_PACKETSIZE 1000
+#define MAX_PACKET_SIZE 1000
 
 struct Request_send {
 	unsigned int to;
 	unsigned int port;
 	unsigned int len;
-	char data[MAX_NTP_PACKETSIZE];
+	char data[MAX_PACKET_SIZE];
 };
 
 struct Reply_recv {
 	unsigned int from;
 	unsigned int port;
 	unsigned int len;
-	char data[MAX_NTP_PACKETSIZE];
+	char data[MAX_PACKET_SIZE];
 };
 
 struct Reply_getreftime {

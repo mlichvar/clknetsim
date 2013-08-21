@@ -44,9 +44,13 @@
 #include "protocol.h"
 
 #define NTP_PORT 123
+#define PTP_EVENT_PORT 319
+#define PTP_GENERAL_PORT 320
 #define BASE_ADDR 0xc0a87b01 /* 192.168.123.1 */
 #define BROADCAST_ADDR (BASE_ADDR | 0xff)
 #define NETMASK 0xffffff00
+#define PTP_PRIMARY_MCAST_ADDR 0xe0000181 /* 224.0.1.129 */
+#define PTP_PDELAY_MCAST_ADDR 0xe000006b /* 224.0.0.107 */
 #define PHC_FD 1000
 #define PHC_CLOCKID ((~(clockid_t)PHC_FD << 3) | 3)
 #define MIN_SOCKET_FD 100
@@ -71,6 +75,8 @@ static int precision_hack = 1;
 static int ntp_eth_fd = 0;
 static int ntp_any_fd = 0;
 static int ntp_broadcast_fd = 0;
+static int ptp_event_fd = 0;
+static int ptp_general_fd = 0;
 static int last_socket_fd = MIN_SOCKET_FD - 1;
 
 static double local_time = 0.0;
@@ -446,9 +452,11 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 
 	timer = get_first_timer(readfds);
 
-	if (ntp_eth_fd || ntp_any_fd) {
+	if (ntp_eth_fd || ntp_any_fd || ptp_event_fd || ptp_general_fd) {
 		assert(!ntp_eth_fd || FD_ISSET(ntp_eth_fd, readfds));
 		assert(!ntp_any_fd || FD_ISSET(ntp_any_fd, readfds));
+		assert(!ptp_event_fd || FD_ISSET(ptp_event_fd, readfds));
+		assert(!ptp_general_fd || FD_ISSET(ptp_general_fd, readfds));
 		any_fd_set = 1;
 	} else {
 		any_fd_set = 0;
@@ -502,8 +510,20 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	}
 
 	if (rep.ret == REPLY_SELECT_NORMAL || (rep.ret == REPLY_SELECT_BROADCAST && !ntp_broadcast_fd)) {
-		assert(rep.port == NTP_PORT);
-		FD_SET(ntp_eth_fd ? ntp_eth_fd : ntp_any_fd, readfds);
+		switch (rep.port) {
+			case NTP_PORT:
+				assert(ntp_eth_fd || ntp_any_fd);
+				FD_SET(ntp_eth_fd ? ntp_eth_fd : ntp_any_fd, readfds);
+				break;
+			case PTP_EVENT_PORT:
+				assert(ptp_event_fd);
+				FD_SET(ptp_event_fd, readfds);
+				break;
+			case PTP_GENERAL_PORT:
+				assert(ptp_general_fd);
+				FD_SET(ptp_general_fd, readfds);
+				break;
+		}
 		return 1;
 	}
 
@@ -614,6 +634,12 @@ int close(int fd) {
 	} else if (fd == ntp_broadcast_fd) {
 		ntp_broadcast_fd = 0;
 		return 0;
+	} else if (fd == ptp_event_fd) {
+		ptp_event_fd = 0;
+		return 0;
+	} else if (fd == ptp_general_fd) {
+		ptp_general_fd = 0;
+		return 0;
 	} else if ((t = get_timer_from_fd(fd)) >= 0) {
 		return timer_delete(get_timerid(t));
 	}
@@ -648,17 +674,28 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 	       
 	in = (struct sockaddr_in *)addr;
 
-	if (ntohs(in->sin_port) == NTP_PORT || ntohs(in->sin_port) == 0) {
-		if (ntohl(in->sin_addr.s_addr) == INADDR_ANY)
-			ntp_any_fd = sockfd;
-		else if (ntohl(in->sin_addr.s_addr) == BASE_ADDR + node)
-			ntp_eth_fd = sockfd;
-		else if (ntohl(in->sin_addr.s_addr) == BROADCAST_ADDR) 
-			ntp_broadcast_fd = sockfd;
-		else if (ntohl(in->sin_addr.s_addr) == INADDR_LOOPBACK)
-			return 0;
-		else
-			assert(0);
+	switch (ntohs(in->sin_port)) {
+		case 0:
+		case NTP_PORT:
+			if (ntohl(in->sin_addr.s_addr) == INADDR_ANY)
+				ntp_any_fd = sockfd;
+			else if (ntohl(in->sin_addr.s_addr) == BASE_ADDR + node)
+				ntp_eth_fd = sockfd;
+			else if (ntohl(in->sin_addr.s_addr) == BROADCAST_ADDR) 
+				ntp_broadcast_fd = sockfd;
+			else if (ntohl(in->sin_addr.s_addr) == INADDR_LOOPBACK)
+				return 0;
+			else
+				assert(0);
+			break;
+		case PTP_EVENT_PORT:
+			assert(ntohl(in->sin_addr.s_addr) == INADDR_ANY);
+			ptp_event_fd = sockfd;
+			break;
+		case PTP_GENERAL_PORT:
+			assert(ntohl(in->sin_addr.s_addr) == INADDR_ANY);
+			ptp_general_fd = sockfd;
+			break;
 	}
 
 	return 0;
@@ -796,7 +833,8 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 
 	struct sockaddr_in *sa;
 
-	if (sockfd != ntp_eth_fd && sockfd != ntp_any_fd) {
+	if (sockfd != ntp_eth_fd && sockfd != ntp_any_fd &&
+			sockfd != ptp_event_fd && sockfd != ptp_general_fd) {
 		printf("sendmsg inval sockfd\n");
 		errno = EINVAL;
 		return -1;
@@ -808,15 +846,25 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 	sa = msg->msg_name;
 
 	assert(sa && msg->msg_namelen >= sizeof (struct sockaddr_in));
-	assert(sa->sin_family == AF_INET && ntohs(sa->sin_port) == NTP_PORT);
+	assert(sa->sin_family == AF_INET);
 	assert(msg->msg_iovlen == 1);
-	assert(msg->msg_iov[0].iov_len <= MAX_NTP_PACKETSIZE);
+	assert(msg->msg_iov[0].iov_len <= MAX_PACKET_SIZE);
 
-	if (sa->sin_addr.s_addr == htonl(BROADCAST_ADDR))
+	if (sa->sin_addr.s_addr == htonl(BROADCAST_ADDR) ||
+			sa->sin_addr.s_addr == htonl(PTP_PRIMARY_MCAST_ADDR) ||
+			sa->sin_addr.s_addr == htonl(PTP_PDELAY_MCAST_ADDR))
 		req.to = -1; /* broadcast */
 	else
 		req.to = ntohl(sa->sin_addr.s_addr) - BASE_ADDR;
-	req.port = NTP_PORT;
+
+	assert(req.to == -1 || req.to < BROADCAST_ADDR - BASE_ADDR);
+
+	req.port = ntohs(sa->sin_port);
+
+	assert((req.port == NTP_PORT && (sockfd == ntp_eth_fd || sockfd == ntp_any_fd)) ||
+			(req.port == PTP_EVENT_PORT && sockfd == ptp_event_fd) ||
+			(req.port == PTP_GENERAL_PORT && sockfd == ptp_general_fd));
+
 	req.len = msg->msg_iov[0].iov_len;
 	memcpy(req.data, msg->msg_iov[0].iov_base, req.len);
 
@@ -846,7 +894,8 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	struct Reply_recv rep;
 	struct sockaddr_in *sa;
 
-	if (sockfd != ntp_eth_fd && sockfd != ntp_any_fd && sockfd != ntp_broadcast_fd)
+	if (sockfd != ntp_eth_fd && sockfd != ntp_any_fd && sockfd != ntp_broadcast_fd &&
+			sockfd != ptp_event_fd && sockfd != ptp_general_fd)
 		return _recvmsg(sockfd, msg, flags);
 
 	if (!initialized)
@@ -864,8 +913,12 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		return -1;
 	}
 
+	assert((rep.port == NTP_PORT && (sockfd == ntp_eth_fd || sockfd == ntp_any_fd)) ||
+			(rep.port == PTP_EVENT_PORT && sockfd == ptp_event_fd) ||
+			(rep.port == PTP_GENERAL_PORT && sockfd == ptp_general_fd));
+
 	sa->sin_family = AF_INET;
-	sa->sin_port = htons(NTP_PORT);
+	sa->sin_port = htons(rep.port);
 	sa->sin_addr.s_addr = htonl(BASE_ADDR + rep.from);
 	msg->msg_namelen = sizeof (struct sockaddr_in);
 

@@ -33,7 +33,7 @@ struct Packet {
 	unsigned int to;
 	unsigned int port;
 	unsigned int len;
-	char data[MAX_NTP_PACKETSIZE];
+	char data[MAX_PACKET_SIZE];
 };
 
 class Packet_queue {
