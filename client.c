@@ -901,11 +901,6 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	if (!initialized)
 		init();
 
-	sa = msg->msg_name;
-
-	assert(sa && msg->msg_namelen >= sizeof (struct sockaddr_in));
-	assert(msg->msg_iovlen == 1);
-
 	make_request(REQ_RECV, NULL, 0, &rep, sizeof (rep));
 
 	if (rep.len == 0) {
@@ -917,11 +912,17 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 			(rep.port == PTP_EVENT_PORT && sockfd == ptp_event_fd) ||
 			(rep.port == PTP_GENERAL_PORT && sockfd == ptp_general_fd));
 
-	sa->sin_family = AF_INET;
-	sa->sin_port = htons(rep.port);
-	sa->sin_addr.s_addr = htonl(BASE_ADDR + rep.from);
-	msg->msg_namelen = sizeof (struct sockaddr_in);
+	if (msg->msg_name) {
+		assert(msg->msg_namelen >= sizeof (struct sockaddr_in));
 
+		sa = msg->msg_name;
+		sa->sin_family = AF_INET;
+		sa->sin_port = htons(rep.port);
+		sa->sin_addr.s_addr = htonl(BASE_ADDR + rep.from);
+		msg->msg_namelen = sizeof (struct sockaddr_in);
+	}
+
+	assert(msg->msg_iovlen == 1);
 	assert(msg->msg_iov[0].iov_len >= rep.len);
 	memcpy(msg->msg_iov[0].iov_base, rep.data, rep.len);
 
