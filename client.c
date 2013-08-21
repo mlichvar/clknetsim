@@ -544,6 +544,12 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 	nfds_t i;
 	fd_set rfds;
 
+	/* ptp4l waiting for tx SO_TIMESTAMPING */
+	if (nfds == 1 && ptp_event_fd && fds[0].fd == ptp_event_fd && !fds[0].events) {
+		fds[0].revents = POLLERR;
+		return 1;
+	}
+
 	FD_ZERO(&rfds);
 
 	for (i = 0; i < nfds; i++)
@@ -901,7 +907,14 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	if (!initialized)
 		init();
 
-	make_request(REQ_RECV, NULL, 0, &rep, sizeof (rep));
+	if (sockfd == ptp_event_fd && flags == MSG_ERRQUEUE) {
+		/* dummy message for tx time stamp */
+		rep.from = node;
+		rep.port = PTP_EVENT_PORT;
+		rep.len = 1;
+		rep.data[0] = 0;
+	} else
+		make_request(REQ_RECV, NULL, 0, &rep, sizeof (rep));
 
 	if (rep.len == 0) {
 		errno = EWOULDBLOCK;
@@ -926,7 +939,25 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	assert(msg->msg_iov[0].iov_len >= rep.len);
 	memcpy(msg->msg_iov[0].iov_base, rep.data, rep.len);
 
-	msg->msg_controllen = 0;
+	if (sockfd == ptp_event_fd) {
+		struct timespec ts;
+		struct cmsghdr *cmsg;
+		int len = CMSG_SPACE(3 * sizeof (struct timespec));
+
+		clock_gettime(CLOCK_REALTIME, &ts);
+
+		assert(msg->msg_control && msg->msg_controllen >= len);
+
+		cmsg = CMSG_FIRSTHDR(msg);
+		cmsg->cmsg_level = SOL_SOCKET;
+		cmsg->cmsg_type = SO_TIMESTAMPING;
+		cmsg->cmsg_len = len;
+
+		memcpy(CMSG_DATA(cmsg), &ts, sizeof (ts));
+
+		msg->msg_controllen = len;
+	} else
+		msg->msg_controllen = 0;
 
 	return rep.len;
 }
