@@ -662,7 +662,8 @@ int close(int fd) {
 		return 0;
 	} else if ((t = get_timer_from_fd(fd)) >= 0) {
 		return timer_delete(get_timerid(t));
-	}
+	} else if (fd >= MIN_SOCKET_FD && fd <= MAX_SOCKET_FD)
+		return 0;
 
 	return _close(fd);
 }
