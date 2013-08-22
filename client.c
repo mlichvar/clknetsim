@@ -472,18 +472,23 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	else
 		req.timeout = 1e20;
 
-	if (timer >= 0 && time + req.timeout > timers[timer].timeout)
-		req.timeout = timers[timer].timeout - time;
+	if (timer >= 0 && timers[timer].timeout <= time) {
+		/* avoid unnecessary requests */
+		rep.ret = REPLY_SELECT_TIMEOUT;
+	} else {
+		if (timer >= 0 && time + req.timeout > timers[timer].timeout)
+			req.timeout = timers[timer].timeout - time;
 
-	make_request(REQ_SELECT, &req, sizeof (req), &rep, sizeof (rep));
+		make_request(REQ_SELECT, &req, sizeof (req), &rep, sizeof (rep));
 
-	local_time_valid = 0;
-	time = getmonotime();
+		local_time_valid = 0;
+		time = getmonotime();
 
-	if (time >= 0.1 || timer >= 0 || any_fd_set)
-		precision_hack = 0;
+		fill_refclock_sample();
 
-	fill_refclock_sample();
+		if (time >= 0.1 || timer >= 0 || any_fd_set)
+			precision_hack = 0;
+	}
 
 	if (readfds)
 		FD_ZERO(readfds);

@@ -173,16 +173,23 @@ void Node::process_select(void *data) {
 		rep.port = incoming_packets.back()->port;
 		reply(&rep, sizeof (rep), REQ_SELECT);
 #ifdef DEBUG
-		printf("returning select immediately in %d at %f\n", index, clock.get_time());
+		printf("returning select immediately for packet in %d at %f\n", index, clock.get_time());
 #endif
 	} else {
 		select_timeout = req->timeout;
-		if (select_timeout < 0.0)
-			select_timeout = 0.0;
-		select_timeout += clock.get_monotime();
+		if (select_timeout > 0.0) {
+			select_timeout += clock.get_monotime();
 #ifdef DEBUG
-		printf("suspending select in %d at %f\n", index, clock.get_time());
+			printf("suspending select with timeout %f in %d at %f\n", req->timeout, index, clock.get_time());
 #endif
+		} else {
+			rep.ret = REPLY_SELECT_TIMEOUT;
+			rep.port = 0;
+			reply(&rep, sizeof (rep), REQ_SELECT);
+#ifdef DEBUG
+			printf("returning select immediately for zero timeout in %d at %f\n", index, clock.get_time());
+#endif
+		}
 	}
 }
 
