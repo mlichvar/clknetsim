@@ -782,7 +782,7 @@ int ioctl(int d, unsigned long request, ...) {
 			ret = -1, errno = EINVAL;
 		req->ifr_netmask.sa_family = AF_INET;
 	} else if (request == SIOCGIFHWADDR) {
-		char mac[IFHWADDRLEN] = {0x12, 0x23, 0x45, 0x67, 0x78, node};
+		char mac[IFHWADDRLEN] = {0x12, 0x23, 0x45, 0x67, 0x78, node + 1};
 		req = va_arg(ap, struct ifreq *);
 		if (!strcmp(req->ifr_name, "lo"))
 			memset((&req->ifr_hwaddr)->sa_data, 0, sizeof (mac));
