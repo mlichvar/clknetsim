@@ -39,6 +39,9 @@
 #include <signal.h>
 #include <ifaddrs.h>
 #include <linux/ptp_clock.h>
+#include <linux/ethtool.h>
+#include <linux/net_tstamp.h>
+#include <linux/sockios.h>
 #include <sys/timerfd.h>
 
 #include "protocol.h"
@@ -51,8 +54,14 @@
 #define NETMASK 0xffffff00
 #define PTP_PRIMARY_MCAST_ADDR 0xe0000181 /* 224.0.1.129 */
 #define PTP_PDELAY_MCAST_ADDR 0xe000006b /* 224.0.0.107 */
-#define PHC_FD 1000
-#define PHC_CLOCKID ((~(clockid_t)PHC_FD << 3) | 3)
+
+#define REFCLK_FD 1000
+#define REFCLK_ID ((~(clockid_t)REFCLK_FD << 3) | 3)
+#define REFCLK_PHC_INDEX 0
+#define SYSCLK_FD 1001
+#define SYSCLK_CLOCKID ((~(clockid_t)SYSCLK_FD << 3) | 3)
+#define SYSCLK_PHC_INDEX 1
+
 #define MIN_SOCKET_FD 100
 #define MAX_SOCKET_FD 199
 #define MAX_TIMERS 20
@@ -355,7 +364,7 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 		case CLOCK_MONOTONIC:
 			time = getmonotime();
 			break;
-		case PHC_CLOCKID:
+		case REFCLK_ID:
 			time = getphctime();
 			break;
 		default:
@@ -366,7 +375,7 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 	tp->tv_sec = floor(time);
 	tp->tv_nsec = (time - tp->tv_sec) * 1e9;
 	
-	if (which_clock == CLOCK_REALTIME || which_clock == PHC_CLOCKID)
+	if (which_clock == CLOCK_REALTIME || which_clock == REFCLK_ID)
 		tp->tv_sec += system_time_offset;
 
 	/* ntpd clock precision routine hack */
@@ -732,7 +741,7 @@ int fcntl(int fd, int cmd, ...) {
 	return 0;
 }
 
-int ioctl(int d, unsigned long request, ...) {
+int ioctl(int fd, unsigned long request, ...) {
 	va_list ap;
 	struct ifconf *conf;
 	struct ifreq *req;
@@ -791,8 +800,31 @@ int ioctl(int d, unsigned long request, ...) {
 		else
 			ret = -1, errno = EINVAL;
 		req->ifr_netmask.sa_family = AF_UNSPEC;
+#ifdef ETHTOOL_GET_TS_INFO
+	} else if (request == SIOCETHTOOL) {
+		struct ethtool_ts_info *info;
+		req = va_arg(ap, struct ifreq *);
+		info = (struct ethtool_ts_info *)req->ifr_data;
+		memset(info, 0, sizeof (*info));
+		if (!strcmp(req->ifr_name, "eth0")) {
+			info->phc_index = SYSCLK_PHC_INDEX;
+			info->so_timestamping = SOF_TIMESTAMPING_SOFTWARE |
+				SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_RX_SOFTWARE |
+				SOF_TIMESTAMPING_RAW_HARDWARE |
+				SOF_TIMESTAMPING_TX_HARDWARE | SOF_TIMESTAMPING_RX_HARDWARE;
+			info->tx_types = HWTSTAMP_TX_ON;
+			info->rx_filters = HWTSTAMP_FILTER_NONE | HWTSTAMP_FILTER_ALL;
+		} else
+			ret = -1, errno = EINVAL;
+#endif
 #ifdef PTP_CLOCK_GETCAPS
-	} else if (request == PTP_CLOCK_GETCAPS && d == PHC_FD) {
+	} else if (request == PTP_CLOCK_GETCAPS && (fd == REFCLK_FD || fd == SYSCLK_FD)) {
+		struct ptp_clock_caps *caps = va_arg(ap, struct ptp_clock_caps *);
+		memset(caps, 0, sizeof (*caps));
+		caps->max_adj = 100000000;
+#endif
+#ifdef SIOCSHWTSTAMP
+	} else if (request == SIOCSHWTSTAMP && fd == ptp_event_fd) {
 #endif
 	} else {
 		ret = -1;
@@ -958,7 +990,9 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		cmsg->cmsg_type = SO_TIMESTAMPING;
 		cmsg->cmsg_len = len;
 
-		memcpy(CMSG_DATA(cmsg), &ts, sizeof (ts));
+		/* copy as sw and hw time stamp */
+		memcpy((struct timespec *)CMSG_DATA(cmsg), &ts, sizeof (ts));
+		memcpy((struct timespec *)CMSG_DATA(cmsg) + 2, &ts, sizeof (ts));
 
 		msg->msg_controllen = len;
 	} else
