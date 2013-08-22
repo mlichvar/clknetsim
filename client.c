@@ -62,6 +62,9 @@
 #define SYSCLK_CLOCKID ((~(clockid_t)SYSCLK_FD << 3) | 3)
 #define SYSCLK_PHC_INDEX 1
 
+#define SCALED_PPM_PER_TICK 6553600
+#define BASE_TICK 10000
+
 #define MIN_SOCKET_FD 100
 #define MAX_SOCKET_FD 199
 #define MAX_TIMERS 20
@@ -431,7 +434,26 @@ int ntp_adjtime(struct timex *buf) {
 }
 
 int clock_adjtime(clockid_t id, struct timex *tx) {
-	assert(id == CLOCK_REALTIME);
+	assert(id == CLOCK_REALTIME || id == SYSCLK_CLOCKID);
+
+	/* allow large frequency adjustment by setting ticks */
+	if (id == SYSCLK_CLOCKID) {
+		int r;
+
+		if (tx->modes & ADJ_FREQUENCY && !(tx->modes & ADJ_TICK))
+			tx->tick = BASE_TICK, tx->modes |= ADJ_TICK;
+
+		tx->tick += tx->freq / SCALED_PPM_PER_TICK;
+		tx->freq = tx->freq % SCALED_PPM_PER_TICK;
+
+		r = adjtimex(tx);
+
+		tx->freq += (tx->tick - BASE_TICK) * SCALED_PPM_PER_TICK;
+		tx->tick = BASE_TICK;
+
+		return r;
+	}
+
 	return adjtimex(tx);
 }
 
@@ -634,8 +656,11 @@ FILE *fopen(const char *path, const char *mode) {
 }
 
 int open(const char *pathname, int flags) {
+	assert(REFCLK_PHC_INDEX == 0 || SYSCLK_PHC_INDEX == 1);
 	if (!strcmp(pathname, "/dev/ptp0"))
-		return PHC_FD;
+		return REFCLK_FD;
+	else if (!strcmp(pathname, "/dev/ptp1"))
+		return SYSCLK_FD;
 
 	return _open(pathname, flags);
 }
@@ -643,7 +668,7 @@ int open(const char *pathname, int flags) {
 int close(int fd) {
 	int t;
 
-	if (fd == PHC_FD) {
+	if (fd == REFCLK_FD || fd == SYSCLK_FD) {
 		return 0;
 	} else if (fd == ntp_any_fd) {
 		ntp_any_fd = 0;
