@@ -323,7 +323,8 @@ static int get_first_timer(fd_set *timerfds) {
 	for (i = 0; i < MAX_TIMERS; i++) {
 		if (!timers[i].used || !timers[i].armed)
 			continue;
-		if (timers[i].type == TIMER_TYPE_FD && !FD_ISSET(get_timerfd(i), timerfds))
+		if (timers[i].type == TIMER_TYPE_FD &&
+				!(timerfds && FD_ISSET(get_timerfd(i), timerfds)))
 			continue;
 		if (r < 0 || timers[r].timeout > timers[i].timeout)
 			r = i;
@@ -482,16 +483,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 		init();
 
 	timer = get_first_timer(readfds);
-
-	if (ntp_eth_fd || ntp_any_fd || ptp_event_fd || ptp_general_fd) {
-		assert(!ntp_eth_fd || FD_ISSET(ntp_eth_fd, readfds));
-		assert(!ntp_any_fd || FD_ISSET(ntp_any_fd, readfds));
-		assert(!ptp_event_fd || FD_ISSET(ptp_event_fd, readfds));
-		assert(!ptp_general_fd || FD_ISSET(ptp_general_fd, readfds));
-		any_fd_set = 1;
-	} else {
-		any_fd_set = 0;
-	}
+	any_fd_set = ntp_eth_fd || ntp_any_fd || ptp_event_fd || ptp_general_fd;
 
 	assert((timeout && (timeout->tv_sec > 0 || timeout->tv_usec > 0)) ||
 			timer >= 0 || any_fd_set);
@@ -503,6 +495,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	else
 		req.timeout = 1e20;
 
+try_again:
 	if (timer >= 0 && timers[timer].timeout <= time) {
 		/* avoid unnecessary requests */
 		rep.ret = REPLY_SELECT_TIMEOUT;
@@ -555,19 +548,27 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 						recv_fd = ntp_eth_fd ? ntp_eth_fd : ntp_any_fd;
 					break;
 				case PTP_EVENT_PORT:
-					assert(ptp_event_fd);
 					recv_fd = ptp_event_fd;
 					break;
 				case PTP_GENERAL_PORT:
-					assert(ptp_general_fd);
 					recv_fd = ptp_general_fd;
 					break;
 				default:
 					assert(0);
 			}
 
-			assert(recv_fd);
+			/* fetch and drop the packet if no fd is waiting for it */
+			if (!readfds || !recv_fd || !FD_ISSET(recv_fd, readfds)) {
+				struct Reply_recv recv_rep;
+
+				make_request(REQ_RECV, NULL, 0, &recv_rep, sizeof (recv_rep));
+				fprintf(stderr, "clknetsim: dropped packet from node %d on port %d\n",
+						recv_rep.from + 1, recv_rep.port);
+
+				goto try_again;
+			}
 			break;
+
 		default:
 			assert(0);
 			return 0;
