@@ -11,5 +11,3 @@ start_client 2 busybox "192.168.123.1"
 start_server 2 -v 2 -o log.offset -f log.freq -g log.rawfreq -p log.packets -r 2000 -l 400000
 
 cat tmp/stats
-
-rm -rf tmp

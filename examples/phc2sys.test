@@ -11,5 +11,3 @@ start_client 1 phc2sys ""
 start_server 1 -v 2 -o log.offset -f log.freq -r 1000 -l 4000
 
 cat tmp/stats
-
-rm -rf tmp

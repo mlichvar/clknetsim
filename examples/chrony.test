@@ -12,5 +12,3 @@ refclock SHM 0"
 start_server 2 -v 2 -o log.offset -f log.freq -g log.rawfreq -p log.packets -r 2000 -l 40000
 
 cat tmp/stats
-
-rm -rf tmp

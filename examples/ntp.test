@@ -17,5 +17,3 @@ cat tmp/stats
 echo
 get_stat 'RMS offset'
 get_stat 'RMS frequency'
-
-rm -rf tmp
