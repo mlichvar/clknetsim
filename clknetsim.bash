@@ -62,6 +62,10 @@ start_client() {
 	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
 	    $client_wrapper ptp4l$suffix -i eth0 $config &> tmp/log.$node &
 	    ;;
+	*)
+	    echo "unknown client $client"
+	    exit 1
+	    ;;
     esac
     client_pids="$client_pids $!"
 }
