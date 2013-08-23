@@ -670,13 +670,18 @@ FILE *fopen(const char *path, const char *mode) {
 }
 
 int open(const char *pathname, int flags) {
+	int r;
+
 	assert(REFCLK_PHC_INDEX == 0 || SYSCLK_PHC_INDEX == 1);
 	if (!strcmp(pathname, "/dev/ptp0"))
 		return REFCLK_FD;
 	else if (!strcmp(pathname, "/dev/ptp1"))
 		return SYSCLK_FD;
 
-	return _open(pathname, flags);
+	r = _open(pathname, flags);
+	assert(r < 0 || (r < MIN_SOCKET_FD && r < BASE_TIMER_FD));
+
+	return r;
 }
 
 int close(int fd) {
