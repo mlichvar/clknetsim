@@ -476,7 +476,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	struct Request_select req;
 	struct Reply_select rep;
 	double time;
-	int timer, any_fd_set;
+	int timer, any_fd_set, recv_fd = -1;
 
 	if (!initialized)
 		init();
@@ -521,56 +521,69 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 			precision_hack = 0;
 	}
 
-	if (readfds)
+	switch (rep.ret) {
+		case REPLY_SELECT_TERMINATE:
+			kill(getpid(), SIGTERM);
+			errno = EINTR;
+			return -1;
+
+		case REPLY_SELECT_TIMEOUT:
+			if (timer >= 0 && time >= timers[timer].timeout) {
+				rearm_timer(timer);
+				switch (timers[timer].type) {
+					case TIMER_TYPE_SIGNAL:
+						kill(getpid(), SIGALRM);
+						errno = EINTR;
+						return -1;
+					case TIMER_TYPE_FD:
+						recv_fd = get_timerfd(timer);
+						break;
+					default:
+						assert(0);
+				}
+			} else
+				recv_fd = 0;
+			break;
+
+		case REPLY_SELECT_NORMAL:
+		case REPLY_SELECT_BROADCAST:
+			switch (rep.port) {
+				case NTP_PORT:
+					if (rep.ret == REPLY_SELECT_BROADCAST && ntp_broadcast_fd)
+						recv_fd = ntp_broadcast_fd;
+					else
+						recv_fd = ntp_eth_fd ? ntp_eth_fd : ntp_any_fd;
+					break;
+				case PTP_EVENT_PORT:
+					assert(ptp_event_fd);
+					recv_fd = ptp_event_fd;
+					break;
+				case PTP_GENERAL_PORT:
+					assert(ptp_general_fd);
+					recv_fd = ptp_general_fd;
+					break;
+				default:
+					assert(0);
+			}
+
+			assert(recv_fd);
+			break;
+		default:
+			assert(0);
+			return 0;
+	}
+
+	assert(!recv_fd || (readfds && FD_ISSET(recv_fd, readfds)));
+	assert(!recv_fd || (recv_fd >= MIN_SOCKET_FD && recv_fd <= MAX_SOCKET_FD) ||
+			(recv_fd >= BASE_TIMER_FD && recv_fd < BASE_TIMER_FD + MAX_TIMERS));
+
+	if (readfds) {
 		FD_ZERO(readfds);
-
-	if (rep.ret == REPLY_SELECT_TERMINATE) {
-		kill(getpid(), SIGTERM);
-		errno = EINTR;
-		return -1;
+		if (recv_fd)
+			FD_SET(recv_fd, readfds);
 	}
 
-	if (rep.ret == REPLY_SELECT_TIMEOUT && timer >= 0 && time >= timers[timer].timeout) {
-		rearm_timer(timer);
-		switch (timers[timer].type) {
-			case TIMER_TYPE_SIGNAL:
-				kill(getpid(), SIGALRM);
-				errno = EINTR;
-				return -1;
-			case TIMER_TYPE_FD:
-				FD_SET(get_timerfd(timer), readfds);
-				return 1;
-			default:
-				assert(0);
-		}
-	}
-
-	if (rep.ret == REPLY_SELECT_NORMAL || (rep.ret == REPLY_SELECT_BROADCAST && !ntp_broadcast_fd)) {
-		switch (rep.port) {
-			case NTP_PORT:
-				assert(ntp_eth_fd || ntp_any_fd);
-				FD_SET(ntp_eth_fd ? ntp_eth_fd : ntp_any_fd, readfds);
-				break;
-			case PTP_EVENT_PORT:
-				assert(ptp_event_fd);
-				FD_SET(ptp_event_fd, readfds);
-				break;
-			case PTP_GENERAL_PORT:
-				assert(ptp_general_fd);
-				FD_SET(ptp_general_fd, readfds);
-				break;
-		}
-		return 1;
-	}
-
-	if (rep.ret == REPLY_SELECT_BROADCAST && ntp_broadcast_fd) {
-		assert(rep.port == NTP_PORT);
-		FD_SET(ntp_broadcast_fd, readfds);
-		return 1;
-	}
-
-	assert(rep.ret == REPLY_SELECT_TIMEOUT);
-	return 0;
+	return recv_fd ? 1 : 0;
 }
 
 #if 1
