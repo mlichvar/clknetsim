@@ -714,9 +714,12 @@ int close(int fd) {
 
 int socket(int domain, int type, int protocol) {
 	if (domain == AF_INET && SOCK_DGRAM) {
-		last_socket_fd++;
-		if (last_socket_fd > MAX_SOCKET_FD)
-			last_socket_fd = MIN_SOCKET_FD;
+		do {
+			last_socket_fd++;
+			if (last_socket_fd > MAX_SOCKET_FD)
+				last_socket_fd = MIN_SOCKET_FD;
+		} while (last_socket_fd == ntp_any_fd || last_socket_fd == ntp_eth_fd ||
+				last_socket_fd == ptp_event_fd || last_socket_fd == ptp_general_fd);
 		return last_socket_fd;
 	}
 	errno = EINVAL;
