@@ -1006,7 +1006,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		return -1;
 	}
 
-	assert((rep.port == NTP_PORT && (sockfd == ntp_eth_fd || sockfd == ntp_any_fd)) ||
+	assert((rep.port == NTP_PORT && (sockfd == ntp_eth_fd || sockfd == ntp_any_fd || sockfd == ntp_broadcast_fd)) ||
 			(rep.port == PTP_EVENT_PORT && sockfd == ptp_event_fd) ||
 			(rep.port == PTP_GENERAL_PORT && sockfd == ptp_general_fd));
 
