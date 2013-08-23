@@ -156,7 +156,7 @@ static void init(void) {
 
 	env = getenv("CLKNETSIM_NODE");
 	if (!env) {
-		fprintf(stderr, "CLKNETSIM_NODE variable not set.\n");
+		fprintf(stderr, "clknetsim: CLKNETSIM_NODE variable not set.\n");
 		exit(1);
 	}
 	node = atoi(env) - 1;
@@ -198,7 +198,7 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 
 	if ((sent = send(clknetsim_fd, buf, reqlen, 0)) <= 0 ||
 			(received = recv(clknetsim_fd, reply, replylen, 0)) <= 0) {
-		fprintf(stderr, "clknetsim connection closed.\n");
+		fprintf(stderr, "clknetsim: server connection closed.\n");
 		exit(1);
 	}
 
@@ -918,7 +918,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 
 	if (sockfd != ntp_eth_fd && sockfd != ntp_any_fd &&
 			sockfd != ptp_event_fd && sockfd != ptp_general_fd) {
-		printf("sendmsg inval sockfd\n");
+		fprintf(stderr, "clknetsim: sendmsg invalid fd\n");
 		errno = EINVAL;
 		return -1;
 	}
