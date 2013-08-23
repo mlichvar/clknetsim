@@ -57,6 +57,11 @@ start_client() {
 	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
 	    $client_wrapper phc2sys$suffix -s /dev/ptp0 -O 0 $config &> tmp/log.$node &
 	    ;;
+	ptp4l)
+	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
+	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
+	    $client_wrapper ptp4l$suffix -i eth0 $config &> tmp/log.$node &
+	    ;;
     esac
     client_pids="$client_pids $!"
 }
