@@ -713,6 +713,9 @@ int close(int fd) {
 }
 
 int socket(int domain, int type, int protocol) {
+	if (!initialized)
+		init();
+
 	if (domain == AF_INET && SOCK_DGRAM) {
 		do {
 			last_socket_fd++;
@@ -886,9 +889,11 @@ int ioctl(int fd, unsigned long request, ...) {
 int getifaddrs(struct ifaddrs **ifap) {
 	static struct sockaddr_in addrs[5];
 	static struct ifaddrs ifaddrs[2];
+	assert(initialized);
 	uint32_t sin_addrs[5] = {INADDR_LOOPBACK, 0xff000000, BASE_ADDR + node, NETMASK, BROADCAST_ADDR};
 	int i;
        
+
 	ifaddrs[0] = (struct ifaddrs){
 		.ifa_next = &ifaddrs[1],
 		.ifa_name = "lo",
@@ -1250,6 +1255,9 @@ int uname(struct utsname *buf) {
 }
 
 int gethostname(char *name, size_t len) {
+	if (!initialized)
+		init();
+
 	snprintf(name, len, "clknetsim-node%d", node + 1);
 	return 0;
 }
