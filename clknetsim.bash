@@ -20,19 +20,24 @@ start_client() {
 
     rm -f tmp/log.$node tmp/conf.$node
 
-    echo "$config" > tmp/conf.$node
-    echo "pidfile tmp/pidfile.$node" >> tmp/conf.$node
-
     case $client in
 	chrony|chronyd)
-	    echo "allow" >> tmp/conf.$node
+	    cat > tmp/conf.$node <<-EOF
+		pidfile tmp/pidfile.$node
+		allow
+		$config
+		EOF
 	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
 	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
 	    $client_wrapper chronyd$suffix -d -f tmp/conf.$node $opts &> tmp/log.$node &
 	    ;;
 	ntp|ntpd)
-	    echo "restrict default" >> tmp/conf.$node
-	    echo "logconfig=syncstatus +allevents" >> tmp/conf.$node
+	    cat > tmp/conf.$node <<-EOF
+		pidfile tmp/pidfile.$node
+		restrict default
+		logconfig=syncstatus +allevents
+		$config
+		EOF
 	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
 	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
 	    $client_wrapper ntpd$suffix -n -c tmp/conf.$node $opts &> tmp/log.$node &
