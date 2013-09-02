@@ -138,6 +138,7 @@ static int refclock_offsets_used = REPLY_GETREFOFFSETS_SIZE;
 
 static void make_request(int request_id, const void *request_data, int reqlen, void *reply, int replylen);
 
+__attribute__((constructor))
 static void init(void) {
 	struct Request_register req;
 	struct Reply_empty rep;
@@ -187,6 +188,8 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 	char buf[MAX_REQ_SIZE];
 	int sent, received;
 
+	assert(initialized);
+
 	header = (struct Request_header *)buf;
 	header->request = request_id;
 
@@ -208,9 +211,6 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 
 static double gettime(void) {
 	struct Reply_gettime r;
-
-	if (!initialized)
-		init();
 
 	if (!local_time_valid) {
 		make_request(REQ_GETTIME, NULL, 0, &r, sizeof (r));
@@ -241,9 +241,6 @@ static void settime(double time) {
 	struct Request_settime req;
 	struct Reply_empty rep;
 
-	if (!initialized)
-		init();
-
 	req.time = time;
 	make_request(REQ_SETTIME, &req, sizeof (req), &rep, sizeof (rep));
 
@@ -256,9 +253,6 @@ static void fill_refclock_sample(void) {
 
 	if (!refclock_shm_enabled)
 		return;
-
-	if (!initialized)
-		init();
 
 	make_request(REQ_GETREFTIME, NULL, 0, &r, sizeof (r));
 
@@ -417,9 +411,6 @@ int adjtimex(struct timex *buf) {
 	struct Request_adjtimex req;
 	struct Reply_adjtimex rep;
 
-	if (!initialized)
-		init();
-
 	req.timex = *buf;
 	make_request(REQ_ADJTIMEX, &req, sizeof (req), &rep, sizeof (rep));
 	*buf = rep.timex;
@@ -462,9 +453,6 @@ int adjtime(const struct timeval *delta, struct timeval *olddelta) {
 	struct Request_adjtime req;
 	struct Reply_adjtime rep;
 
-	if (!initialized)
-		init();
-
 	req.tv = *delta;
 	make_request(REQ_ADJTIME, &req, sizeof (req), &rep, sizeof (rep));
 	if (olddelta)
@@ -478,9 +466,6 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	struct Reply_select rep;
 	double time;
 	int timer, any_fd_set, recv_fd = -1;
-
-	if (!initialized)
-		init();
 
 	timer = get_first_timer(readfds);
 	any_fd_set = ntp_eth_fd || ntp_any_fd || ptp_event_fd || ptp_general_fd;
@@ -713,9 +698,6 @@ int close(int fd) {
 }
 
 int socket(int domain, int type, int protocol) {
-	if (!initialized)
-		init();
-
 	if (domain == AF_INET && SOCK_DGRAM) {
 		do {
 			last_socket_fd++;
@@ -889,7 +871,6 @@ int ioctl(int fd, unsigned long request, ...) {
 int getifaddrs(struct ifaddrs **ifap) {
 	static struct sockaddr_in addrs[5];
 	static struct ifaddrs ifaddrs[2];
-	assert(initialized);
 	uint32_t sin_addrs[5] = {INADDR_LOOPBACK, 0xff000000, BASE_ADDR + node, NETMASK, BROADCAST_ADDR};
 	int i;
        
@@ -935,9 +916,6 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 		errno = EINVAL;
 		return -1;
 	}
-
-	if (!initialized)
-		init();
 
 	sa = msg->msg_name;
 
@@ -993,9 +971,6 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	if (sockfd != ntp_eth_fd && sockfd != ntp_any_fd && sockfd != ntp_broadcast_fd &&
 			sockfd != ptp_event_fd && sockfd != ptp_general_fd)
 		return _recvmsg(sockfd, msg, flags);
-
-	if (!initialized)
-		init();
 
 	if (sockfd == ptp_event_fd && flags == MSG_ERRQUEUE) {
 		/* dummy message for tx time stamp */
@@ -1255,9 +1230,6 @@ int uname(struct utsname *buf) {
 }
 
 int gethostname(char *name, size_t len) {
-	if (!initialized)
-		init();
-
 	snprintf(name, len, "clknetsim-node%d", node + 1);
 	return 0;
 }
