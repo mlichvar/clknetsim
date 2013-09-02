@@ -63,9 +63,13 @@ start_client() {
 	    $client_wrapper phc2sys$suffix -s /dev/ptp0 -O 0 $config &> tmp/log.$node &
 	    ;;
 	ptp4l)
+	    cat > tmp/conf.$node <<-EOF
+		[global]
+		$config
+		EOF
 	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
 	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
-	    $client_wrapper ptp4l$suffix -i eth0 $config &> tmp/log.$node &
+	    $client_wrapper ptp4l$suffix -i eth0 -f tmp/conf.$node $opts &> tmp/log.$node &
 	    ;;
 	*)
 	    echo "unknown client $client"

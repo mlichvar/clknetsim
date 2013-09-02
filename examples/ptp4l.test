@@ -5,9 +5,10 @@ CLKNETSIM_PATH=..
 
 generate_config1 3 0.01 "(sum (* 1e-9 (normal)))" "(* 1e-8 (exponential))"
 
-start_client 1 ptp4l "-P"
-start_client 2 ptp4l "-S -P"
-start_client 3 ptp4l "-P"
+start_client 1 ptp4l "delay_mechanism P2P"
+start_client 2 ptp4l "delay_mechanism P2P
+time_stamping software"
+start_client 3 ptp4l "delay_mechanism P2P"
 
 start_server 3 -o log.offset -p log.packets -r 100 -l 1000
 
