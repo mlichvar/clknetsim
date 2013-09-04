@@ -179,6 +179,8 @@ find_sync() {
     } END {
 	if (lastnonsync < time) {
 	    print lastnonsync
+	} else {
+	    print -1
 	}
     }'
 }
