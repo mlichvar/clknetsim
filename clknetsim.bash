@@ -140,7 +140,9 @@ generate_config3() {
 }
 
 find_sync() {
-    local offlog=$1 freqlog=$2 index=$3 offsync=$4 freqsync=$5
+    local offlog=$1 freqlog=$2 index=$3 offsync=$4 freqsync=$5 smooth=$6
+
+    [ -z "$smooth" ] && smooth=0.05
 
     paste <(cut -f $index $1) <(cut -f $index $2) | awk '
     {
@@ -152,8 +154,8 @@ find_sync() {
 	    avgoff = off
 	    avgfreq = freq
 	} else {
-	    avgoff += 0.05 * (off - avgoff)
-	    avgfreq += 0.05 * (freq - avgfreq)
+	    avgoff += '$smooth' * (off - avgoff)
+	    avgfreq += '$smooth' * (freq - avgfreq)
 	}
 
 	if (avgoff > '$offsync' || avgfreq > '$freqsync') {
