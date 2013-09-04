@@ -142,7 +142,28 @@ generate_config3() {
 find_sync() {
     local offlog=$1 freqlog=$2 index=$3 offsync=$4 freqsync=$5
 
-    paste <(cut -f $index $1) <(cut -f $index $2) | awk '{ time++; off = $1 < 0 ? -$1 : $1; freq = $2 < 0 ? -$2 : $2; if (avgoff == 0.0 && avgfreq == 0.0) { avgoff = off; avgfreq = freq} else { avgoff += 0.05 * (off - avgoff); avgfreq += 0.05 * (freq - avgfreq) }; if (avgoff > '$offsync' || avgfreq > '$freqsync') { lastnonsync=time } } END { if (lastnonsync < time) { print lastnonsync } }'
+    paste <(cut -f $index $1) <(cut -f $index $2) | awk '
+    {
+	time++
+	off = $1 < 0 ? -$1 : $1
+	freq = $2 < 0 ? -$2 : $2
+
+	if (avgoff == 0.0 && avgfreq == 0.0) {
+	    avgoff = off
+	    avgfreq = freq
+	} else {
+	    avgoff += 0.05 * (off - avgoff)
+	    avgfreq += 0.05 * (freq - avgfreq)
+	}
+
+	if (avgoff > '$offsync' || avgfreq > '$freqsync') {
+	    lastnonsync = time
+	}
+    } END {
+	if (lastnonsync < time) {
+	    print lastnonsync
+	}
+    }'
 }
 
 get_stat() {
