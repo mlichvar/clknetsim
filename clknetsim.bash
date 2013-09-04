@@ -139,6 +139,21 @@ generate_config3() {
     done > tmp/conf
 }
 
+generate_config4() {
+    local stablenode=$1 nodes=$2 offset=$3 freqexpr=$4 delayexpr=$5 i j
+
+    for i in `seq 1 $nodes`; do
+	if [ $i -ne $stablenode ]; then
+	    echo "node${i}_offset = $offset"
+	    echo "node${i}_freq = $freqexpr"
+	fi
+	for j in `seq 1 $nodes`; do
+	    [ $i -eq $j ] && continue
+	    echo "node${i}_delay${j} = $delayexpr"
+	done
+    done > tmp/conf
+}
+
 find_sync() {
     local offlog=$1 freqlog=$2 index=$3 offsync=$4 freqsync=$5 smooth=$6
 
