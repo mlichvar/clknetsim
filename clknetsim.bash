@@ -194,6 +194,11 @@ get_stat() {
     fi
 }
 
+check_stat() {
+    local value=$1 min=$2 max=$3
+    awk "BEGIN { exit !($value >= $min && $value <= $max) }"
+}
+
 if [ -z "$CLKNETSIM_PATH" ]; then
     echo CLKNETSIM_PATH not set 2>&1
     exit 1
