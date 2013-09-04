@@ -254,7 +254,7 @@ void Node::receive(struct Packet *packet) {
 		return;
 	}
 
-	incoming_packets.push_back(packet);
+	incoming_packets.insert(incoming_packets.begin(), packet);
 
 	if (pending_request == REQ_SELECT) {
 		Reply_select rep;
