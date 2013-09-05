@@ -80,15 +80,16 @@ start_client() {
 }
 
 start_server() {
-    local nodes=$1
+    local nodes=$1 ret=0
     shift
     $server_wrapper $CLKNETSIM_PATH/clknetsim "$@" -s tmp/sock tmp/conf $nodes > tmp/stats 2> tmp/log
     if [ $? -ne 0 ]; then
         echo clknetsim failed 1>&2
-        exit 1
+        ret=1
     fi
     kill $client_pids &> /dev/null
     client_pids=" "
+    return $ret
 }
 
 generate_seq() {
