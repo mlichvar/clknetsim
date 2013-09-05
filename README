@@ -148,7 +148,7 @@ Functions and their parameters supported in the expressions:
   (poisson lambda)       - random number generator with poisson distribution
   (file "datafile")      - number generator reading floating-point values from
                            the specified file in an inifinite loop
-  (pulse high period)    - pulse wave generator
+  (pulse high low)       - pulse wave generator
   (sine period)          - sine wave generator
   (triangle period)      - triangle wave generator
 
