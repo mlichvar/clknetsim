@@ -870,10 +870,11 @@ int ioctl(int fd, unsigned long request, ...) {
 
 int getifaddrs(struct ifaddrs **ifap) {
 	static struct sockaddr_in addrs[5];
-	static struct ifaddrs ifaddrs[2];
+	struct ifaddrs *ifaddrs;
 	uint32_t sin_addrs[5] = {INADDR_LOOPBACK, 0xff000000, BASE_ADDR + node, NETMASK, BROADCAST_ADDR};
 	int i;
        
+	ifaddrs = malloc(sizeof (struct ifaddrs) * 2);
 
 	ifaddrs[0] = (struct ifaddrs){
 		.ifa_next = &ifaddrs[1],
@@ -902,6 +903,7 @@ int getifaddrs(struct ifaddrs **ifap) {
 }
 
 void freeifaddrs(struct ifaddrs *ifa) {
+	free(ifa);
 }
 
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
