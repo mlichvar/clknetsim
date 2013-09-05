@@ -206,4 +206,9 @@ if [ -z "$CLKNETSIM_PATH" ]; then
     exit 1
 fi
 
+if [ ! -x "$CLKNETSIM_PATH/clknetsim" -o ! -e "$CLKNETSIM_PATH/clknetsim.so" ]; then
+    echo "can't find clknetsim or clknetsim.so in $CLKNETSIM_PATH"
+    exit 1
+fi
+
 [ -d tmp ] || mkdir tmp
