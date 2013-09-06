@@ -154,6 +154,10 @@ Functions and their parameters supported in the expressions:
   (equal epsilon [expr | float] ...)
                          - returns 1.0 if the values of all parameters are
                            equal within epsilon, 0.0 otherwise
+  (max [expr | float] ...)
+                         - returns maximum value
+  (min [expr | float] ...)
+                         - returns minimum value
 
 An example:
 

@@ -127,6 +127,18 @@ class Generator_equal: public Generator {
 	virtual double generate();
 };
 
+class Generator_max: public Generator {
+	public:
+	Generator_max(const vector<double> *parameters, const vector<Generator *> *input_generators);
+	virtual double generate();
+};
+
+class Generator_min: public Generator {
+	public:
+	Generator_min(const vector<double> *parameters, const vector<Generator *> *input_generators);
+	virtual double generate();
+};
+
 class Generator_generator {
 	public:
 	Generator_generator();

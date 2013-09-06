@@ -244,6 +244,52 @@ double Generator_equal::generate() {
 	return max - min <= epsilon ? 1.0 : 0.0;
 }
 
+Generator_max::Generator_max(const vector<double> *parameters, const vector<Generator *> *input_generators): Generator(parameters, input_generators) {
+	syntax_assert((parameters && parameters->size() > 0) || (input_generators && input_generators->size() > 0));
+}
+
+double Generator_max::generate() {
+	unsigned int i, c = 0;
+	double x, max = 0.0;
+
+	for (i = 0; i < parameters.size(); i++, c++) {
+		x = parameters[i];
+		if (!c || max < x)
+			max = x;
+	}
+
+	for (i = 0; i < input_generators.size(); i++, c++) {
+		x = input_generators[i]->generate();
+		if (!c || max < x)
+			max = x;
+	}
+
+	return max;
+}
+
+Generator_min::Generator_min(const vector<double> *parameters, const vector<Generator *> *input_generators): Generator(parameters, input_generators) {
+	syntax_assert((parameters && parameters->size() > 0) || (input_generators && input_generators->size() > 0));
+}
+
+double Generator_min::generate() {
+	unsigned int i, c = 0;
+	double x, min = 0.0;
+
+	for (i = 0; i < parameters.size(); i++, c++) {
+		x = parameters[i];
+		if (!c || min > x)
+			min = x;
+	}
+
+	for (i = 0; i < input_generators.size(); i++, c++) {
+		x = input_generators[i]->generate();
+		if (!c || min > x)
+			min = x;
+	}
+
+	return min;
+}
+
 Generator_generator::Generator_generator() {
 }
 
@@ -343,6 +389,10 @@ Generator *Generator_generator::generate(char *code) const {
 		ret = new Generator_wave_triangle(&params, &generators);
 	else if (strcmp(name, "equal") == 0)
 		ret = new Generator_equal(&params, &generators);
+	else if (strcmp(name, "max") == 0)
+		ret = new Generator_max(&params, &generators);
+	else if (strcmp(name, "min") == 0)
+		ret = new Generator_min(&params, &generators);
 	else {
 		ret = NULL;
 		syntax_assert(0);
