@@ -178,14 +178,17 @@ double Generator_wave_triangle::generate() {
 
 }
 
-Generator_sum::Generator_sum(const vector<double> *parameters, const vector<Generator *> *input_generators): Generator(NULL, input_generators) {
-	syntax_assert(!parameters || parameters->size() == 0);
-	syntax_assert(input_generators && input_generators->size() == 1);
+Generator_sum::Generator_sum(const vector<double> *parameters, const vector<Generator *> *input_generators): Generator(parameters, input_generators) {
 	sum = 0.0;
 }
 
 double Generator_sum::generate() {
-	sum += input_generators[0]->generate();
+	unsigned int i;
+
+	for (i = 0; i < parameters.size(); i++)
+		sum += parameters[i];
+	for (i = 0; i < input_generators.size(); i++)
+		sum += input_generators[i]->generate();
 	return sum;
 }
 
