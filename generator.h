@@ -20,8 +20,12 @@
 
 #include "sysheaders.h"
 #include <vector>
+#include <map>
+#include <string>
 
 using namespace std;
+
+typedef map<string, double> Generator_variables;
 
 class Generator {
 	protected:
@@ -31,7 +35,7 @@ class Generator {
 	public:
 	Generator(const vector<Generator *> *input);
 	virtual ~Generator();
-	virtual double generate() = 0;
+	virtual double generate(const Generator_variables *variables) = 0;
 	bool is_constant() const;
 };
 
@@ -40,13 +44,21 @@ class Generator_float: public Generator {
 
 	public:
 	Generator_float(double f);
-	virtual double generate();
+	virtual double generate(const Generator_variables *variables);
+};
+
+class Generator_variable: public Generator {
+	string name;
+
+	public:
+	Generator_variable(string name);
+	virtual double generate(const Generator_variables *variables);
 };
 
 class Generator_random_uniform: public Generator {
 	public:
 	Generator_random_uniform(const vector<Generator *> *input);
-	virtual double generate();
+	virtual double generate(const Generator_variables *variables);
 };
 
 class Generator_random_normal: public Generator {
@@ -54,7 +66,7 @@ class Generator_random_normal: public Generator {
 
 	public:
 	Generator_random_normal(const vector<Generator *> *input);
-	virtual double generate();
+	virtual double generate(const Generator_variables *variables);
 };
 
 class Generator_random_exponential: public Generator {
@@ -62,7 +74,7 @@ class Generator_random_exponential: public Generator {
 
 	public:
 	Generator_random_exponential(const vector<Generator *> *input);
-	virtual double generate();
+	virtual double generate(const Generator_variables *variables);
 };
 
 class Generator_random_poisson: public Generator {
@@ -71,7 +83,7 @@ class Generator_random_poisson: public Generator {
 
 	public:
 	Generator_random_poisson(const vector<Generator *> *input);
-	virtual double generate();
+	virtual double generate(const Generator_variables *variables);
 };
 
 class Generator_file: public Generator {
@@ -80,7 +92,7 @@ class Generator_file: public Generator {
 	public:
 	Generator_file(const char *file);
 	virtual ~Generator_file();
-	virtual double generate();
+	virtual double generate(const Generator_variables *variables);
 };
 
 class Generator_wave_pulse: public Generator {
@@ -90,7 +102,7 @@ class Generator_wave_pulse: public Generator {
 
 	public:
 	Generator_wave_pulse(const vector<Generator *> *input);
-	virtual double generate();
+	virtual double generate(const Generator_variables *variables);
 };
 
 class Generator_wave_sine: public Generator {
@@ -99,7 +111,7 @@ class Generator_wave_sine: public Generator {
 
 	public:
 	Generator_wave_sine(const vector<Generator *> *input);
-	virtual double generate();
+	virtual double generate(const Generator_variables *variables);
 };
 
 class Generator_wave_triangle: public Generator {
@@ -108,44 +120,44 @@ class Generator_wave_triangle: public Generator {
 
 	public:
 	Generator_wave_triangle(const vector<Generator *> *input);
-	virtual double generate();
+	virtual double generate(const Generator_variables *variables);
 };
 
 class Generator_sum: public Generator {
 	double sum;
 	public:
 	Generator_sum(const vector<Generator *> *input);
-	virtual double generate();
+	virtual double generate(const Generator_variables *variables);
 };
 
 class Generator_multiply: public Generator {
 	public:
 	Generator_multiply(const vector<Generator *> *input);
-	virtual double generate();
+	virtual double generate(const Generator_variables *variables);
 };
 
 class Generator_add: public Generator {
 	public:
 	Generator_add(const vector<Generator *> *input);
-	virtual double generate();
+	virtual double generate(const Generator_variables *variables);
 };
 
 class Generator_equal: public Generator {
 	public:
 	Generator_equal(const vector<Generator *> *input);
-	virtual double generate();
+	virtual double generate(const Generator_variables *variables);
 };
 
 class Generator_max: public Generator {
 	public:
 	Generator_max(const vector<Generator *> *input);
-	virtual double generate();
+	virtual double generate(const Generator_variables *variables);
 };
 
 class Generator_min: public Generator {
 	public:
 	Generator_min(const vector<Generator *> *input);
-	virtual double generate();
+	virtual double generate(const Generator_variables *variables);
 };
 
 class Generator_generator {

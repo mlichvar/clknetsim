@@ -98,7 +98,7 @@ void run_generator(char *expr, int num) {
 
 	generator = gen_generator.generate(expr);
 	while (num--)
-		printf("%.9e\n", generator->generate());
+		printf("%.9e\n", generator->generate(NULL));
 	delete generator;
 }
 

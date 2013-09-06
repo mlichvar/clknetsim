@@ -140,9 +140,9 @@ void Clock::advance(double real_interval) {
 
 void Clock::update(bool second) {
 	if (freq_generator)
-		set_freq(freq_generator->generate());
+		set_freq(freq_generator->generate(NULL));
 	if (step_generator)
-		step_time(step_generator->generate());
+		step_time(step_generator->generate(NULL));
 	
 	if (!second)
 		return;
@@ -349,7 +349,7 @@ void Refclock::update(double time, const Clock *clock) {
 		return;
 
 	this->time = time;
-	offset = clock->get_time() - time + offset_generator->generate();
+	offset = clock->get_time() - time + offset_generator->generate(NULL);
 	valid = true;
 }
 
@@ -363,5 +363,5 @@ void Refclock::get_refoffsets(double *offsets, int size) {
 	int i;
 
 	for (i = 0; i < size; i++)
-		offsets[i] = offset_generator->generate();
+		offsets[i] = offset_generator->generate(NULL);
 }

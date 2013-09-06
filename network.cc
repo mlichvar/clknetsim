@@ -364,7 +364,7 @@ void Network::send(struct Packet *packet) {
 
 	i = packet->from * nodes.size() + packet->to;
 	if (link_delays[i])
-		delay = link_delays[i]->generate();
+		delay = link_delays[i]->generate(NULL);
 
 	stats[packet->from].update_packet_stats(false, delay);
 
