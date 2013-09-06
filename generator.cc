@@ -217,6 +217,33 @@ double Generator_add::generate() {
 	return x;
 }
 
+Generator_equal::Generator_equal(const vector<double> *parameters, const vector<Generator *> *input_generators): Generator(parameters, input_generators) {
+	syntax_assert(parameters && parameters->size() > 0);
+}
+
+double Generator_equal::generate() {
+	unsigned int i, c = 0;
+	double x, min = 0.0, max = 0.0, epsilon = parameters[0];
+
+	for (i = 1; i < parameters.size(); i++, c++) {
+		x = parameters[i];
+		if (!c || min > x)
+			min = x;
+		if (!c || max < x)
+			max = x;
+	}
+
+	for (i = 0; i < input_generators.size(); i++, c++) {
+		x = input_generators[i]->generate();
+		if (!c || min > x)
+			min = x;
+		if (!c || max < x)
+			max = x;
+	}
+
+	return max - min <= epsilon ? 1.0 : 0.0;
+}
+
 Generator_generator::Generator_generator() {
 }
 
@@ -314,6 +341,8 @@ Generator *Generator_generator::generate(char *code) const {
 		ret = new Generator_wave_sine(&params, &generators);
 	else if (strcmp(name, "triangle") == 0)
 		ret = new Generator_wave_triangle(&params, &generators);
+	else if (strcmp(name, "equal") == 0)
+		ret = new Generator_equal(&params, &generators);
 	else {
 		ret = NULL;
 		syntax_assert(0);

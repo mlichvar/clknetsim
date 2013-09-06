@@ -121,6 +121,12 @@ class Generator_add: public Generator {
 	virtual double generate();
 };
 
+class Generator_equal: public Generator {
+	public:
+	Generator_equal(const vector<double> *parameters, const vector<Generator *> *input_generators);
+	virtual double generate();
+};
+
 class Generator_generator {
 	public:
 	Generator_generator();
