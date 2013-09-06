@@ -363,8 +363,14 @@ void Network::send(struct Packet *packet) {
 	assert(packet->to < nodes.size() && packet->from < nodes.size());
 
 	i = packet->from * nodes.size() + packet->to;
-	if (link_delays[i])
-		delay = link_delays[i]->generate(NULL);
+
+	if (link_delays[i]) {
+		link_delay_variables["time"] = time;
+		link_delay_variables["port"] = packet->port;
+		link_delay_variables["length"] = packet->len;
+
+		delay = link_delays[i]->generate(&link_delay_variables);
+	}
 
 	stats[packet->from].update_packet_stats(false, delay);
 

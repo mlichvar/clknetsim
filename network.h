@@ -56,6 +56,8 @@ class Network {
 	vector<Generator *> link_delays;
 	vector<Stats> stats;
 	
+	Generator_variables link_delay_variables;
+
 	Packet_queue packet_queue;
 
 	FILE *offset_log;
