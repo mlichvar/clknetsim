@@ -24,24 +24,35 @@ static void syntax_assert(bool condition) {
 	}
 }
 
-Generator::Generator(const vector<double> *parameters, const vector<Generator *> *input_generators) {
-       	if (parameters)
-		this->parameters = *parameters;
-	if (input_generators)
-		this->input_generators = *input_generators;
+Generator::Generator(const vector<Generator *> *input) {
+	if (input)
+		this->input = *input;
+	constant = false;
 }
 
-
 Generator::~Generator() {
-	while (!input_generators.empty()) {
-		delete input_generators.back();
-		input_generators.pop_back();
+	while (!input.empty()) {
+		delete input.back();
+		input.pop_back();
 	}
 }
 
-Generator_random_uniform::Generator_random_uniform(const vector<double> *parameters, const vector<Generator *> *input_generators): Generator(NULL, NULL) {
-	syntax_assert(!parameters || parameters->size() == 0);
-	syntax_assert(!input_generators || input_generators->size() == 0);
+bool Generator::is_constant() const {
+	return constant;
+}
+
+Generator_float::Generator_float(double f): Generator(NULL) {
+	this->f = f;
+	constant = true;
+}
+
+double Generator_float::generate() {
+	return f;
+}
+
+Generator_random_uniform::Generator_random_uniform(const vector<Generator *> *input):
+	Generator(NULL) {
+	syntax_assert(!input || input->size() == 0);
 }
 
 double Generator_random_uniform::generate() {
@@ -53,9 +64,9 @@ double Generator_random_uniform::generate() {
 	return x;
 }
 
-Generator_random_normal::Generator_random_normal(const vector<double> *parameters, const vector<Generator *> *input_generators): Generator(NULL, NULL), uniform(NULL, NULL) {
-	syntax_assert(!parameters || parameters->size() == 0);
-	syntax_assert(!input_generators || input_generators->size() == 0);
+Generator_random_normal::Generator_random_normal(const vector<Generator *> *input):
+	Generator(NULL), uniform(NULL) {
+	syntax_assert(!input || input->size() == 0);
 }
 
 double Generator_random_normal::generate() {
@@ -74,22 +85,22 @@ double Generator_random_normal::generate() {
 	return x;
 }
 
-Generator_random_exponential::Generator_random_exponential(const vector<double> *parameters, const vector<Generator *> *input_generators): Generator(NULL, NULL), uniform(NULL, NULL) {
-	syntax_assert(!parameters || parameters->size() == 0);
-	syntax_assert(!input_generators || input_generators->size() == 0);
+Generator_random_exponential::Generator_random_exponential(const vector<Generator *> *input):
+	Generator(NULL), uniform(NULL) {
+	syntax_assert(!input || input->size() == 0);
 }
 
 double Generator_random_exponential::generate() {
 	return -log(uniform.generate());
 }
 
-Generator_random_poisson::Generator_random_poisson(const vector<double> *parameters, const vector<Generator *> *input_generators): Generator(NULL, NULL), uniform(NULL, NULL) {
+Generator_random_poisson::Generator_random_poisson(const vector<Generator *> *input):
+	Generator(NULL), uniform(NULL) {
 	double lambda;
 
-	syntax_assert(parameters && parameters->size() == 1);
-	syntax_assert(!input_generators || input_generators->size() == 0);
+	syntax_assert(input && input->size() == 1 && (*input)[0]->is_constant());
 
-	lambda = (*parameters)[0];
+	lambda = (*input)[0]->generate();
 	syntax_assert(lambda >= 1 && lambda <= 20);
 	L = exp(-lambda);
 }
@@ -107,7 +118,7 @@ double Generator_random_poisson::generate() {
 	return k;
 }
 
-Generator_file::Generator_file(const char *file): Generator(NULL, NULL) {
+Generator_file::Generator_file(const char *file): Generator(NULL) {
 	input = fopen(file, "r");
 	if (!input) {
 		fprintf(stderr, "can't open %s\n", file);
@@ -135,11 +146,12 @@ double Generator_file::generate() {
 	return x;
 }
 
-Generator_wave_pulse::Generator_wave_pulse(const vector<double> *parameters, const vector<Generator *> *input_generators): Generator(NULL, NULL) {
-	syntax_assert(parameters && parameters->size() == 2);
-	syntax_assert(!input_generators || input_generators->size() == 0);
-	high = (*parameters)[0];
-	low = (*parameters)[1];
+Generator_wave_pulse::Generator_wave_pulse(const vector<Generator *> *input):
+	Generator(NULL) {
+	syntax_assert(input && input->size() == 2 &&
+			(*input)[0]->is_constant() && (*input)[1]->is_constant());
+	high = (*input)[0]->generate();
+	low = (*input)[1]->generate();
 	counter = 0;
 }
 
@@ -152,10 +164,10 @@ double Generator_wave_pulse::generate() {
 	return -1.0;
 }
 
-Generator_wave_sine::Generator_wave_sine(const vector<double> *parameters, const vector<Generator *> *input_generators): Generator(NULL, NULL) {
-	syntax_assert(parameters && parameters->size() == 1);
-	syntax_assert(!input_generators || input_generators->size() == 0);
-	length = (*parameters)[0];
+Generator_wave_sine::Generator_wave_sine(const vector<Generator *> *input):
+	Generator(NULL) {
+	syntax_assert(input && input->size() == 1 && (*input)[0]->is_constant());
+	length = (*input)[0]->generate();
 	counter = 0;
 }
 
@@ -163,10 +175,10 @@ double Generator_wave_sine::generate() {
 	return sin(counter++ / length * 2 * M_PI);
 }
 
-Generator_wave_triangle::Generator_wave_triangle(const vector<double> *parameters, const vector<Generator *> *input_generators): Generator(NULL, NULL) {
-	syntax_assert(parameters && parameters->size() == 1);
-	syntax_assert(!input_generators || input_generators->size() == 0);
-	length = (*parameters)[0];
+Generator_wave_triangle::Generator_wave_triangle(const vector<Generator *> *input):
+	Generator(NULL) {
+	syntax_assert(input && input->size() == 1 && (*input)[0]->is_constant());
+	length = (*input)[0]->generate();
 	counter = 0;
 }
 
@@ -178,115 +190,95 @@ double Generator_wave_triangle::generate() {
 
 }
 
-Generator_sum::Generator_sum(const vector<double> *parameters, const vector<Generator *> *input_generators): Generator(parameters, input_generators) {
+Generator_sum::Generator_sum(const vector<Generator *> *input):
+	Generator(input) {
 	sum = 0.0;
 }
 
 double Generator_sum::generate() {
 	unsigned int i;
 
-	for (i = 0; i < parameters.size(); i++)
-		sum += parameters[i];
-	for (i = 0; i < input_generators.size(); i++)
-		sum += input_generators[i]->generate();
+	for (i = 0; i < input.size(); i++)
+		sum += input[i]->generate();
 	return sum;
 }
 
-Generator_multiply::Generator_multiply(const vector<double> *parameters, const vector<Generator *> *input_generators): Generator(parameters, input_generators) {
+Generator_multiply::Generator_multiply(const vector<Generator *> *input):
+	Generator(input) {
 }
 
 double Generator_multiply::generate() {
 	unsigned int i;
 	double x = 1.0;
 
-	for (i = 0; i < parameters.size(); i++)
-		x *= parameters[i];
-	for (i = 0; i < input_generators.size(); i++)
-		x *= input_generators[i]->generate();
+	for (i = 0; i < input.size(); i++)
+		x *= input[i]->generate();
 	return x;
 }
 
-Generator_add::Generator_add(const vector<double> *parameters, const vector<Generator *> *input_generators): Generator(parameters, input_generators) {
+Generator_add::Generator_add(const vector<Generator *> *input):
+	Generator(input) {
 }
 
 double Generator_add::generate() {
 	unsigned int i;
 	double x = 0.0;
 
-	for (i = 0; i < parameters.size(); i++)
-		x += parameters[i];
-	for (i = 0; i < input_generators.size(); i++)
-		x += input_generators[i]->generate();
+	for (i = 0; i < input.size(); i++)
+		x += input[i]->generate();
 	return x;
 }
 
-Generator_equal::Generator_equal(const vector<double> *parameters, const vector<Generator *> *input_generators): Generator(parameters, input_generators) {
-	syntax_assert(parameters && parameters->size() > 0);
+Generator_equal::Generator_equal(const vector<Generator *> *input):
+	Generator(input) {
+	syntax_assert(input && input->size() > 0);
 }
 
 double Generator_equal::generate() {
-	unsigned int i, c = 0;
-	double x, min = 0.0, max = 0.0, epsilon = parameters[0];
+	unsigned int i;
+	double x, min = 0.0, max = 0.0, epsilon = input[0]->generate();
 
-	for (i = 1; i < parameters.size(); i++, c++) {
-		x = parameters[i];
-		if (!c || min > x)
+	for (i = 1; i < input.size(); i++) {
+		x = input[i]->generate();
+		if (i == 1 || min > x)
 			min = x;
-		if (!c || max < x)
-			max = x;
-	}
-
-	for (i = 0; i < input_generators.size(); i++, c++) {
-		x = input_generators[i]->generate();
-		if (!c || min > x)
-			min = x;
-		if (!c || max < x)
+		if (i == 1 || max < x)
 			max = x;
 	}
 
 	return max - min <= epsilon ? 1.0 : 0.0;
 }
 
-Generator_max::Generator_max(const vector<double> *parameters, const vector<Generator *> *input_generators): Generator(parameters, input_generators) {
-	syntax_assert((parameters && parameters->size() > 0) || (input_generators && input_generators->size() > 0));
+Generator_max::Generator_max(const vector<Generator *> *input):
+	Generator(input) {
+	syntax_assert(input && input->size() > 0);
 }
 
 double Generator_max::generate() {
-	unsigned int i, c = 0;
+	unsigned int i;
 	double x, max = 0.0;
 
-	for (i = 0; i < parameters.size(); i++, c++) {
-		x = parameters[i];
-		if (!c || max < x)
-			max = x;
-	}
-
-	for (i = 0; i < input_generators.size(); i++, c++) {
-		x = input_generators[i]->generate();
-		if (!c || max < x)
+	for (i = 0; i < input.size(); i++) {
+		x = input[i]->generate();
+		if (!i || max < x)
 			max = x;
 	}
 
 	return max;
 }
 
-Generator_min::Generator_min(const vector<double> *parameters, const vector<Generator *> *input_generators): Generator(parameters, input_generators) {
-	syntax_assert((parameters && parameters->size() > 0) || (input_generators && input_generators->size() > 0));
+Generator_min::Generator_min(const vector<Generator *> *input):
+	Generator(input) {
+	syntax_assert(input && input->size() > 0);
 }
 
 double Generator_min::generate() {
-	unsigned int i, c = 0;
+	unsigned int i;
 	double x, min = 0.0;
 
-	for (i = 0; i < parameters.size(); i++, c++) {
-		x = parameters[i];
-		if (!c || min > x)
-			min = x;
-	}
-
-	for (i = 0; i < input_generators.size(); i++, c++) {
-		x = input_generators[i]->generate();
-		if (!c || min > x)
+	for (i = 0; i < input.size(); i++) {
+		x = input[i]->generate();
+		if (!i || min > x)
 			min = x;
 	}
 
@@ -303,7 +295,6 @@ Generator *Generator_generator::generate(char *code) const {
 	const char *ws = " \t\n\r", *wsp = " \t\n\r()";
 	int len, paren;
 	Generator *ret;
-	vector<double> params;
 	vector<Generator *> generators;
 	char *arg, *name, *end, *string = NULL;
 
@@ -361,41 +352,41 @@ Generator *Generator_generator::generate(char *code) const {
 			syntax_assert(code[0] != ')' && code[0] != '(');
 			code[0] = '\0';
 			code++;
-			params.push_back(atof(arg));
-			//printf("param: %f\n", params.back());
+			generators.push_back(new Generator_float(atof(arg)));
+			//printf("float: %f\n", generators.back()->generate());
 		}
 
 		code += strspn(code, ws);
 	}
 
 	if (strcmp(name, "*") == 0)
-		ret = new Generator_multiply(&params, &generators);
+		ret = new Generator_multiply(&generators);
 	else if (strcmp(name, "+") == 0)
-		ret = new Generator_add(&params, &generators);
+		ret = new Generator_add(&generators);
 	else if (strcmp(name, "sum") == 0)
-		ret = new Generator_sum(&params, &generators);
+		ret = new Generator_sum(&generators);
 	else if (strcmp(name, "uniform") == 0)
-		ret = new Generator_random_uniform(&params, &generators);
+		ret = new Generator_random_uniform(&generators);
 	else if (strcmp(name, "normal") == 0)
-		ret = new Generator_random_normal(&params, &generators);
+		ret = new Generator_random_normal(&generators);
 	else if (strcmp(name, "exponential") == 0)
-		ret = new Generator_random_exponential(&params, &generators);
+		ret = new Generator_random_exponential(&generators);
 	else if (strcmp(name, "poisson") == 0)
-		ret = new Generator_random_poisson(&params, &generators);
+		ret = new Generator_random_poisson(&generators);
 	else if (strcmp(name, "file") == 0)
 		ret = new Generator_file(string);
 	else if (strcmp(name, "pulse") == 0)
-		ret = new Generator_wave_pulse(&params, &generators);
+		ret = new Generator_wave_pulse(&generators);
 	else if (strcmp(name, "sine") == 0)
-		ret = new Generator_wave_sine(&params, &generators);
+		ret = new Generator_wave_sine(&generators);
 	else if (strcmp(name, "triangle") == 0)
-		ret = new Generator_wave_triangle(&params, &generators);
+		ret = new Generator_wave_triangle(&generators);
 	else if (strcmp(name, "equal") == 0)
-		ret = new Generator_equal(&params, &generators);
+		ret = new Generator_equal(&generators);
 	else if (strcmp(name, "max") == 0)
-		ret = new Generator_max(&params, &generators);
+		ret = new Generator_max(&generators);
 	else if (strcmp(name, "min") == 0)
-		ret = new Generator_min(&params, &generators);
+		ret = new Generator_min(&generators);
 	else {
 		ret = NULL;
 		syntax_assert(0);

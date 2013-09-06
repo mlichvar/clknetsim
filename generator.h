@@ -25,18 +25,27 @@ using namespace std;
 
 class Generator {
 	protected:
-	vector<double> parameters;
-	vector<Generator *> input_generators;
+	vector<Generator *> input;
+	bool constant;
 
 	public:
-	Generator(const vector<double> *parameters, const vector<Generator *> *input_generators);
+	Generator(const vector<Generator *> *input);
 	virtual ~Generator();
 	virtual double generate() = 0;
+	bool is_constant() const;
+};
+
+class Generator_float: public Generator {
+	double f;
+
+	public:
+	Generator_float(double f);
+	virtual double generate();
 };
 
 class Generator_random_uniform: public Generator {
 	public:
-	Generator_random_uniform(const vector<double> *parameters, const vector<Generator *> *input_generators);
+	Generator_random_uniform(const vector<Generator *> *input);
 	virtual double generate();
 };
 
@@ -44,7 +53,7 @@ class Generator_random_normal: public Generator {
 	Generator_random_uniform uniform;
 
 	public:
-	Generator_random_normal(const vector<double> *parameters, const vector<Generator *> *input_generators);
+	Generator_random_normal(const vector<Generator *> *input);
 	virtual double generate();
 };
 
@@ -52,7 +61,7 @@ class Generator_random_exponential: public Generator {
 	Generator_random_uniform uniform;
 
 	public:
-	Generator_random_exponential(const vector<double> *parameters, const vector<Generator *> *input_generators);
+	Generator_random_exponential(const vector<Generator *> *input);
 	virtual double generate();
 };
 
@@ -61,7 +70,7 @@ class Generator_random_poisson: public Generator {
 	double L;
 
 	public:
-	Generator_random_poisson(const vector<double> *parameters, const vector<Generator *> *input_generators);
+	Generator_random_poisson(const vector<Generator *> *input);
 	virtual double generate();
 };
 
@@ -80,7 +89,7 @@ class Generator_wave_pulse: public Generator {
 	int counter;
 
 	public:
-	Generator_wave_pulse(const vector<double> *parameters, const vector<Generator *> *input_generators);
+	Generator_wave_pulse(const vector<Generator *> *input);
 	virtual double generate();
 };
 
@@ -89,7 +98,7 @@ class Generator_wave_sine: public Generator {
 	int counter;
 
 	public:
-	Generator_wave_sine(const vector<double> *parameters, const vector<Generator *> *input_generators);
+	Generator_wave_sine(const vector<Generator *> *input);
 	virtual double generate();
 };
 
@@ -98,44 +107,44 @@ class Generator_wave_triangle: public Generator {
 	int counter;
 
 	public:
-	Generator_wave_triangle(const vector<double> *parameters, const vector<Generator *> *input_generators);
+	Generator_wave_triangle(const vector<Generator *> *input);
 	virtual double generate();
 };
 
 class Generator_sum: public Generator {
 	double sum;
 	public:
-	Generator_sum(const vector<double> *parameters, const vector<Generator *> *input_generators);
+	Generator_sum(const vector<Generator *> *input);
 	virtual double generate();
 };
 
 class Generator_multiply: public Generator {
 	public:
-	Generator_multiply(const vector<double> *parameters, const vector<Generator *> *input_generators);
+	Generator_multiply(const vector<Generator *> *input);
 	virtual double generate();
 };
 
 class Generator_add: public Generator {
 	public:
-	Generator_add(const vector<double> *parameters, const vector<Generator *> *input_generators);
+	Generator_add(const vector<Generator *> *input);
 	virtual double generate();
 };
 
 class Generator_equal: public Generator {
 	public:
-	Generator_equal(const vector<double> *parameters, const vector<Generator *> *input_generators);
+	Generator_equal(const vector<Generator *> *input);
 	virtual double generate();
 };
 
 class Generator_max: public Generator {
 	public:
-	Generator_max(const vector<double> *parameters, const vector<Generator *> *input_generators);
+	Generator_max(const vector<Generator *> *input);
 	virtual double generate();
 };
 
 class Generator_min: public Generator {
 	public:
-	Generator_min(const vector<double> *parameters, const vector<Generator *> *input_generators);
+	Generator_min(const vector<Generator *> *input);
 	virtual double generate();
 };
 
