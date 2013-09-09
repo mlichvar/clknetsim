@@ -698,7 +698,7 @@ int close(int fd) {
 }
 
 int socket(int domain, int type, int protocol) {
-	if (domain == AF_INET && SOCK_DGRAM) {
+	if (domain == AF_INET && (type == SOCK_DGRAM || type == SOCK_STREAM)) {
 		do {
 			last_socket_fd++;
 			if (last_socket_fd > MAX_SOCKET_FD)
