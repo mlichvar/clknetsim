@@ -585,6 +585,12 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 		return 1;
 	}
 
+	/* OpenSSL waiting for /dev/urandom */
+	if (nfds == 1 && fds[0].fd < MIN_SOCKET_FD && fds[0].events == POLLIN) {
+		fds[0].revents = POLLIN;
+		return 1;
+	}
+
 	FD_ZERO(&rfds);
 
 	for (i = 0; i < nfds; i++)
