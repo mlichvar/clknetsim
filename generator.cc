@@ -366,12 +366,12 @@ Generator *Generator_generator::generate(char *code) const {
 			syntax_assert(code[0] != ')' && code[0] != '(');
 			code[0] = '\0';
 			code++;
-			if ((arg[0] >= '0' && arg[0] <= '9') || arg[0] == '-') {
-				generators.push_back(new Generator_float(atof(arg)));
-				//printf("float: %f\n", generators.back()->generate());
-			} else {
+			if (isalpha(arg[0])) {
 				generators.push_back(new Generator_variable(arg));
 				//printf("variable: %s\n", arg);
+			} else {
+				generators.push_back(new Generator_float(atof(arg)));
+				//printf("float: %f\n", generators.back()->generate());
 			}
 		}
 
