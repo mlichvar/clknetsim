@@ -45,6 +45,10 @@ struct Request_register {
 	unsigned int node;
 };
 
+struct Reply_register {
+	unsigned int subnets;
+};
+
 struct Reply_gettime {
 	double time;
 	double mono_time;
@@ -84,12 +88,14 @@ struct Request_select {
 
 struct Reply_select {
 	int ret;
+	unsigned int subnet; /* for NORMAL or BROADCAST */
 	unsigned int port; /* for NORMAL or BROADCAST */
 };
 
 #define MAX_PACKET_SIZE 1000
 
 struct Request_send {
+	unsigned int subnet;
 	unsigned int to;
 	unsigned int port;
 	unsigned int len;
@@ -97,6 +103,7 @@ struct Request_send {
 };
 
 struct Reply_recv {
+	unsigned int subnet;
 	unsigned int from;
 	unsigned int port;
 	unsigned int len;

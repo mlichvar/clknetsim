@@ -103,7 +103,7 @@ void run_generator(char *expr, int num) {
 }
 
 int main(int argc, char **argv) {
-	int nodes, help = 0, verbosity = 2, generate_only = 0, rate = 1;
+	int nodes, subnets = 1, help = 0, verbosity = 2, generate_only = 0, rate = 1;
 	double limit = 10000.0, reset = 0.0;
 	const char *offset_log = NULL, *freq_log = NULL, *rawfreq_log = NULL,
 	      *packet_log = NULL, *config, *socket = "clknetsim.sock";
@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
 	int r, opt;
 	Network *network;
 
-	while ((opt = getopt(argc, argv, "l:r:R:o:f:Gg:p:s:v:h")) != -1) {
+	while ((opt = getopt(argc, argv, "l:r:R:n:o:f:Gg:p:s:v:h")) != -1) {
 		switch (opt) {
 			case 'l':
 				limit = atof(optarg);
@@ -122,6 +122,9 @@ int main(int argc, char **argv) {
 				break;
 			case 'R':
 				rate = atoi(optarg);
+				break;
+			case 'n':
+				subnets = atoi(optarg);
 				break;
 			case 'o':
 				offset_log = optarg;
@@ -156,6 +159,7 @@ int main(int argc, char **argv) {
 		printf("       -l secs       set time limit to secs (default 10000)\n");
 		printf("       -r secs       reset stats after secs (default 0)\n");
 		printf("       -R rate       set freq/log/stats update rate (default 1 per second)\n");
+		printf("       -n subnets    set number of subnetworks (default 1)\n");
 		printf("       -o file       log time offsets to file\n");
 		printf("       -f file       log frequency offsets to file\n");
 		printf("       -g file       log raw (w/o slew) frequency offsets to file\n");
@@ -178,7 +182,7 @@ int main(int argc, char **argv) {
 		return 0;
 	}
 
-	network = new Network(socket, nodes, rate);
+	network = new Network(socket, nodes, subnets, rate);
 	
 	if (offset_log)
 		network->open_offset_log(offset_log);

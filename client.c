@@ -99,6 +99,7 @@ struct socket {
 };
 
 static struct socket sockets[MAX_SOCKETS];
+static int subnets;
 
 static double local_time = 0.0;
 static double local_mono_time = 0.0;
@@ -150,7 +151,7 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 __attribute__((constructor))
 static void init(void) {
 	struct Request_register req;
-	struct Reply_empty rep;
+	struct Reply_register rep;
 	struct sockaddr_un s = {AF_UNIX, "clknetsim.sock"};
 	const char *env;
 
@@ -190,6 +191,8 @@ static void init(void) {
 
 	req.node = node;
 	make_request(REQ_REGISTER, &req, sizeof (req), &rep, sizeof (rep));
+
+	subnets = rep.subnets;
 }
 
 static void make_request(int request_id, const void *request_data, int reqlen, void *reply, int replylen) {
@@ -1012,6 +1015,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 	assert(msg->msg_iovlen == 1);
 	assert(msg->msg_iov[0].iov_len <= MAX_PACKET_SIZE);
 
+	req.subnet = 0;
 	req.to = get_node_from_addr(ntohl(sa->sin_addr.s_addr));
 	req.port = ntohs(sa->sin_port);
 	assert(req.port == sockets[s].port);

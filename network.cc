@@ -54,8 +54,9 @@ double Packet_queue::get_timeout(double time) const {
 	return 1e20;
 }
 
-Network::Network(const char *socket, unsigned int n, unsigned int rate) {
+Network::Network(const char *socket, unsigned int n, unsigned int subnets, unsigned int rate) {
        	time = 0.0;
+	this->subnets = subnets;
 	socket_name = socket;
 	update_rate = rate;
 	update_count = 0;
@@ -360,12 +361,14 @@ void Network::send(struct Packet *packet) {
 		return;
 	}
 
-	assert(packet->to < nodes.size() && packet->from < nodes.size());
+	assert(packet->to < nodes.size() && packet->from < nodes.size() &&
+			packet->subnet < subnets);
 
 	i = packet->from * nodes.size() + packet->to;
 
 	if (link_delays[i]) {
 		link_delay_variables["time"] = time;
+		link_delay_variables["subnet"] = packet->subnet + 1;
 		link_delay_variables["port"] = packet->port;
 		link_delay_variables["length"] = packet->len;
 
@@ -375,18 +378,24 @@ void Network::send(struct Packet *packet) {
 	stats[packet->from].update_packet_stats(false, delay);
 
 	if (packet_log)
-		fprintf(packet_log, "%e\t%d\t%d\t%e\t%d\n", time, packet->from + 1, packet->to + 1, delay, packet->port);
+		fprintf(packet_log, "%e\t%d\t%d\t%e\t%d\t%d\n", time,
+				packet->from + 1, packet->to + 1, delay,
+				packet->port, packet->subnet + 1);
 
 	if (delay > 0.0) {
 		packet->receive_time = time + delay;
 		packet_queue.insert(packet);
 		stats[packet->to].update_packet_stats(true, delay);
 #ifdef DEBUG
-		printf("sending packet from %d to %d:%d at %f delay %f\n", packet->from, packet->to, packet->port, time, delay);
+		printf("sending packet from %d to %d:%d:%d at %f delay %f \n",
+				packet->from, packet->subnet, packet->to,
+				packet->port, time, delay);
 #endif
 	} else {
 #ifdef DEBUG
-		printf("dropping packet from %d to %d:%d at %f\n", packet->from, packet->to, packet->port, time);
+		printf("dropping packet from %d to %d:%d:%d at %f\n",
+				packet->from, packet->subnet, packet->to,
+				packet->port, time);
 #endif
 		delete packet;
 	}
@@ -394,4 +403,8 @@ void Network::send(struct Packet *packet) {
 
 double Network::get_time() const {
 	return time;
+}
+
+unsigned int Network::get_subnets() const {
+	return subnets;
 }

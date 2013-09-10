@@ -29,6 +29,7 @@ using namespace std;
 struct Packet {
 	double receive_time;
 	int broadcast;
+	unsigned int subnet;
 	unsigned int from;
 	unsigned int to;
 	unsigned int port;
@@ -48,6 +49,7 @@ class Packet_queue {
 
 class Network {
 	double time;
+	unsigned int subnets;
 	unsigned int update_rate;
 	unsigned int update_count;
 
@@ -69,7 +71,7 @@ class Network {
 	void update_clock_stats();
 
 	public:
-	Network(const char *socket, unsigned int n, unsigned int rate);
+	Network(const char *socket, unsigned int n, unsigned int s, unsigned int rate);
 	~Network();
 	bool prepare_clients();
 	Node *get_node(unsigned int node);
@@ -84,6 +86,7 @@ class Network {
 
 	void send(struct Packet *packet);
 	double get_time() const;
+	unsigned int get_subnets() const;
 };
 
 #endif
