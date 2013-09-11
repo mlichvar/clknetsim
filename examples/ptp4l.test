@@ -3,7 +3,7 @@
 CLKNETSIM_PATH=..
 . ../clknetsim.bash
 
-generate_config1 3 0.01 "(sum (* 1e-9 (normal)))" "(* 1e-8 (exponential))"
+generate_config4 1 3 0.01 "(sum (* 1e-9 (normal)))" "(* 1e-8 (exponential))"
 
 start_client 1 ptp4l "time_stamping hardware" "" "-i eth0"
 start_client 2 ptp4l "time_stamping software" "" "-i eth0"
