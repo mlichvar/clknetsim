@@ -52,8 +52,11 @@ in current directory is used by default. The CLKNETSIM_START_DATE variable can
 be used to specify in seconds since 1970 when should the simulated time start,
 1262304000 by default (2010-01-01 0:00 UTC).
 
-The virtual network uses IPv4 addresses 192.168.123.n where n is the number of
-the node. 192.168.123.255 is the broadcast address.
+The simulated network is available to the clients as one or more Ethernet
+networks with IPv4 addressing. All nodes have interfaces to all networks.
+Their addresses are 192.168.122+s.n, where n is the number of the node
+(starting at 1) and s is the number of the network (starting at 1). The
+broadcast addresses are 192.168.122+s.255.
 
 At the end of the simulation clock and network statistics are printed.
 clknetsim has options which can be used to control for how long the
@@ -165,6 +168,9 @@ Functions and their parameters supported in the expressions:
                            set to the number of the receiving port
   length                 - variable available in the network delay expressions
                            set to the length of the packet
+  subnet                 - variable available in the network delay expressions
+                           set to the number of the Ethernet network in which
+                           the packet was sent
 
 An example:
 

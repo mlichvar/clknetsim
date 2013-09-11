@@ -46,9 +46,14 @@
 
 #include "protocol.h"
 
-#define BASE_ADDR 0xc0a87b01 /* 192.168.123.1 */
-#define BROADCAST_ADDR (BASE_ADDR | 0xff)
+/* first node in first subnet is 192.168.123.1 */
+#define BASE_ADDR 0xc0a87b00
 #define NETMASK 0xffffff00
+#define NODE_ADDR(subnet, node) (BASE_ADDR + 0x100 * (subnet) + (node) + 1)
+#define BROADCAST_ADDR(subnet) (NODE_ADDR(subnet, 0) | 0xff)
+#define NODE_FROM_ADDR(addr) (((addr) & ~NETMASK) - 1)
+#define SUBNET_FROM_ADDR(addr) ((((addr) & NETMASK) - BASE_ADDR) / 0x100)
+
 #define PTP_PRIMARY_MCAST_ADDR 0xe0000181 /* 224.0.1.129 */
 #define PTP_PDELAY_MCAST_ADDR 0xe000006b /* 224.0.0.107 */
 
@@ -288,14 +293,39 @@ static void fill_refclock_sample(void) {
 	shm_time.valid = 1;
 }
 
-static int get_node_from_addr(uint32_t addr) {
-	if (addr == BROADCAST_ADDR ||
-			addr == PTP_PRIMARY_MCAST_ADDR ||
-			addr == PTP_PDELAY_MCAST_ADDR)
-		return -1; /* broadcast */
+static int socket_in_subnet(int socket, int subnet) {
+	switch (sockets[socket].iface) {
+		case IFACE_LO:
+			return 0;
+		case IFACE_NONE:
+		case IFACE_ALL:
+			return 1;
+		default:
+			return sockets[socket].iface - IFACE_ETH0 == subnet;
+	}
+}
 
-	assert(addr >= BASE_ADDR && addr < BROADCAST_ADDR);
-	return addr - BASE_ADDR;
+static void get_target(int socket, uint32_t addr, unsigned int *subnet, unsigned int *node) {
+	if (addr == PTP_PRIMARY_MCAST_ADDR || addr == PTP_PDELAY_MCAST_ADDR) {
+		assert(sockets[socket].iface >= IFACE_ETH0);
+		*subnet = sockets[socket].iface - IFACE_ETH0;
+		*node = -1; /* multicast as broadcast */
+	} else {
+		*subnet = SUBNET_FROM_ADDR(addr);
+		assert(*subnet >= 0 && *subnet < subnets);
+		assert(socket_in_subnet(socket, *subnet));
+
+		if (addr == BROADCAST_ADDR(*subnet))
+			*node = -1; /* broadcast */
+		else
+			*node = NODE_FROM_ADDR(addr);
+	}
+}
+
+static int get_network_from_iface(const char *iface) {
+	if (strncmp(iface, "eth", 3))
+		return -1;
+	return atoi(iface + 3);
 }
 
 static int get_free_socket(void) {
@@ -321,12 +351,12 @@ static int get_socket_fd(int s) {
 	return s + BASE_SOCKET_FD;
 }
 
-static int find_recv_socket(int port, int broadcast) {
+static int find_recv_socket(int subnet, int port, int broadcast) {
 	int i, s = -1;
 
 	for (i = 0; i < MAX_SOCKETS; i++) {
 		if (!sockets[i].used ||
-				sockets[i].iface == IFACE_LO ||
+				!socket_in_subnet(i, subnet) ||
 				sockets[i].type != SOCK_DGRAM ||
 				(port && sockets[i].port && sockets[i].port != port))
 			continue;
@@ -532,7 +562,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	timer = get_first_timer(readfds);
 
 	assert((timeout && (timeout->tv_sec > 0 || timeout->tv_usec > 0)) ||
-			timer >= 0 || find_recv_socket(0, 0) >= 0);
+			timer >= 0 || find_recv_socket(0, 0, 0) >= 0);
 
 	time = getmonotime();
 
@@ -586,7 +616,8 @@ try_again:
 
 		case REPLY_SELECT_NORMAL:
 		case REPLY_SELECT_BROADCAST:
-			s = find_recv_socket(rep.port, rep.ret == REPLY_SELECT_BROADCAST);
+			s = find_recv_socket(rep.subnet, rep.port,
+					rep.ret == REPLY_SELECT_BROADCAST);
 			recv_fd = s >= 0 ? get_socket_fd(s) : 0;
 
 			/* fetch and drop the packet if no fd is waiting for it */
@@ -594,8 +625,8 @@ try_again:
 				struct Reply_recv recv_rep;
 
 				make_request(REQ_RECV, NULL, 0, &recv_rep, sizeof (recv_rep));
-				fprintf(stderr, "clknetsim: dropped packet from node %d on port %d\n",
-						recv_rep.from + 1, recv_rep.port);
+				fprintf(stderr, "clknetsim: dropped packet from node %d on port %d in subnet %d\n",
+						recv_rep.from + 1, recv_rep.port, recv_rep.subnet + 1);
 
 				goto try_again;
 			}
@@ -764,6 +795,8 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 	/* ntpd uses connect() and getsockname() to find the interface
 	   which will be used to send packets to an address */
 	int s = get_socket_from_fd(sockfd), port;
+	unsigned int node, subnet;
+	uint32_t a;
 
 	if (s <= 0 || addr->sa_family != AF_INET) {
 		errno = EINVAL;
@@ -771,12 +804,14 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 	}
 
 	port = ntohs(((const struct sockaddr_in *)addr)->sin_port);
-	
+	a = ntohl(((const struct sockaddr_in *)addr)->sin_addr.s_addr);
+
 	assert(!sockets[s].port || sockets[s].port == port);
-	assert(get_node_from_addr(ntohl(((const struct sockaddr_in *)addr)->sin_addr.s_addr)) >= -1);
+
+	get_target(s, a, &subnet, &node);
 
 	sockets[s].port = port;
-	sockets[s].iface = IFACE_ETH0;
+	sockets[s].iface = IFACE_ETH0 + subnet;
 
 	return 0;
 }
@@ -796,15 +831,19 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 
 	if (a == INADDR_ANY)
 		sockets[s].iface = IFACE_ALL;
-	else if (a == BASE_ADDR + node)
-		sockets[s].iface = IFACE_ETH0;
-	else if (a == BROADCAST_ADDR) {
-		sockets[s].iface = IFACE_ETH0;
-		sockets[s].broadcast = 1;
-	} else if (a == INADDR_LOOPBACK)
+	else if (a == INADDR_LOOPBACK)
 		sockets[s].iface = IFACE_LO;
-	else
-		assert(0);
+	else {
+		int subnet = SUBNET_FROM_ADDR(a);
+		assert(subnet >= 0 && subnet < subnets);
+		if (a == NODE_ADDR(subnet, node))
+			sockets[s].iface = IFACE_ETH0 + subnet;
+		else if (a == BROADCAST_ADDR(subnet)) {
+			sockets[s].iface = IFACE_ETH0 + subnet;
+			sockets[s].broadcast = 1;
+		} else
+			assert(0);
+	}
 
 	return 0;
 }
@@ -833,11 +872,11 @@ int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
 		case IFACE_LO:
 			a = INADDR_LOOPBACK;
 			break;
-		case IFACE_ETH0:
-			a = sockets[s].broadcast ? BROADCAST_ADDR : BASE_ADDR + node;
-			break;
 		default:
-			assert(0);
+			assert(sockets[s].iface - IFACE_ETH0 < subnets);
+			a = sockets[s].broadcast ?
+				BROADCAST_ADDR(sockets[s].iface - IFACE_ETH0) :
+				NODE_ADDR(sockets[s].iface - IFACE_ETH0, node);
 	}
 
 	in->sin_addr.s_addr = htonl(a);
@@ -846,7 +885,7 @@ int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
 }
 
 int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen) {
-	int s = get_socket_from_fd(sockfd);
+	int subnet, s = get_socket_from_fd(sockfd);
 
 	if (s < 0) {
 		errno = EINVAL;
@@ -855,6 +894,16 @@ int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t
 
 	if (level == SOL_SOCKET && optname == SO_TIMESTAMPING && optlen == sizeof (int))
 		sockets[s].time_stamping = !!(int *)optval;
+	else if (level == SOL_SOCKET && optname == SO_BINDTODEVICE) {
+		if (!strcmp(optval, "lo"))
+			sockets[s].iface = IFACE_LO;
+		else if ((subnet = get_network_from_iface(optval)) >= 0)
+			sockets[s].iface = IFACE_ETH0 + subnet;
+		else {
+			errno = EINVAL;
+			return -1;
+		}
+	}
 
 	/* unhandled options succeed too */
 	return 0;
@@ -868,39 +917,43 @@ int ioctl(int fd, unsigned long request, ...) {
 	va_list ap;
 	struct ifconf *conf;
 	struct ifreq *req;
-	int ret = 0, s = get_socket_from_fd(fd);
+	int i, subnet, ret = 0, s = get_socket_from_fd(fd);
 
 	va_start(ap, request);
 
 	if (request == SIOCGIFCONF) {
 		conf = va_arg(ap, struct ifconf *);
-		conf->ifc_len = sizeof (struct ifreq) * 2;
+		assert(conf->ifc_len >= sizeof (struct ifreq) * (1 + subnets));
+		conf->ifc_len = sizeof (struct ifreq) * (1 + subnets);
 		sprintf(conf->ifc_req[0].ifr_name, "lo");
-		sprintf(conf->ifc_req[1].ifr_name, "eth0");
 		((struct sockaddr_in*)&conf->ifc_req[0].ifr_addr)->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-		((struct sockaddr_in*)&conf->ifc_req[1].ifr_addr)->sin_addr.s_addr = htonl(BASE_ADDR + node);
 		conf->ifc_req[0].ifr_addr.sa_family = AF_INET;
-		conf->ifc_req[1].ifr_addr.sa_family = AF_INET;
+
+		for (i = 0; i < subnets; i++) {
+			sprintf(conf->ifc_req[i + 1].ifr_name, "eth%d", i);
+			((struct sockaddr_in*)&conf->ifc_req[i + 1].ifr_addr)->sin_addr.s_addr = htonl(NODE_ADDR(i, node));
+			conf->ifc_req[i + 1].ifr_addr.sa_family = AF_INET;
+		}
 	} else if (request == SIOCGIFINDEX) {
 		req = va_arg(ap, struct ifreq *);
 		if (!strcmp(req->ifr_name, "lo"))
 			req->ifr_ifindex = 0;
-		else if (!strcmp(req->ifr_name, "eth0"))
-			req->ifr_ifindex = 1;
+		else if ((subnet = get_network_from_iface(req->ifr_name)) >= 0)
+			req->ifr_ifindex = subnet + 1;
 		else
 			ret = -1, errno = EINVAL;
 	} else if (request == SIOCGIFFLAGS) {
 		req = va_arg(ap, struct ifreq *);
 		if (!strcmp(req->ifr_name, "lo"))
 			req->ifr_flags = IFF_UP | IFF_LOOPBACK;
-		else if (!strcmp(req->ifr_name, "eth0"))
+		else if (get_network_from_iface(req->ifr_name) >= 0)
 			req->ifr_flags = IFF_UP | IFF_BROADCAST;
 		else
 			ret = -1, errno = EINVAL;
 	} else if (request == SIOCGIFBRDADDR) {
 		req = va_arg(ap, struct ifreq *);
-		if (!strcmp(req->ifr_name, "eth0"))
-			((struct sockaddr_in*)&req->ifr_broadaddr)->sin_addr.s_addr = htonl(BROADCAST_ADDR);
+		if ((subnet = get_network_from_iface(req->ifr_name)) >= 0)
+			((struct sockaddr_in*)&req->ifr_broadaddr)->sin_addr.s_addr = htonl(BROADCAST_ADDR(subnet));
 		else
 			ret = -1, errno = EINVAL;
 		req->ifr_broadaddr.sa_family = AF_INET;
@@ -908,19 +961,19 @@ int ioctl(int fd, unsigned long request, ...) {
 		req = va_arg(ap, struct ifreq *);
 		if (!strcmp(req->ifr_name, "lo"))
 			((struct sockaddr_in*)&req->ifr_netmask)->sin_addr.s_addr = htonl(0xff000000);
-		else if (!strcmp(req->ifr_name, "eth0"))
+		else if (get_network_from_iface(req->ifr_name) >= 0)
 			((struct sockaddr_in*)&req->ifr_netmask)->sin_addr.s_addr = htonl(NETMASK);
 		else
 			ret = -1, errno = EINVAL;
 		req->ifr_netmask.sa_family = AF_INET;
 	} else if (request == SIOCGIFHWADDR) {
-		char mac[IFHWADDRLEN] = {0x12, 0x23, 0x45, 0x67, 0x78, node + 1};
 		req = va_arg(ap, struct ifreq *);
 		if (!strcmp(req->ifr_name, "lo"))
-			memset((&req->ifr_hwaddr)->sa_data, 0, sizeof (mac));
-		else if (!strcmp(req->ifr_name, "eth0"))
+			memset((&req->ifr_hwaddr)->sa_data, 0, IFHWADDRLEN);
+		else if ((subnet = get_network_from_iface(req->ifr_name)) >= 0) {
+			char mac[IFHWADDRLEN] = {0x12, 0x34, 0x56, 0x78, subnet + 1, node + 1};
 			memcpy((&req->ifr_hwaddr)->sa_data, mac, sizeof (mac));
-		else
+		} else
 			ret = -1, errno = EINVAL;
 		req->ifr_netmask.sa_family = AF_UNSPEC;
 #ifdef ETHTOOL_GET_TS_INFO
@@ -929,7 +982,7 @@ int ioctl(int fd, unsigned long request, ...) {
 		req = va_arg(ap, struct ifreq *);
 		info = (struct ethtool_ts_info *)req->ifr_data;
 		memset(info, 0, sizeof (*info));
-		if (!strcmp(req->ifr_name, "eth0")) {
+		if (get_network_from_iface(req->ifr_name) >= 0) {
 			info->phc_index = SYSCLK_PHC_INDEX;
 			info->so_timestamping = SOF_TIMESTAMPING_SOFTWARE |
 				SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_RX_SOFTWARE |
@@ -959,36 +1012,51 @@ int ioctl(int fd, unsigned long request, ...) {
 }
 
 int getifaddrs(struct ifaddrs **ifap) {
-	static struct sockaddr_in addrs[5];
-	struct ifaddrs *ifaddrs;
-	uint32_t sin_addrs[5] = {INADDR_LOOPBACK, 0xff000000, BASE_ADDR + node, NETMASK, BROADCAST_ADDR};
+	struct iface {
+		struct ifaddrs ifaddrs;
+		struct sockaddr_in addr, netmask, broadaddr;
+		char name[10];
+	} *ifaces;
 	int i;
        
-	ifaddrs = malloc(sizeof (struct ifaddrs) * 2);
+	ifaces = malloc(sizeof (struct iface) * (1 + subnets));
 
-	ifaddrs[0] = (struct ifaddrs){
-		.ifa_next = &ifaddrs[1],
+	ifaces[0].ifaddrs = (struct ifaddrs){
+		.ifa_next = &ifaces[1].ifaddrs,
 		.ifa_name = "lo",
 		.ifa_flags = IFF_UP | IFF_LOOPBACK,
-		.ifa_addr = (struct sockaddr *)&addrs[0],
-		.ifa_netmask = (struct sockaddr *)&addrs[1]
+		.ifa_addr = (struct sockaddr *)&ifaces[0].addr,
+		.ifa_netmask = (struct sockaddr *)&ifaces[0].netmask,
+		.ifa_broadaddr = (struct sockaddr *)&ifaces[0].broadaddr
 	};
+	ifaces[0].addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	ifaces[0].netmask.sin_addr.s_addr = htonl(0xff000000);
+	ifaces[0].broadaddr.sin_addr.s_addr = 0;
 
-	ifaddrs[1] = (struct ifaddrs){
-		.ifa_name = "eth0",
-		.ifa_flags = IFF_UP | IFF_BROADCAST,
-		.ifa_addr = (struct sockaddr *)&addrs[2],
-		.ifa_netmask = (struct sockaddr *)&addrs[3],
-		.ifa_broadaddr = (struct sockaddr *)&addrs[4]
-	};
-
-	for (i = 0; i < 5; i++)
-		addrs[i] = (struct sockaddr_in){
-			.sin_addr.s_addr = htonl(sin_addrs[i]),
-			.sin_family = AF_INET
+	for (i = 0; i < subnets; i++) {
+		ifaces[i + 1].ifaddrs = (struct ifaddrs){
+			.ifa_next = &ifaces[i + 2].ifaddrs,
+			.ifa_flags = IFF_UP | IFF_BROADCAST,
+			.ifa_addr = (struct sockaddr *)&ifaces[i + 1].addr,
+			.ifa_netmask = (struct sockaddr *)&ifaces[i + 1].netmask,
+			.ifa_broadaddr = (struct sockaddr *)&ifaces[i + 1].broadaddr
 		};
+		ifaces[i + 1].ifaddrs.ifa_name = ifaces[i + 1].name;
+		snprintf(ifaces[i + 1].name, sizeof (ifaces[i + 1].name), "eth%d", i);
+		ifaces[i + 1].addr.sin_addr.s_addr = htonl(NODE_ADDR(i, node));
+		ifaces[i + 1].netmask.sin_addr.s_addr = htonl(NETMASK);
+		ifaces[i + 1].broadaddr.sin_addr.s_addr = htonl(BROADCAST_ADDR(i));
+	}
 
-	*ifap = ifaddrs;
+	ifaces[i].ifaddrs.ifa_next = NULL;
+
+	for (i = 0; i < 1 + subnets; i++) {
+		ifaces[i].addr.sin_family = AF_INET;
+		ifaces[i].netmask.sin_family = AF_INET;
+		ifaces[i].broadaddr.sin_family = AF_INET;
+	}
+
+	*ifap = (struct ifaddrs *)ifaces;
 	return 0;
 }
 
@@ -1015,8 +1083,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 	assert(msg->msg_iovlen == 1);
 	assert(msg->msg_iov[0].iov_len <= MAX_PACKET_SIZE);
 
-	req.subnet = 0;
-	req.to = get_node_from_addr(ntohl(sa->sin_addr.s_addr));
+	get_target(s, ntohl(sa->sin_addr.s_addr), &req.subnet, &req.to);
 	req.port = ntohs(sa->sin_port);
 	assert(!sockets[s].port || sockets[s].port == req.port);
 
@@ -1057,6 +1124,8 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 
 	if (sockets[s].time_stamping && flags == MSG_ERRQUEUE) {
 		/* dummy message for tx time stamp */
+		assert(sockets[s].iface >= IFACE_ETH0);
+		rep.subnet = sockets[s].iface - IFACE_ETH0;
 		rep.from = node;
 		rep.port = sockets[s].port;
 		rep.len = 1;
@@ -1069,6 +1138,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		return -1;
 	}
 
+	assert(socket_in_subnet(s, rep.subnet));
 	assert(!sockets[s].port || sockets[s].port == rep.port);
 
 	if (msg->msg_name) {
@@ -1077,7 +1147,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		sa = msg->msg_name;
 		sa->sin_family = AF_INET;
 		sa->sin_port = htons(rep.port);
-		sa->sin_addr.s_addr = htonl(BASE_ADDR + rep.from);
+		sa->sin_addr.s_addr = htonl(NODE_ADDR(rep.subnet, rep.from));
 		msg->msg_namelen = sizeof (struct sockaddr_in);
 	}
 
