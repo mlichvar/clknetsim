@@ -326,9 +326,9 @@ static int find_recv_socket(int port, int broadcast) {
 
 	for (i = 0; i < MAX_SOCKETS; i++) {
 		if (!sockets[i].used ||
-				sockets[i].iface <= IFACE_LO ||
+				sockets[i].iface == IFACE_LO ||
 				sockets[i].type != SOCK_DGRAM ||
-				(port && sockets[i].port != port))
+				(port && sockets[i].port && sockets[i].port != port))
 			continue;
 		if (s < 0 || sockets[s].iface < sockets[i].iface ||
 				(broadcast && sockets[i].broadcast))
@@ -1018,7 +1018,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 	req.subnet = 0;
 	req.to = get_node_from_addr(ntohl(sa->sin_addr.s_addr));
 	req.port = ntohs(sa->sin_port);
-	assert(req.port == sockets[s].port);
+	assert(!sockets[s].port || sockets[s].port == req.port);
 
 	req.len = msg->msg_iov[0].iov_len;
 	memcpy(req.data, msg->msg_iov[0].iov_base, req.len);
@@ -1069,7 +1069,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		return -1;
 	}
 
-	assert(rep.port == sockets[s].port);
+	assert(!sockets[s].port || sockets[s].port == rep.port);
 
 	if (msg->msg_name) {
 		assert(msg->msg_namelen >= sizeof (struct sockaddr_in));
