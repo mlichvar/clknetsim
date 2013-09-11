@@ -20,8 +20,16 @@ start_client() {
 
     rm -f tmp/log.$node tmp/conf.$node
 
+    [ $client = chrony ] && client=chronyd
+    [ $client = ntp ] && client=ntpd
+
+    if ! which $client$suffix &> /dev/null; then
+	    echo "can't find $client$suffix in PATH"
+	    return 1
+    fi
+
     case $client in
-	chrony|chronyd)
+	chronyd)
 	    cat > tmp/conf.$node <<-EOF
 		pidfile tmp/pidfile.$node
 		allow
@@ -31,7 +39,7 @@ start_client() {
 	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
 	    $client_wrapper chronyd$suffix -d -f tmp/conf.$node $opts &> tmp/log.$node &
 	    ;;
-	ntp|ntpd)
+	ntpd)
 	    cat > tmp/conf.$node <<-EOF
 		pidfile tmp/pidfile.$node
 		restrict default
