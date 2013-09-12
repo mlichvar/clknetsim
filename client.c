@@ -625,8 +625,11 @@ try_again:
 				struct Reply_recv recv_rep;
 
 				make_request(REQ_RECV, NULL, 0, &recv_rep, sizeof (recv_rep));
-				fprintf(stderr, "clknetsim: dropped packet from node %d on port %d in subnet %d\n",
-						recv_rep.from + 1, recv_rep.port, recv_rep.subnet + 1);
+				if (rep.ret != REPLY_SELECT_BROADCAST)
+					fprintf(stderr, "clknetsim: dropped packet from "
+							"node %d on port %d in subnet %d\n",
+							recv_rep.from + 1, recv_rep.port,
+							recv_rep.subnet + 1);
 
 				goto try_again;
 			}
