@@ -70,7 +70,7 @@
 #define MAX_SOCKETS 20
 #define BASE_SOCKET_FD 100
 
-#define MAX_TIMERS 20
+#define MAX_TIMERS 40
 #define BASE_TIMER_ID 0xC1230123
 #define BASE_TIMER_FD 200
 
