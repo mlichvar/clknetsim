@@ -172,8 +172,11 @@ find_sync() {
     [ -z "$smooth" ] && smooth=0.05
 
     paste <(cut -f $index $1) <(cut -f $index $2) | awk '
+    BEGIN {
+	lastnonsync = -1
+	time = 0
+    }
     {
-	time++
 	off = $1 < 0 ? -$1 : $1
 	freq = $2 < 0 ? -$2 : $2
 
@@ -188,9 +191,10 @@ find_sync() {
 	if (avgoff > '$offsync' || avgfreq > '$freqsync') {
 	    lastnonsync = time
 	}
+	time++
     } END {
 	if (lastnonsync < time) {
-	    print lastnonsync
+	    print lastnonsync + 1
 	} else {
 	    print -1
 	}
