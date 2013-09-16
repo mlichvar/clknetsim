@@ -90,6 +90,7 @@ struct Reply_select {
 	int ret;
 	unsigned int subnet; /* for NORMAL or BROADCAST */
 	unsigned int port; /* for NORMAL or BROADCAST */
+	struct Reply_gettime time;
 };
 
 #define MAX_PACKET_SIZE 1000

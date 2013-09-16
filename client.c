@@ -583,8 +583,10 @@ try_again:
 
 		make_request(REQ_SELECT, &req, sizeof (req), &rep, sizeof (rep));
 
-		local_time_valid = 0;
-		fetch_time();
+		real_time = rep.time.real_time;
+		monotonic_time = rep.time.monotonic_time;
+		network_time = rep.time.network_time;
+		local_time_valid = 1;
 
 		fill_refclock_sample();
 

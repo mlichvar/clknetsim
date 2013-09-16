@@ -187,8 +187,12 @@ void Node::try_select() {
 #endif
 	}
 
-	if (rep.ret >= 0)
+	if (rep.ret >= 0) {
+		rep.time.real_time = clock.get_real_time();
+		rep.time.monotonic_time = clock.get_monotonic_time();
+		rep.time.network_time = network->get_time();
 		reply(&rep, sizeof (rep), REQ_SELECT);
+	}
 }
 
 void Node::process_select(void *data) {
