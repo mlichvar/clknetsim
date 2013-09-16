@@ -160,36 +160,45 @@ void Node::process_adjtime(void *data) {
 	reply(&rep, sizeof (rep), REQ_ADJTIME);
 }
 
-void Node::process_select(void *data) {
-	Request_select *req = (Request_select *)data;
-	Reply_select rep = {0, 0, 0};
+void Node::try_select() {
+	Reply_select rep = {-1, 0, 0};
 
 	if (terminate) {
 		rep.ret = REPLY_SELECT_TERMINATE;
-		reply(&rep, sizeof (rep), REQ_SELECT);
+#ifdef DEBUG
+		printf("select returned on termination in %d at %f\n", index, clock.get_time());
+#endif
+	} else if (select_timeout - clock.get_monotime() <= 0.0) {
+		assert(select_timeout - clock.get_monotime() > -1e-10);
+		rep.ret = REPLY_SELECT_TIMEOUT;
+#ifdef DEBUG
+		printf("select returned on timeout in %d at %f\n", index, clock.get_time());
+#endif
 	} else if (incoming_packets.size() > 0) {
-		rep.ret = incoming_packets.back()->broadcast ? REPLY_SELECT_BROADCAST : REPLY_SELECT_NORMAL;
+		rep.ret = incoming_packets.back()->broadcast ?
+			REPLY_SELECT_BROADCAST :
+			REPLY_SELECT_NORMAL;
 		rep.subnet = incoming_packets.back()->subnet;
 		rep.port = incoming_packets.back()->port;
-		reply(&rep, sizeof (rep), REQ_SELECT);
 #ifdef DEBUG
-		printf("returning select immediately for packet in %d at %f\n", index, clock.get_time());
+		printf("select returned for packet in %d at %f\n", index, clock.get_time());
 #endif
-	} else {
-		select_timeout = req->timeout;
-		if (select_timeout > 0.0) {
-			select_timeout += clock.get_monotime();
-#ifdef DEBUG
-			printf("suspending select with timeout %f in %d at %f\n", req->timeout, index, clock.get_time());
-#endif
-		} else {
-			rep.ret = REPLY_SELECT_TIMEOUT;
-			reply(&rep, sizeof (rep), REQ_SELECT);
-#ifdef DEBUG
-			printf("returning select immediately for zero timeout in %d at %f\n", index, clock.get_time());
-#endif
-		}
 	}
+
+	if (rep.ret >= 0)
+		reply(&rep, sizeof (rep), REQ_SELECT);
+}
+
+void Node::process_select(void *data) {
+	Request_select *req = (Request_select *)data;
+
+	if (req->timeout < 0.0)
+		req->timeout = 0.0;
+	select_timeout = clock.get_monotime() + req->timeout;
+#ifdef DEBUG
+	printf("select called with timeout %f in %d at %f\n", req->timeout, index, clock.get_time());
+#endif
+	try_select();
 }
 
 void Node::process_send(void *data) {
@@ -258,16 +267,8 @@ void Node::receive(struct Packet *packet) {
 
 	incoming_packets.insert(incoming_packets.begin(), packet);
 
-	if (pending_request == REQ_SELECT) {
-		Reply_select rep;
-		rep.ret = incoming_packets.back()->broadcast ? REPLY_SELECT_BROADCAST : REPLY_SELECT_NORMAL;
-		rep.subnet = incoming_packets.back()->subnet;
-		rep.port = incoming_packets.back()->port;
-		reply(&rep, sizeof (rep), REQ_SELECT);
-#ifdef DEBUG
-		printf("resuming select in %d at %f\n", index, clock.get_time());
-#endif
-	}
+	if (pending_request == REQ_SELECT)
+		try_select();
 }
 
 void Node::process_getreftime() {
@@ -288,17 +289,7 @@ void Node::process_getrefoffsets() {
 void Node::resume() {
 	switch (pending_request) {
 		case REQ_SELECT:
-			if (terminate) {
-				Reply_select rep = { REPLY_SELECT_TERMINATE, 0, 0 };
-				reply(&rep, sizeof (rep), REQ_SELECT);
-			} else if (select_timeout - clock.get_monotime() <= 0.0) {
-				assert(select_timeout - clock.get_monotime() > -1e-10);
-				Reply_select rep = { REPLY_SELECT_TIMEOUT, 0, 0 };
-				reply(&rep, sizeof (rep), REQ_SELECT);
-#ifdef DEBUG
-				printf("resuming select in %d at %f\n", index, clock.get_time());
-#endif
-			}
+			try_select();
 			break;
 		case REQ_REGISTER:
 			if (start_time - network->get_time() <= 0.0 || terminate) {

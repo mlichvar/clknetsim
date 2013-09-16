@@ -52,6 +52,7 @@ class Node {
 	void process_settime(void *data);
 	void process_adjtimex(void *data);
 	void process_adjtime(void *data);
+	void try_select();
 	void process_select(void *data);
 	void process_send(void *data);
 	void process_recv();
