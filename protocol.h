@@ -30,7 +30,7 @@
 #define REQ_SELECT 6
 #define REQ_SEND 7
 #define REQ_RECV 8
-#define REQ_GETREFTIME 9
+#define REQ_GETREFSAMPLE 9
 #define REQ_GETREFOFFSETS 10
 
 struct Request_header {
@@ -50,8 +50,8 @@ struct Reply_register {
 };
 
 struct Reply_gettime {
-	double time;
-	double mono_time;
+	double real_time;
+	double monotonic_time;
 	double network_time;
 };
 
@@ -110,7 +110,7 @@ struct Reply_recv {
 	char data[MAX_PACKET_SIZE];
 };
 
-struct Reply_getreftime {
+struct Reply_getrefsample {
 	double time;
 	double offset;
 	int valid;

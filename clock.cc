@@ -62,11 +62,11 @@ Clock::~Clock() {
 		delete step_generator;
 }
 
-double Clock::get_time() const {
+double Clock::get_real_time() const {
 	return time;
 }
 
-double Clock::get_monotime() const {
+double Clock::get_monotonic_time() const {
 	return mono_time;
 }
 
@@ -85,12 +85,12 @@ double Clock::get_raw_freq() const {
 	return freq * timex_freq;
 }
 
-double Clock::get_real_interval(double local_interval) const {
+double Clock::get_true_interval(double local_interval) const {
 	return local_interval / get_total_freq();
 }
 
-double Clock::get_local_interval(double real_interval) const {
-	return real_interval * get_total_freq();
+double Clock::get_local_interval(double true_interval) const {
+	return true_interval * get_total_freq();
 }
 
 void Clock::set_freq_generator(Generator *gen) {
@@ -349,17 +349,17 @@ void Refclock::update(double time, const Clock *clock) {
 		return;
 
 	this->time = time;
-	offset = clock->get_time() - time + offset_generator->generate(NULL);
+	offset = clock->get_real_time() - time + offset_generator->generate(NULL);
 	valid = true;
 }
 
-bool Refclock::get_reftime(double *time, double *offset) const {
+bool Refclock::get_sample(double *time, double *offset) const {
 	*time = this->time;
 	*offset = this->offset;
 	return valid;
 }
 
-void Refclock::get_refoffsets(double *offsets, int size) {
+void Refclock::get_offsets(double *offsets, int size) {
 	int i;
 
 	for (i = 0; i < size; i++)

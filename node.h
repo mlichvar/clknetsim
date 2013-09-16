@@ -56,7 +56,7 @@ class Node {
 	void process_select(void *data);
 	void process_send(void *data);
 	void process_recv();
-	void process_getreftime();
+	void process_getrefsample();
 	void process_getrefoffsets();
 
 	void receive(struct Packet *packet);

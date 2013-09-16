@@ -75,7 +75,8 @@ bool Node::process_fd() {
 	pending_request = h->request;
 
 #ifdef DEBUG
-	printf("received request %ld in node %d at %f\n", h->request, index, clock.get_time());
+	printf("received request %ld in node %d at %f\n",
+			h->request, index, clock.get_real_time());
 #endif
 
 	switch (h->request) {
@@ -100,8 +101,8 @@ bool Node::process_fd() {
 		case REQ_RECV:
 			process_recv();
 			break;
-		case REQ_GETREFTIME:
-			process_getreftime();
+		case REQ_GETREFSAMPLE:
+			process_getrefsample();
 			break;
 		case REQ_GETREFOFFSETS:
 			process_getrefoffsets();
@@ -127,8 +128,8 @@ void Node::reply(void *data, int len, int request) {
 void Node::process_gettime() {
 	Reply_gettime r;
 
-	r.time = clock.get_time();
-	r.mono_time = clock.get_monotime();
+	r.real_time = clock.get_real_time();
+	r.monotonic_time = clock.get_monotonic_time();
 	r.network_time = network->get_time();
 	reply(&r, sizeof (r), REQ_GETTIME);
 }
@@ -166,13 +167,14 @@ void Node::try_select() {
 	if (terminate) {
 		rep.ret = REPLY_SELECT_TERMINATE;
 #ifdef DEBUG
-		printf("select returned on termination in %d at %f\n", index, clock.get_time());
+		printf("select returned on termination in %d at %f\n",
+				index, clock.get_real_time());
 #endif
-	} else if (select_timeout - clock.get_monotime() <= 0.0) {
-		assert(select_timeout - clock.get_monotime() > -1e-10);
+	} else if (select_timeout - clock.get_monotonic_time() <= 0.0) {
+		assert(select_timeout - clock.get_monotonic_time() > -1e-10);
 		rep.ret = REPLY_SELECT_TIMEOUT;
 #ifdef DEBUG
-		printf("select returned on timeout in %d at %f\n", index, clock.get_time());
+		printf("select returned on timeout in %d at %f\n", index, clock.get_real_time());
 #endif
 	} else if (incoming_packets.size() > 0) {
 		rep.ret = incoming_packets.back()->broadcast ?
@@ -181,7 +183,7 @@ void Node::try_select() {
 		rep.subnet = incoming_packets.back()->subnet;
 		rep.port = incoming_packets.back()->port;
 #ifdef DEBUG
-		printf("select returned for packet in %d at %f\n", index, clock.get_time());
+		printf("select returned for packet in %d at %f\n", index, clock.get_real_time());
 #endif
 	}
 
@@ -194,9 +196,10 @@ void Node::process_select(void *data) {
 
 	if (req->timeout < 0.0)
 		req->timeout = 0.0;
-	select_timeout = clock.get_monotime() + req->timeout;
+	select_timeout = clock.get_monotonic_time() + req->timeout;
 #ifdef DEBUG
-	printf("select called with timeout %f in %d at %f\n", req->timeout, index, clock.get_time());
+	printf("select called with timeout %f in %d at %f\n",
+			req->timeout, index, clock.get_real_time());
 #endif
 	try_select();
 }
@@ -255,7 +258,7 @@ void Node::process_recv() {
 
 	incoming_packets.pop_back();
 #ifdef DEBUG
-	printf("received packet in %d at %f\n", index, clock.get_time());
+	printf("received packet in %d at %f\n", index, clock.get_real_time());
 #endif
 }
 
@@ -271,18 +274,18 @@ void Node::receive(struct Packet *packet) {
 		try_select();
 }
 
-void Node::process_getreftime() {
-	Reply_getreftime r;
+void Node::process_getrefsample() {
+	Reply_getrefsample r;
 
-	r.valid = refclock.get_reftime(&r.time, &r.offset);
+	r.valid = refclock.get_sample(&r.time, &r.offset);
 	r._pad = 0;
-	reply(&r, sizeof (r), REQ_GETREFTIME);
+	reply(&r, sizeof (r), REQ_GETREFSAMPLE);
 }
 
 void Node::process_getrefoffsets() {
 	Reply_getrefoffsets r;
 
-	refclock.get_refoffsets(r.offsets, REPLY_GETREFOFFSETS_SIZE);
+	refclock.get_offsets(r.offsets, REPLY_GETREFOFFSETS_SIZE);
 	reply(&r, sizeof (r), REQ_GETREFOFFSETS);
 }
 
@@ -314,7 +317,7 @@ bool Node::waiting() const {
 double Node::get_timeout() const {
 	switch (pending_request) {
 		case REQ_SELECT:
-			return clock.get_real_interval(select_timeout - clock.get_monotime());
+			return clock.get_true_interval(select_timeout - clock.get_monotonic_time());
 		case REQ_REGISTER:
 			return start_time - network->get_time();
 		default:

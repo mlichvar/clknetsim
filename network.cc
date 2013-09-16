@@ -283,7 +283,7 @@ void Network::update_clock_stats() {
 
 	if (offset_log) {
 		for (i = 0; i < n; i++)
-			fprintf(offset_log, "%.9f%c", nodes[i]->get_clock()->get_time() - time, i + 1 < n ? '\t' : '\n');
+			fprintf(offset_log, "%.9f%c", nodes[i]->get_clock()->get_real_time() - time, i + 1 < n ? '\t' : '\n');
 	}
 	if (freq_log) {
 		for (i = 0; i < n; i++)
@@ -295,7 +295,7 @@ void Network::update_clock_stats() {
 	}
 
 	for (i = 0; i < n; i++)
-		stats[i].update_clock_stats(nodes[i]->get_clock()->get_time() - time,
+		stats[i].update_clock_stats(nodes[i]->get_clock()->get_real_time() - time,
 				nodes[i]->get_clock()->get_total_freq() - 1.0,
 				nodes[i]->get_clock()->get_raw_freq() - 1.0);
 }

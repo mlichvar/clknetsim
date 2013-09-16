@@ -106,10 +106,10 @@ struct socket {
 static struct socket sockets[MAX_SOCKETS];
 static int subnets;
 
-static double local_time = 0.0;
-static double local_mono_time = 0.0;
-static int local_time_valid = 0;
+static double real_time = 0.0;
+static double monotonic_time = 0.0;
 static double network_time = 0.0;
+static int local_time_valid = 0;
 
 static time_t system_time_offset = 1262304000; /* 2010-01-01 0:00 UTC */
 
@@ -226,27 +226,30 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 	assert(received == replylen);
 }
 
-static double gettime(void) {
+static void fetch_time(void) {
 	struct Reply_gettime r;
 
 	if (!local_time_valid) {
 		make_request(REQ_GETTIME, NULL, 0, &r, sizeof (r));
-		local_time = r.time;
-		local_mono_time = r.mono_time;
-		local_time_valid = 1;
+		real_time = r.real_time;
+		monotonic_time = r.monotonic_time;
 		network_time = r.network_time;
+		local_time_valid = 1;
 	}
-
-	return local_time;
 }
 
-static double getmonotime(void) {
-	gettime();
-	return local_mono_time;
+static double get_real_time(void) {
+	fetch_time();
+	return real_time;
 }
 
-static double getphctime(void) {
-	gettime();
+static double get_monotonic_time(void) {
+	fetch_time();
+	return monotonic_time;
+}
+
+static double get_refclock_time(void) {
+	fetch_time();
 	if (refclock_offsets_used >= REPLY_GETREFOFFSETS_SIZE) {
 		make_request(REQ_GETREFOFFSETS, NULL, 0, &refclock_offsets, sizeof (refclock_offsets));
 		refclock_offsets_used = 0;
@@ -265,13 +268,13 @@ static void settime(double time) {
 }
 
 static void fill_refclock_sample(void) {
-	struct Reply_getreftime r;
+	struct Reply_getrefsample r;
 	double clock_time, receive_time;
 
 	if (!refclock_shm_enabled)
 		return;
 
-	make_request(REQ_GETREFTIME, NULL, 0, &r, sizeof (r));
+	make_request(REQ_GETREFSAMPLE, NULL, 0, &r, sizeof (r));
 
 	if (r.time == refclock_time || !r.valid)
 		return;
@@ -431,7 +434,7 @@ static void rearm_timer(int timer)
 int gettimeofday(struct timeval *tv, struct timezone *tz) {
 	double time;
 
-	time = gettime() + 0.5e-6;
+	time = get_real_time() + 0.5e-6;
 
 	tv->tv_sec = floor(time);
 	tv->tv_usec = (time - tv->tv_sec) * 1e6;
@@ -449,13 +452,13 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 
 	switch (which_clock) {
 		case CLOCK_REALTIME:
-			time = gettime();
+			time = get_real_time();
 			break;
 		case CLOCK_MONOTONIC:
-			time = getmonotime();
+			time = get_monotonic_time();
 			break;
 		case REFCLK_ID:
-			time = getphctime();
+			time = get_refclock_time();
 			break;
 		default:
 			assert(0);
@@ -480,7 +483,7 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 time_t time(time_t *t) {
 	time_t time;
 
-	time = floor(gettime());
+	time = floor(get_real_time());
 	time += system_time_offset;
 	if (t)
 		*t = time;
@@ -556,7 +559,6 @@ int adjtime(const struct timeval *delta, struct timeval *olddelta) {
 int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout) {
 	struct Request_select req;
 	struct Reply_select rep;
-	double time;
 	int timer, s, recv_fd = -1;
 
 	timer = get_first_timer(readfds);
@@ -564,7 +566,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	assert((timeout && (timeout->tv_sec > 0 || timeout->tv_usec > 0)) ||
 			timer >= 0 || find_recv_socket(0, 0, 0) >= 0);
 
-	time = getmonotime();
+	fetch_time();
 
 	if (timeout)
 		req.timeout = timeout->tv_sec + (timeout->tv_usec + 1) / 1e6;
@@ -572,21 +574,21 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 		req.timeout = 1e20;
 
 try_again:
-	if (timer >= 0 && timers[timer].timeout <= time) {
+	if (timer >= 0 && timers[timer].timeout <= monotonic_time) {
 		/* avoid unnecessary requests */
 		rep.ret = REPLY_SELECT_TIMEOUT;
 	} else {
-		if (timer >= 0 && time + req.timeout > timers[timer].timeout)
-			req.timeout = timers[timer].timeout - time;
+		if (timer >= 0 && monotonic_time + req.timeout > timers[timer].timeout)
+			req.timeout = timers[timer].timeout - monotonic_time;
 
 		make_request(REQ_SELECT, &req, sizeof (req), &rep, sizeof (rep));
 
 		local_time_valid = 0;
-		time = getmonotime();
+		fetch_time();
 
 		fill_refclock_sample();
 
-		if (time >= 0.1 || timer >= 0 || rep.ret != REPLY_SELECT_TIMEOUT)
+		if (monotonic_time >= 0.1 || timer >= 0 || rep.ret != REPLY_SELECT_TIMEOUT)
 			precision_hack = 0;
 	}
 
@@ -597,7 +599,7 @@ try_again:
 			return -1;
 
 		case REPLY_SELECT_TIMEOUT:
-			if (timer >= 0 && time >= timers[timer].timeout) {
+			if (timer >= 0 && monotonic_time >= timers[timer].timeout) {
 				rearm_timer(timer);
 				switch (timers[timer].type) {
 					case TIMER_TYPE_SIGNAL:
@@ -1256,7 +1258,8 @@ int timer_settime(timer_t timerid, int flags, const struct itimerspec *value, st
 
 	if (value->it_value.tv_sec || value->it_value.tv_nsec) {
 		timers[t].armed = 1;
-		timers[t].timeout = getmonotime() + value->it_value.tv_sec + value->it_value.tv_nsec * 1e-9;
+		timers[t].timeout = get_monotonic_time() +
+			value->it_value.tv_sec + value->it_value.tv_nsec * 1e-9;
 		timers[t].interval = value->it_interval.tv_sec + value->it_interval.tv_nsec * 1e-9;
 	} else {
 		timers[t].armed = 0;
@@ -1275,7 +1278,7 @@ int timer_gettime(timer_t timerid, struct itimerspec *value) {
 	}
 
 	if (timers[t].armed) {
-		timeout = timers[t].timeout - getmonotime();
+		timeout = timers[t].timeout - get_monotonic_time();
 		value->it_value.tv_sec = timeout;
 		value->it_value.tv_nsec = (timeout - value->it_value.tv_sec) * 1e9;
 	} else {

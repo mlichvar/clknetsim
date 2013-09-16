@@ -46,12 +46,12 @@ class Clock {
 public:
 	Clock();
 	~Clock();
-	double get_time() const;
-	double get_monotime() const;
+	double get_real_time() const;
+	double get_monotonic_time() const;
 	double get_total_freq() const;
 	double get_raw_freq() const;
-	double get_real_interval(double local_interval) const;
-	double get_local_interval(double real_interval) const;
+	double get_true_interval(double local_interval) const;
+	double get_local_interval(double true_interval) const;
 
 	void set_freq_generator(Generator *gen);
 	void set_step_generator(Generator *gen);
@@ -80,8 +80,8 @@ public:
 	~Refclock();
 	void set_offset_generator(Generator *gen);
 	void update(double time, const Clock *clock);
-	bool get_reftime(double *time, double *offset) const;
-	void get_refoffsets(double *offsets, int size);
+	bool get_sample(double *time, double *offset) const;
+	void get_offsets(double *offsets, int size);
 };
 
 #endif
