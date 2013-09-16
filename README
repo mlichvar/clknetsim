@@ -50,7 +50,8 @@ Optionally, the environment variable CLKNETSIM_SOCKET can be set to the path of
 the UNIX domain socket which is used to connect to the server, clknetsim.sock
 in current directory is used by default. The CLKNETSIM_START_DATE variable can
 be used to specify in seconds since 1970 when should the simulated time start,
-1262304000 by default (2010-01-01 0:00 UTC).
+1262304000 by default (2010-01-01 0:00 UTC). The CLKNETSIM_CONNECT_TIMEOUT
+variable sets the server connection timeout, 10 seconds by default.
 
 The simulated network is available to the clients as one or more Ethernet
 networks with IPv4 addressing. All nodes have interfaces to all networks.

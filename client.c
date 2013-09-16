@@ -159,6 +159,7 @@ static void init(void) {
 	struct Reply_register rep;
 	struct sockaddr_un s = {AF_UNIX, "clknetsim.sock"};
 	const char *env;
+	unsigned int connect_retries = 100; /* 10 seconds */
 
 	assert(!initialized);
 
@@ -185,12 +186,21 @@ static void init(void) {
 	if (env)
 		system_time_offset = atol(env);
 
+	env = getenv("CLKNETSIM_CONNECT_TIMEOUT");
+	if (env)
+		connect_retries = 10 * atoi(env);
+
 	clknetsim_fd = _socket(AF_UNIX, SOCK_STREAM, 0);
 
 	assert(clknetsim_fd >= 0);
 
-	while (_connect(clknetsim_fd, (struct sockaddr *)&s, sizeof (s)) < 0)
+	while (_connect(clknetsim_fd, (struct sockaddr *)&s, sizeof (s)) < 0) {
+		if (!--connect_retries) {
+			fprintf(stderr, "clknetsim: could not connect to server.\n");
+			exit(1);
+		}
 		_usleep(100000);
+	}
 
 	initialized = 1;
 
