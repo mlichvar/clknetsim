@@ -106,7 +106,7 @@ bool Network::prepare_clients() {
 	s.sun_family = AF_UNIX;
 	snprintf(s.sun_path, sizeof (s.sun_path), "%s", socket_name);
 
-	sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
+	sockfd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
 	if (sockfd < 0) {
 		fprintf(stderr, "socket() failed\n");
 		return false;

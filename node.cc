@@ -130,8 +130,10 @@ void Node::reply(void *data, int len, int request) {
 	assert(request == pending_request);
 	pending_request = 0;
 
-	sent = send(fd, data, len, 0);
-	assert(sent == len);
+	if (data) {
+		sent = send(fd, data, len, 0);
+		assert(sent == len);
+	}
 }
 
 
@@ -146,10 +148,9 @@ void Node::process_gettime() {
 
 void Node::process_settime(void *data) {
 	Request_settime *req = (Request_settime *)data;
-	Reply_empty rep = { 0 };
 
 	clock.set_time(req->time);
-	reply(&rep, sizeof (rep), REQ_SETTIME);
+	reply(NULL, 0, REQ_SETTIME);
 }
 
 void Node::process_adjtimex(void *data) {
@@ -220,7 +221,6 @@ void Node::process_select(void *data) {
 
 void Node::process_send(void *data) {
 	Request_send *req = (Request_send *)data;
-	Reply_empty rep = { 0 };
 	struct Packet *packet;
 
 	assert(req->len <= sizeof (packet->data));
@@ -237,7 +237,7 @@ void Node::process_send(void *data) {
 		network->send(packet);
 	}
 
-	reply(&rep, sizeof (rep), REQ_SEND);
+	reply(NULL, 0, REQ_SEND);
 }
 
 void Node::process_recv() {

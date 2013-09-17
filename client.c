@@ -190,7 +190,7 @@ static void init(void) {
 	if (env)
 		connect_retries = 10 * atoi(env);
 
-	clknetsim_fd = _socket(AF_UNIX, SOCK_STREAM, 0);
+	clknetsim_fd = _socket(AF_UNIX, SOCK_SEQPACKET, 0);
 
 	assert(clknetsim_fd >= 0);
 
@@ -213,7 +213,7 @@ static void init(void) {
 static void make_request(int request_id, const void *request_data, int reqlen, void *reply, int replylen) {
 	struct Request_header *header;
 	char buf[MAX_REQ_SIZE];
-	int sent, received;
+	int sent, received = 0;
 
 	assert(initialized);
 
@@ -227,13 +227,13 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 	reqlen += sizeof (struct Request_header);
 
 	if ((sent = send(clknetsim_fd, buf, reqlen, 0)) <= 0 ||
-			(received = recv(clknetsim_fd, reply, replylen, 0)) <= 0) {
+			(reply && (received = recv(clknetsim_fd, reply, replylen, 0)) <= 0)) {
 		fprintf(stderr, "clknetsim: server connection closed.\n");
 		exit(1);
 	}
 
 	assert(sent == reqlen);
-	assert(received == replylen);
+	assert(!reply || received == replylen);
 }
 
 static void fetch_time(void) {
@@ -269,10 +269,9 @@ static double get_refclock_time(void) {
 
 static void settime(double time) {
 	struct Request_settime req;
-	struct Reply_empty rep;
 
 	req.time = time;
-	make_request(REQ_SETTIME, &req, sizeof (req), &rep, sizeof (rep));
+	make_request(REQ_SETTIME, &req, sizeof (req), NULL, 0);
 
 	local_time_valid = 0;
 }
@@ -1083,7 +1082,6 @@ void freeifaddrs(struct ifaddrs *ifa) {
 
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 	struct Request_send req;
-	struct Reply_empty rep;
 	struct sockaddr_in *sa;
 	int s = get_socket_from_fd(sockfd);
 
@@ -1107,7 +1105,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 	req.len = msg->msg_iov[0].iov_len;
 	memcpy(req.data, msg->msg_iov[0].iov_base, req.len);
 
-	make_request(REQ_SEND, &req, sizeof (req), &rep, sizeof (rep));
+	make_request(REQ_SEND, &req, sizeof (req), NULL, 0);
 
 	return req.len;
 }

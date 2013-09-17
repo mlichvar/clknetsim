@@ -37,10 +37,6 @@ struct Request_header {
 	long request;
 };
 
-struct Reply_empty {
-	int pad;
-};
-
 struct Request_register {
 	unsigned int node;
 };
