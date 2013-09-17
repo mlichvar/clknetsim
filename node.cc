@@ -62,7 +62,7 @@ bool Node::process_fd() {
 	char buf[MAX_REQ_SIZE];
 	Request_header *h;
 	void *data;
-	int received;
+	int received, reqlen;
 
 	received = recv(fd, buf, sizeof (buf), 0);
 	if (received < (int)sizeof (Request_header))
@@ -70,6 +70,7 @@ bool Node::process_fd() {
 
 	h = (Request_header *)buf;
 	data = buf + sizeof (Request_header);
+	reqlen = received - sizeof (Request_header);
 
 	assert(pending_request == 0);
 	pending_request = h->request;
@@ -81,30 +82,39 @@ bool Node::process_fd() {
 
 	switch (h->request) {
 		case REQ_GETTIME:
+			assert(reqlen == 0);
 			process_gettime();
 			break;
 		case REQ_SETTIME:
+			assert(reqlen == sizeof (Request_settime));
 			process_settime(data);
 			break;
 		case REQ_ADJTIMEX:
+			assert(reqlen == sizeof (Request_adjtimex));
 			process_adjtimex(data);
 			break;
 		case REQ_ADJTIME:
+			assert(reqlen == sizeof (Request_adjtime));
 			process_adjtime(data);
 			break;
 		case REQ_SELECT:
+			assert(reqlen == sizeof (Request_select));
 			process_select(data);
 			break;
 		case REQ_SEND:
+			assert(reqlen == sizeof (Request_send));
 			process_send(data);
 			break;
 		case REQ_RECV:
+			assert(reqlen == 0);
 			process_recv();
 			break;
 		case REQ_GETREFSAMPLE:
+			assert(reqlen == 0);
 			process_getrefsample();
 			break;
 		case REQ_GETREFOFFSETS:
+			assert(reqlen == 0);
 			process_getrefoffsets();
 			break;
 		default:
