@@ -79,6 +79,11 @@ start_client() {
 	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
 	    $client_wrapper ptp4l$suffix -f tmp/conf.$node $opts &> tmp/log.$node &
 	    ;;
+	pmc)
+	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
+	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
+	    $client_wrapper pmc$suffix "$config" &> tmp/log.$node &
+	    ;;
 	*)
 	    echo "unknown client $client"
 	    exit 1

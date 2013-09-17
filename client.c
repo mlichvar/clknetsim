@@ -686,6 +686,13 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 		return 1;
 	}
 
+	/* pmc waiting to send packet */
+	if (nfds == 2 && (fds[1].events & POLLOUT) && get_socket_from_fd(fds[1].fd) >= 0) {
+		fds[0].revents = 0;
+		fds[1].revents = POLLOUT;
+		return 1;
+	}
+
 	FD_ZERO(&rfds);
 
 	for (i = 0; i < nfds; i++)

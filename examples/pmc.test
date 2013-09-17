@@ -1,0 +1,16 @@
+#!/bin/bash
+
+CLKNETSIM_PATH=..
+. ../clknetsim.bash
+
+generate_config4 "1" "1 2 3" 0.01 "(sum (* 1e-9 (normal)))" "(* 1e-8 (exponential))"
+
+echo 'node3_start = 100' >> tmp/conf
+
+start_client 1 ptp4l "" "" "-i eth0"
+start_client 2 ptp4l "" "" "-i eth0"
+start_client 3 pmc "GET TIME_STATUS_NP"
+
+start_server 3 -l 110
+
+cat tmp/log.3
