@@ -32,6 +32,7 @@
 #define REQ_RECV 8
 #define REQ_GETREFSAMPLE 9
 #define REQ_GETREFOFFSETS 10
+#define REQ_DEREGISTER 11
 
 struct Request_header {
 	long request;

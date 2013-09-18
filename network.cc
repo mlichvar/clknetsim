@@ -211,6 +211,8 @@ bool Network::run(double time_limit) {
 					fprintf(stderr, "client %d failed.\n", i + 1);
 					return false;
 				}
+				if (nodes[i]->finished())
+					pollfds[i].events = 0;
 				if (nodes[i]->waiting())
 					waiting++;
 			}

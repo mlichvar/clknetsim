@@ -36,11 +36,10 @@ Node::~Node() {
 
 	terminate = true;
 
-	if (waiting())
-		resume();
-	while (process_fd()) {
-		assert(!waiting());
-	}
+	do {
+		if (waiting())
+			resume();
+	} while (process_fd());
 
 	if (fd >= 0)
 		close(fd);
@@ -116,6 +115,9 @@ bool Node::process_fd() {
 		case REQ_GETREFOFFSETS:
 			assert(reqlen == 0);
 			process_getrefoffsets();
+			break;
+		case REQ_DEREGISTER:
+			assert(reqlen == 0);
 			break;
 		default:
 			assert(0);
@@ -277,7 +279,7 @@ void Node::process_recv() {
 }
 
 void Node::receive(struct Packet *packet) {
-	if (pending_request == REQ_REGISTER) {
+	if (pending_request == REQ_REGISTER || pending_request == REQ_DEREGISTER) {
 		delete packet;
 		return;
 	}
@@ -318,6 +320,8 @@ void Node::resume() {
 #endif
 			}
 			break;
+		case REQ_DEREGISTER:
+			break;
 		default:
 			assert(0);
 
@@ -325,7 +329,13 @@ void Node::resume() {
 }
 
 bool Node::waiting() const {
-	return pending_request == REQ_SELECT || pending_request == REQ_REGISTER;
+	return pending_request == REQ_SELECT ||
+		pending_request == REQ_REGISTER ||
+		pending_request == REQ_DEREGISTER;
+}
+
+bool Node::finished() const {
+	return pending_request == REQ_DEREGISTER;
 }
 
 double Node::get_timeout() const {
@@ -334,6 +344,8 @@ double Node::get_timeout() const {
 			return clock.get_true_interval(select_timeout - clock.get_monotonic_time());
 		case REQ_REGISTER:
 			return start_time - network->get_time();
+		case REQ_DEREGISTER:
+			return 10.0;
 		default:
 			assert(0);
 	}

@@ -62,6 +62,7 @@ class Node {
 	void receive(struct Packet *packet);
 	void resume();
 	bool waiting() const;
+	bool finished() const;
 
 	double get_timeout() const;
 	Clock *get_clock();

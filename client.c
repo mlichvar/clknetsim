@@ -210,6 +210,12 @@ static void init(void) {
 	subnets = rep.subnets;
 }
 
+__attribute__((destructor))
+static void fini(void) {
+	if (initialized)
+		make_request(REQ_DEREGISTER, NULL, 0, NULL, 0);
+}
+
 static void make_request(int request_id, const void *request_data, int reqlen, void *reply, int replylen) {
 	struct Request_header *header;
 	char buf[MAX_REQ_SIZE];
@@ -229,6 +235,7 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 	if ((sent = send(clknetsim_fd, buf, reqlen, 0)) <= 0 ||
 			(reply && (received = recv(clknetsim_fd, reply, replylen, 0)) <= 0)) {
 		fprintf(stderr, "clknetsim: server connection closed.\n");
+		initialized = 0;
 		exit(1);
 	}
 
