@@ -53,22 +53,22 @@ start_client() {
 	ntpq)
 	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
 	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
-	    $client_wrapper ntpq$suffix -c 'rv 0' -c ass -c 'mrv 1 1' $config &> tmp/log.$node &
+	    $client_wrapper ntpq$suffix $opts $config &> tmp/log.$node &
 	    ;;
 	ntpdate)
 	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
 	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
-	    $client_wrapper ntpdate$suffix $config &> tmp/log.$node &
+	    $client_wrapper ntpdate$suffix $opts $config &> tmp/log.$node &
             ;;
 	busybox)
 	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
 	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
-	    $client_wrapper busybox$suffix ntpd -ddd -n -p $config &> tmp/log.$node &
+	    $client_wrapper busybox$suffix ntpd -ddd -n -p $opts $config &> tmp/log.$node &
 	    ;;
 	phc2sys)
 	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
 	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
-	    $client_wrapper phc2sys$suffix -s /dev/ptp0 -O 0 $config &> tmp/log.$node &
+	    $client_wrapper phc2sys$suffix -s /dev/ptp0 -O 0 $opts $config &> tmp/log.$node &
 	    ;;
 	ptp4l)
 	    cat > tmp/conf.$node <<-EOF
@@ -82,7 +82,7 @@ start_client() {
 	pmc)
 	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
 	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
-	    $client_wrapper pmc$suffix "$config" &> tmp/log.$node &
+	    $client_wrapper pmc$suffix $opts "$config" &> tmp/log.$node &
 	    ;;
 	*)
 	    echo "unknown client $client"
