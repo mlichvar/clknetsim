@@ -17,6 +17,7 @@ client_pids=""
 
 start_client() {
     local node=$1 client=$2 config=$3 suffix=$4 opts=$5
+    local args=()
 
     rm -f tmp/log.$node tmp/conf.$node
 
@@ -35,9 +36,7 @@ start_client() {
 		allow
 		$config
 		EOF
-	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
-	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
-	    $client_wrapper chronyd$suffix -d -f tmp/conf.$node $opts &> tmp/log.$node &
+	    args=(-d -f tmp/conf.$node $opts)
 	    ;;
 	ntpd)
 	    cat > tmp/conf.$node <<-EOF
@@ -46,49 +45,40 @@ start_client() {
 		logconfig=syncstatus +allevents
 		$config
 		EOF
-	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
-	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
-	    $client_wrapper ntpd$suffix -n -c tmp/conf.$node $opts &> tmp/log.$node &
-	    ;;
-	ntpq)
-	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
-	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
-	    $client_wrapper ntpq$suffix $opts $config &> tmp/log.$node &
-	    ;;
-	ntpdate)
-	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
-	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
-	    $client_wrapper ntpdate$suffix $opts $config &> tmp/log.$node &
-            ;;
-	busybox)
-	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
-	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
-	    $client_wrapper busybox$suffix ntpd -ddd -n -p $opts $config &> tmp/log.$node &
-	    ;;
-	phc2sys)
-	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
-	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
-	    $client_wrapper phc2sys$suffix -s /dev/ptp0 -O 0 $opts $config &> tmp/log.$node &
+	    args=(-n -c tmp/conf.$node $opts)
 	    ;;
 	ptp4l)
 	    cat > tmp/conf.$node <<-EOF
 		[global]
 		$config
 		EOF
-	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
-	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
-	    $client_wrapper ptp4l$suffix -f tmp/conf.$node $opts &> tmp/log.$node &
+	    args=(-f tmp/conf.$node $opts)
 	    ;;
 	pmc)
-	    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
-	    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
-	    $client_wrapper pmc$suffix $opts "$config" &> tmp/log.$node &
+	    args=($opts "$config")
+	    ;;
+	ntpq)
+	    args=($opts $config)
+	    ;;
+	ntpdate)
+	    args=($opts $config)
+	    ;;
+	busybox)
+	    args=(ntpd -ddd -n -p $opts $config)
+	    ;;
+	phc2sys)
+	    args=(-s /dev/ptp0 -O 0 $opts $config)
 	    ;;
 	*)
 	    echo "unknown client $client"
 	    exit 1
 	    ;;
     esac
+
+    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
+    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
+    $client_wrapper $client$suffix "${args[@]}" &> tmp/log.$node &
+
     client_pids="$client_pids $!"
 }
 
