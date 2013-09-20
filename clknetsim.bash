@@ -34,6 +34,7 @@ start_client() {
 	    cat > tmp/conf.$node <<-EOF
 		pidfile tmp/pidfile.$node
 		allow
+		cmdallow
 		$config
 		EOF
 	    args=(-d -f tmp/conf.$node $opts)
