@@ -67,6 +67,9 @@ start_client() {
 	    while read line; do args+=(-c "$line"); done <<< "$config"
 	    args+=($opts)
 	    ;;
+	sntp)
+	    args=(-K /dev/null $opts $config)
+	    ;;
 	ntpdate)
 	    args=($opts $config)
 	    ;;
