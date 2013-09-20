@@ -80,6 +80,7 @@ static int (*_close)(int fd);
 static int (*_socket)(int domain, int type, int protocol);
 static int (*_connect)(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 static ssize_t (*_recvmsg)(int sockfd, struct msghdr *msg, int flags);
+static ssize_t (*_send)(int sockfd, const void *buf, size_t len, int flags);
 static int (*_usleep)(useconds_t usec);
 
 static unsigned int node;
@@ -99,6 +100,7 @@ struct socket {
 	int type;
 	int port;
 	int iface;
+	int remote_node;
 	int broadcast;
 	int time_stamping;
 };
@@ -169,6 +171,7 @@ static void init(void) {
 	_socket = (int (*)(int domain, int type, int protocol))dlsym(RTLD_NEXT, "socket");
 	_connect = (int (*)(int sockfd, const struct sockaddr *addr, socklen_t addrlen))dlsym(RTLD_NEXT, "connect");
 	_recvmsg = (ssize_t (*)(int sockfd, struct msghdr *msg, int flags))dlsym(RTLD_NEXT, "recvmsg");
+	_send = (ssize_t (*)(int sockfd, const void *buf, size_t len, int flags))dlsym(RTLD_NEXT, "send");
 	_usleep = (int (*)(useconds_t usec))dlsym(RTLD_NEXT, "usleep");
 
 	env = getenv("CLKNETSIM_NODE");
@@ -232,7 +235,7 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 		memcpy(buf + sizeof (struct Request_header), request_data, reqlen);
 	reqlen += sizeof (struct Request_header);
 
-	if ((sent = send(clknetsim_fd, buf, reqlen, 0)) <= 0 ||
+	if ((sent = _send(clknetsim_fd, buf, reqlen, 0)) <= 0 ||
 			(reply && (received = recv(clknetsim_fd, reply, replylen, 0)) <= 0)) {
 		fprintf(stderr, "clknetsim: server connection closed.\n");
 		initialized = 0;
@@ -822,6 +825,7 @@ int socket(int domain, int type, int protocol) {
 	memset(sockets + s, 0, sizeof (struct socket));
 	sockets[s].used = 1;
 	sockets[s].type = type;
+	sockets[s].remote_node = -1;
 
 	return get_socket_fd(s);
 }
@@ -847,6 +851,7 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 
 	sockets[s].port = port;
 	sockets[s].iface = IFACE_ETH0 + subnet;
+	sockets[s].remote_node = node;
 
 	return 0;
 }
@@ -1144,6 +1149,25 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags, const struct 
 	msg.msg_controllen = 0;
 	msg.msg_flags = 0;
 	return sendmsg(sockfd, &msg, flags);
+}
+
+ssize_t send(int sockfd, const void *buf, size_t len, int flags) {
+	struct sockaddr_in sa;
+	socklen_t addrlen = sizeof (sa);
+	int s = get_socket_from_fd(sockfd);
+
+	if (s < 0 || sockets[s].iface < IFACE_ETH0 || sockets[s].remote_node < 0) {
+		assert(0);
+		errno = EINVAL;
+		return -1;
+	}
+
+	sa.sin_family = AF_INET;
+	sa.sin_port = htons(sockets[s].port);
+	sa.sin_addr.s_addr = htonl(NODE_ADDR(sockets[s].iface - IFACE_ETH0,
+				sockets[s].remote_node));
+
+	return sendto(sockfd, buf, len, flags, (struct sockaddr *)&sa, addrlen);
 }
 
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
