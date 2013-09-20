@@ -828,7 +828,7 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 	unsigned int node, subnet;
 	uint32_t a;
 
-	if (s <= 0 || addr->sa_family != AF_INET) {
+	if (s < 0 || addr->sa_family != AF_INET) {
 		errno = EINVAL;
 		return -1;
 	}
