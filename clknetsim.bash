@@ -55,6 +55,10 @@ start_client() {
 		EOF
 	    args=(-f tmp/conf.$node $opts)
 	    ;;
+	chronyc)
+	    args=($opts -m)
+	    while read line; do args+=("$line"); done <<< "$config"
+	    ;;
 	pmc)
 	    args=($opts)
 	    while read line; do args+=("$line"); done <<< "$config"

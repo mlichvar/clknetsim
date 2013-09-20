@@ -18,7 +18,7 @@ with two simulated systems it is usually three or four orders of magnitude
 faster than real time.
 
 Supported programs:
-- chronyd (http://chrony.tuxfamily.org/)
+- chronyd and chronyc from chrony (http://chrony.tuxfamily.org/)
 - ntpd from NTP (http://www.ntp.org/)
 - ntpd from busybox (http://www.busybox.net/)
 - ptp4l, phc2sys and pmc from linuxptp (http://linuxptp.sourceforge.net/)

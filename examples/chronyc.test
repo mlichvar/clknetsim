@@ -1,0 +1,17 @@
+#!/bin/bash
+
+CLKNETSIM_PATH=..
+. ../clknetsim.bash
+
+generate_config4 "1" "1 2 3" 0.01 "(sum (* 1e-9 (normal)))" "(+ 1e-3 (* 1e-3 (exponential)))"
+
+echo "node3_start = 10000" >> tmp/conf
+start_client 1 chronyd "local stratum 1"
+start_client 2 chronyd "server 192.168.123.1"
+start_client 3 chronyc "tracking
+sources -n
+sourcestats" "" "-h 192.168.123.2"
+
+start_server 3 -v 2 -l 10001
+
+cat tmp/log.3
