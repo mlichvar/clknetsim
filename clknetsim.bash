@@ -17,7 +17,7 @@ client_pids=""
 
 start_client() {
     local node=$1 client=$2 config=$3 suffix=$4 opts=$5
-    local args=()
+    local args=() line
 
     rm -f tmp/log.$node tmp/conf.$node
 
@@ -56,7 +56,8 @@ start_client() {
 	    args=(-f tmp/conf.$node $opts)
 	    ;;
 	pmc)
-	    args=($opts "$config")
+	    args=($opts)
+	    while read line; do args+=("$line"); done <<< "$config"
 	    ;;
 	ntpq)
 	    args=($opts $config)

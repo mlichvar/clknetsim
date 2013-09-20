@@ -9,7 +9,10 @@ echo 'node3_start = 100' >> tmp/conf
 
 start_client 1 ptp4l "" "" "-i eth0"
 start_client 2 ptp4l "" "" "-i eth0"
-start_client 3 pmc "GET TIME_STATUS_NP"
+start_client 3 pmc "
+GET TIME_STATUS_NP
+GET TIME_PROPERTIES_DATA_SET
+GET PORT_DATA_SET"
 
 start_server 3 -l 110
 
