@@ -177,7 +177,7 @@ bool Network::run(double time_limit) {
 
 	for (i = 0; i < n; i++) {
 		pollfds[i].fd = nodes[i]->get_fd();
-		pollfds[i].events = POLLIN;
+		pollfds[i].events = !nodes[i]->finished() ? POLLIN : 0;
 		pollfds[i].revents = 0;
 	}
 
