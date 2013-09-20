@@ -64,7 +64,8 @@ start_client() {
 	    while read line; do args+=("$line"); done <<< "$config"
 	    ;;
 	ntpq)
-	    args=($opts $config)
+	    while read line; do args+=(-c "$line"); done <<< "$config"
+	    args+=($opts)
 	    ;;
 	ntpdate)
 	    args=($opts $config)

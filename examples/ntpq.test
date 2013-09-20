@@ -1,0 +1,17 @@
+#!/bin/bash
+
+CLKNETSIM_PATH=..
+. ../clknetsim.bash
+
+generate_config4 "1" "1 2 | 2 3" 0.01 "(sum (* 1e-9 (normal)))" "(* 1e-8 (exponential))"
+
+echo 'node3_start = 1000' >> tmp/conf
+
+start_client 1 ntpd "server 127.127.1.0"
+start_client 2 ntpd "server 192.168.123.1 minpoll 6 maxpoll 6"
+start_client 3 ntpq "rv 0
+peers" "" "192.168.123.2"
+
+start_server 3 -l 1010
+
+cat tmp/log.3
