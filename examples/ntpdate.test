@@ -1,0 +1,17 @@
+#!/bin/bash
+
+CLKNETSIM_PATH=..
+. ../clknetsim.bash
+
+generate_config1 3 10.0 "(sum (* 1e-9 (normal)))" "(+ 1e-3 (* 1e-3 (exponential)))"
+
+echo "node2_start = 100" >> tmp/conf
+echo "node3_start = 100" >> tmp/conf
+
+start_client 1 ntpd "server 127.127.1.0"
+start_client 2 ntpdate "-B 192.168.123.1"
+start_client 3 ntpdate "-b 192.168.123.1"
+
+start_server 3 -v 2 -o log.offset -r 110 -l 200
+
+cat tmp/stats
