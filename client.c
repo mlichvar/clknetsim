@@ -38,11 +38,13 @@
 #include <stdarg.h>
 #include <signal.h>
 #include <ifaddrs.h>
-#include <linux/ptp_clock.h>
+#include <linux/types.h>
 #include <linux/ethtool.h>
-#include <linux/net_tstamp.h>
 #include <linux/sockios.h>
-#include <sys/timerfd.h>
+#ifdef SO_TIMESTAMPING
+#include <linux/ptp_clock.h>
+#include <linux/net_tstamp.h>
+#endif
 
 #include "protocol.h"
 
@@ -932,9 +934,7 @@ int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t
 		return -1;
 	}
 
-	if (level == SOL_SOCKET && optname == SO_TIMESTAMPING && optlen == sizeof (int))
-		sockets[s].time_stamping = !!(int *)optval;
-	else if (level == SOL_SOCKET && optname == SO_BINDTODEVICE) {
+	if (level == SOL_SOCKET && optname == SO_BINDTODEVICE) {
 		if (!strcmp(optval, "lo"))
 			sockets[s].iface = IFACE_LO;
 		else if ((subnet = get_network_from_iface(optval)) >= 0)
@@ -944,6 +944,10 @@ int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t
 			return -1;
 		}
 	}
+#ifdef SO_TIMESTAMPING
+	else if (level == SOL_SOCKET && optname == SO_TIMESTAMPING && optlen == sizeof (int))
+		sockets[s].time_stamping = !!(int *)optval;
+#endif
 
 	/* unhandled options succeed too */
 	return 0;
@@ -1213,6 +1217,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	assert(msg->msg_iov[0].iov_len >= rep.len);
 	memcpy(msg->msg_iov[0].iov_base, rep.data, rep.len);
 
+#ifdef SO_TIMESTAMPING
 	if (sockets[s].time_stamping) {
 		struct timespec ts;
 		struct cmsghdr *cmsg;
@@ -1233,6 +1238,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 
 		msg->msg_controllen = len;
 	} else
+#endif
 		msg->msg_controllen = 0;
 
 	return rep.len;
