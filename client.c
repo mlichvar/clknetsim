@@ -67,7 +67,6 @@
 #define SYSCLK_PHC_INDEX 1
 
 #define SCALED_PPM_PER_TICK 6553600
-#define BASE_TICK 10000
 
 #define MAX_SOCKETS 20
 #define BASE_SOCKET_FD 100
@@ -116,6 +115,7 @@ static double network_time = 0.0;
 static int local_time_valid = 0;
 
 static time_t system_time_offset = 1262304000; /* 2010-01-01 0:00 UTC */
+static long base_tick;
 
 #define TIMER_TYPE_SIGNAL 1
 #define TIMER_TYPE_FD 2
@@ -175,6 +175,10 @@ static void init(void) {
 	_recvmsg = (ssize_t (*)(int sockfd, struct msghdr *msg, int flags))dlsym(RTLD_NEXT, "recvmsg");
 	_send = (ssize_t (*)(int sockfd, const void *buf, size_t len, int flags))dlsym(RTLD_NEXT, "send");
 	_usleep = (int (*)(useconds_t usec))dlsym(RTLD_NEXT, "usleep");
+
+	base_tick = sysconf(_SC_CLK_TCK);
+	assert(base_tick > 0);
+	base_tick = (1000000 + base_tick / 2) / base_tick;
 
 	env = getenv("CLKNETSIM_NODE");
 	if (!env) {
@@ -549,15 +553,15 @@ int clock_adjtime(clockid_t id, struct timex *tx) {
 		int r;
 
 		if (tx->modes & ADJ_FREQUENCY && !(tx->modes & ADJ_TICK))
-			tx->tick = BASE_TICK, tx->modes |= ADJ_TICK;
+			tx->tick = base_tick, tx->modes |= ADJ_TICK;
 
 		tx->tick += tx->freq / SCALED_PPM_PER_TICK;
 		tx->freq = tx->freq % SCALED_PPM_PER_TICK;
 
 		r = adjtimex(tx);
 
-		tx->freq += (tx->tick - BASE_TICK) * SCALED_PPM_PER_TICK;
-		tx->tick = BASE_TICK;
+		tx->freq += (tx->tick - base_tick) * SCALED_PPM_PER_TICK;
+		tx->tick = base_tick;
 
 		return r;
 	}

@@ -25,9 +25,8 @@
 #define SCALE_FREQ 65536.0e6
 #define MAXFREQ_SCALED 32768000
 #define MAX_SLEWRATE 500
-#define BASE_TICK 10000
-#define MAX_TICK (BASE_TICK * 11 / 10)
-#define MIN_TICK (BASE_TICK * 9 / 10)
+#define MAX_TICK(base_tick) ((base_tick) * 11 / 10)
+#define MIN_TICK(base_tick) ((base_tick) * 9 / 10)
 
 #define MIN_FREQ 0.8
 #define MAX_FREQ 1.2
@@ -40,8 +39,12 @@ Clock::Clock() {
 	freq_generator = NULL;
 	step_generator = NULL;
 
+	base_tick = sysconf(_SC_CLK_TCK);
+	assert(base_tick > 0);
+	base_tick = (1000000 + base_tick / 2) / base_tick;
+
 	memset(&ntp_timex, 0, sizeof(ntp_timex));
-	ntp_timex.tick = BASE_TICK;
+	ntp_timex.tick = base_tick;
 	ntp_timex.tolerance = MAXFREQ_SCALED;
 	ntp_timex.precision = 1;
 
@@ -73,7 +76,7 @@ double Clock::get_monotonic_time() const {
 double Clock::get_total_freq() const {
 	double timex_freq, adjtime_freq;
 
-	timex_freq = (double)ntp_timex.tick / BASE_TICK + ntp_timex.freq / SCALE_FREQ + ntp_slew;
+	timex_freq = (double)ntp_timex.tick / base_tick + ntp_timex.freq / SCALE_FREQ + ntp_slew;
 	adjtime_freq = ss_slew / 1e6;
 	return freq * (timex_freq + adjtime_freq);
 }
@@ -81,7 +84,7 @@ double Clock::get_total_freq() const {
 double Clock::get_raw_freq() const {
 	double timex_freq;
 
-	timex_freq = (double)ntp_timex.tick / BASE_TICK + ntp_timex.freq / SCALE_FREQ;
+	timex_freq = (double)ntp_timex.tick / base_tick + ntp_timex.freq / SCALE_FREQ;
 	return freq * timex_freq;
 }
 
@@ -282,7 +285,7 @@ int Clock::adjtimex(struct timex *buf) {
 			ntp_timex.constant = 0;
 	}
 	if (buf->modes & ADJ_TICK) {
-		if (buf->tick > MAX_TICK || buf->tick < MIN_TICK) {
+		if (buf->tick > MAX_TICK(base_tick) || buf->tick < MIN_TICK(base_tick)) {
 			r = -1;
 		} else
 			ntp_timex.tick = buf->tick;

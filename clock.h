@@ -33,6 +33,8 @@ class Clock {
 	Generator *freq_generator;
 	Generator *step_generator;
 
+	long base_tick;
+
 	struct timex ntp_timex;
 	int ntp_shift_pll;
 	int ntp_flags;
