@@ -88,8 +88,10 @@ start_client() {
     LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
     CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
     $client_wrapper $client$suffix "${args[@]}" &> tmp/log.$node &
+    lastpid=$!
+    disown $lastpid
 
-    client_pids="$client_pids $!"
+    client_pids="$client_pids $lastpid"
 }
 
 start_server() {
