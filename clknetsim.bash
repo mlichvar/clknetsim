@@ -17,7 +17,7 @@ client_pids=""
 
 start_client() {
     local node=$1 client=$2 config=$3 suffix=$4 opts=$5
-    local args=() line
+    local args=() line lastpid
 
     rm -f tmp/log.$node tmp/conf.$node
 
