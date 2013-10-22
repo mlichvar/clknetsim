@@ -21,6 +21,7 @@
 #include <sys/timex.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/syscall.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <netinet/in.h>
@@ -481,6 +482,7 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 			break;
 		case CLOCK_MONOTONIC:
 			time = get_monotonic_time();
+			time = network_time;
 			break;
 		case REFCLK_ID:
 			time = get_refclock_time();
@@ -1478,3 +1480,28 @@ void syslog(int priority, const char *format, ...) {
 
 void closelog(void) {
 }
+
+#if 1
+long syscall(long number, ...) {
+	va_list ap;
+	long r;
+	struct timex *timex;
+	clockid_t clock_id;
+
+	va_start(ap, number);
+	switch (number) {
+#ifdef __NR_clock_adjtime
+		case __NR_clock_adjtime:
+			clock_id = va_arg(ap, clockid_t);
+			timex = va_arg(ap, struct timex *);
+			r = clock_adjtime(clock_id, timex);
+			break;
+#endif
+		default:
+			assert(0);
+	}
+	va_end(ap);
+
+	return r;
+}
+#endif
