@@ -712,7 +712,7 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 	FD_ZERO(&rfds);
 
 	for (i = 0; i < nfds; i++)
-		if (fds[i].events & POLLIN) {
+		if (fds[i].fd >= 0 && fds[i].events & POLLIN) {
 			FD_SET(fds[i].fd, &rfds);
 			if (maxfd < fds[i].fd)
 				maxfd = fds[i].fd;
@@ -727,7 +727,8 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 	r = select(maxfd, &rfds, NULL, NULL, ptv);
 
 	for (i = 0; i < nfds; i++)
-		fds[i].revents = r > 0 && FD_ISSET(fds[i].fd, &rfds) ? POLLIN : 0;
+		fds[i].revents = r > 0 && fds[i].fd >= 0 &&
+			FD_ISSET(fds[i].fd, &rfds) ? POLLIN : 0;
 
 	return r;
 }
