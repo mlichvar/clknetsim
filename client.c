@@ -84,6 +84,7 @@ static int (*_connect)(int sockfd, const struct sockaddr *addr, socklen_t addrle
 static ssize_t (*_recvmsg)(int sockfd, struct msghdr *msg, int flags);
 static ssize_t (*_send)(int sockfd, const void *buf, size_t len, int flags);
 static int (*_usleep)(useconds_t usec);
+static void (*_srandom)(unsigned int seed);
 
 static unsigned int node;
 static int initialized = 0;
@@ -176,6 +177,7 @@ static void init(void) {
 	_recvmsg = (ssize_t (*)(int sockfd, struct msghdr *msg, int flags))dlsym(RTLD_NEXT, "recvmsg");
 	_send = (ssize_t (*)(int sockfd, const void *buf, size_t len, int flags))dlsym(RTLD_NEXT, "send");
 	_usleep = (int (*)(useconds_t usec))dlsym(RTLD_NEXT, "usleep");
+	_srandom = (void (*)(unsigned int seed))dlsym(RTLD_NEXT, "srandom");
 
 	base_tick = sysconf(_SC_CLK_TCK);
 	assert(base_tick > 0);
@@ -1505,3 +1507,14 @@ long syscall(long number, ...) {
 	return r;
 }
 #endif
+
+void srandom(unsigned int seed) {
+	FILE *f;
+
+	/* the seed is likely based on the simulated time, make it truly random */
+	if ((f = fopen("/dev/urandom", "r"))) {
+		fread(&seed, sizeof (seed), 1, f);
+		fclose(f);
+	}
+	_srandom(seed);
+}
