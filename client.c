@@ -297,7 +297,7 @@ static void settime(double time) {
 
 static void fill_refclock_sample(void) {
 	struct Reply_getrefsample r;
-	double clock_time, receive_time;
+	double clock_time, receive_time, round_corr;
 
 	if (!refclock_shm_enabled)
 		return;
@@ -310,6 +310,10 @@ static void fill_refclock_sample(void) {
 
 	clock_time = r.time - r.offset;
 	receive_time = r.time;
+
+	round_corr = (clock_time * 1e6 - floor(clock_time * 1e6) + 0.5) / 1e6;
+	clock_time -= round_corr;
+	receive_time -= round_corr;
 
 	shm_time.count++;
 	shm_time.clockTimeStampSec = floor(clock_time);
