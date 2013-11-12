@@ -157,11 +157,11 @@ generate_config3() {
 
 generate_config4() {
     local stablenodes=$1 subnets=$2 offset=$3 freqexpr=$4 delayexpr=$5
-    local subnet i j
+    local subnet i j added
 
     echo "$subnets" | tr '|' '\n' | while read subnet; do
 	for i in $subnet; do
-	    if ! [[ " $stablenodes " =~ [^0-9]$i[^0-9] ]]; then
+	    if ! [[ " $stablenodes $added " =~ [^0-9]$i[^0-9] ]]; then
 		echo "node${i}_offset = $offset"
 		echo "node${i}_freq = $freqexpr"
 	    fi
@@ -169,6 +169,7 @@ generate_config4() {
 		[ $i -eq $j ] && continue
 		echo "node${i}_delay${j} = $delayexpr"
 	    done
+	    added="$added $i"
 	done
     done > tmp/conf
 }
