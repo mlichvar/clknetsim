@@ -351,8 +351,8 @@ void Refclock::update(double time, const Clock *clock) {
 	if (!offset_generator)
 		return;
 
-	this->time = time;
-	offset = clock->get_real_time() - time + offset_generator->generate(NULL);
+	this->time = clock->get_real_time();
+	offset = this->time - time + offset_generator->generate(NULL);
 	valid = true;
 }
 

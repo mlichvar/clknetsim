@@ -308,8 +308,8 @@ static void fill_refclock_sample(void) {
 		return;
 	refclock_time = r.time;
 
-	clock_time = r.time + 0.5e-6;
-	receive_time = r.time + r.offset + 0.5e-6;
+	clock_time = r.time - r.offset;
+	receive_time = r.time;
 
 	shm_time.count++;
 	shm_time.clockTimeStampSec = floor(clock_time);
