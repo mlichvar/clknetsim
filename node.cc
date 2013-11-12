@@ -293,6 +293,7 @@ void Node::receive(struct Packet *packet) {
 void Node::process_getrefsample() {
 	Reply_getrefsample r;
 
+	refclock.set_generation(true);
 	r.valid = refclock.get_sample(&r.time, &r.offset);
 	r._pad = 0;
 	reply(&r, sizeof (r), REQ_GETREFSAMPLE);

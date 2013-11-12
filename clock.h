@@ -74,6 +74,7 @@ public:
 class Refclock {
 	double time;
 	double offset;
+	bool generate;
 	bool valid;
 
 	Generator *offset_generator;
@@ -82,6 +83,7 @@ public:
 	~Refclock();
 	void set_offset_generator(Generator *gen);
 	void update(double time, const Clock *clock);
+	void set_generation(bool enable);
 	bool get_sample(double *time, double *offset) const;
 	void get_offsets(double *offsets, int size);
 };

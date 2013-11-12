@@ -332,6 +332,7 @@ int Clock::adjtime(const struct timeval *delta, struct timeval *olddelta) {
 Refclock::Refclock() {
 	time = 0.0;
 	offset = 0.0;
+	generate = false;
 	valid = false;
 	offset_generator = NULL;
 }
@@ -347,8 +348,12 @@ void Refclock::set_offset_generator(Generator *gen) {
 	offset_generator = gen;
 }
 
+void Refclock::set_generation(bool enable) {
+	generate = enable;
+}
+
 void Refclock::update(double time, const Clock *clock) {
-	if (!offset_generator)
+	if (!generate || !offset_generator)
 		return;
 
 	this->time = clock->get_real_time();
