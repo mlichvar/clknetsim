@@ -189,6 +189,17 @@ double Generator_wave_sine::generate(const Generator_variables *variables) {
 	return sin(counter++ / length * 2 * M_PI);
 }
 
+Generator_wave_cosine::Generator_wave_cosine(const vector<Generator *> *input):
+	Generator(NULL) {
+	syntax_assert(input && input->size() == 1 && (*input)[0]->is_constant());
+	length = (*input)[0]->generate(NULL);
+	counter = 0;
+}
+
+double Generator_wave_cosine::generate(const Generator_variables *variables) {
+	return cos(counter++ / length * 2 * M_PI);
+}
+
 Generator_wave_triangle::Generator_wave_triangle(const vector<Generator *> *input):
 	Generator(NULL) {
 	syntax_assert(input && input->size() == 1 && (*input)[0]->is_constant());
@@ -398,6 +409,8 @@ Generator *Generator_generator::generate(char *code) const {
 		ret = new Generator_wave_pulse(&generators);
 	else if (strcmp(name, "sine") == 0)
 		ret = new Generator_wave_sine(&generators);
+	else if (strcmp(name, "cosine") == 0)
+		ret = new Generator_wave_cosine(&generators);
 	else if (strcmp(name, "triangle") == 0)
 		ret = new Generator_wave_triangle(&generators);
 	else if (strcmp(name, "equal") == 0)

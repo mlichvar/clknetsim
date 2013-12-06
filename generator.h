@@ -114,6 +114,15 @@ class Generator_wave_sine: public Generator {
 	virtual double generate(const Generator_variables *variables);
 };
 
+class Generator_wave_cosine: public Generator {
+	double length;
+	int counter;
+
+	public:
+	Generator_wave_cosine(const vector<Generator *> *input);
+	virtual double generate(const Generator_variables *variables);
+};
+
 class Generator_wave_triangle: public Generator {
 	double length;
 	int counter;

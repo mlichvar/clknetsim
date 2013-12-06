@@ -155,6 +155,7 @@ Functions and their parameters supported in the expressions:
                            the specified file in an inifinite loop
   (pulse high low)       - pulse wave generator
   (sine period)          - sine wave generator
+  (cosine period)        - cosine wave generator
   (triangle period)      - triangle wave generator
   (equal epsilon [expr | float] ...)
                          - returns 1.0 if the values of all parameters are
