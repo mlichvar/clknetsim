@@ -13,10 +13,8 @@ clknetsim.so: client.c
 clknetsim: $(serverobjs)
 	$(CXX) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-test: LDFLAGS += -lrt
-
 clean:
-	rm -rf server test *.so *.o core.* .deps
+	rm -rf server *.so *.o core.* .deps
 
 .deps:
 	@mkdir .deps
