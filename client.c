@@ -1054,7 +1054,8 @@ int ioctl(int fd, unsigned long request, ...) {
 	} else if (request == PTP_CLOCK_GETCAPS && (fd == REFCLK_FD || fd == SYSCLK_FD)) {
 		struct ptp_clock_caps *caps = va_arg(ap, struct ptp_clock_caps *);
 		memset(caps, 0, sizeof (*caps));
-		caps->max_adj = 100000000;
+		/* maximum frequency in 32-bit timex.freq */
+		caps->max_adj = 32767999;
 #endif
 #ifdef SIOCSHWTSTAMP
 	} else if (request == SIOCSHWTSTAMP && s >= 0) {
