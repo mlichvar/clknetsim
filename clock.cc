@@ -48,7 +48,8 @@ Clock::Clock() {
 	ntp_timex.tolerance = MAXFREQ_SCALED;
 	ntp_timex.precision = 1;
 
-	ntp_shift_pll = 4;
+	/* in Linux kernel SHIFT_PLL is 2 since 2.6.31 */
+	ntp_shift_pll = 2;
 	ntp_flags = 0;
 	ntp_update_interval = 0;
 	ntp_offset = 0.0;

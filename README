@@ -133,7 +133,7 @@ Variables:
   the extra time step applied once per second (or at the rate specified with
   the -R option) in seconds, there is no default (no extra steps are applied)
 - nodeX_shift_pll = integer
-  kernel PLL parameter, the default is 4
+  kernel PLL parameter, the default is 2
 - nodeX_pll_clamp = 1 | 0
   kernel PLL parameter, the default is 0
 - nodeX_fll_mode2 = 1 | 0
