@@ -164,14 +164,14 @@ Functions and their parameters supported in the expressions:
                          - returns maximum value
   (min [expr | float] ...)
                          - returns minimum value
-  time                   - variable available in the network delay expressions
-                           set to the current network time
-  port                   - variable available in the network delay expressions
-                           set to the number of the receiving port
-  length                 - variable available in the network delay expressions
-                           set to the length of the packet
-  subnet                 - variable available in the network delay expressions
-                           set to the number of the Ethernet network in which
+
+Variables available in network delay expressions:
+  time                   - current network time
+  from                   - number of the sending node
+  to                     - number of the receiving node
+  port                   - receiving port number
+  length                 - length of the packet
+  subnet                 - number of the Ethernet network in which
                            the packet was sent
 
 An example:

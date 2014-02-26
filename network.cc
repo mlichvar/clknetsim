@@ -370,6 +370,8 @@ void Network::send(struct Packet *packet) {
 
 	if (link_delays[i]) {
 		link_delay_variables["time"] = time;
+		link_delay_variables["from"] = packet->from + 1;
+		link_delay_variables["to"] = packet->to + 1;
 		link_delay_variables["subnet"] = packet->subnet + 1;
 		link_delay_variables["port"] = packet->port;
 		link_delay_variables["length"] = packet->len;
