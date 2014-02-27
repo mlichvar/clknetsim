@@ -254,6 +254,21 @@ double Generator_add::generate(const Generator_variables *variables) {
 	return x;
 }
 
+Generator_modulo::Generator_modulo(const vector<Generator *> *input):
+	Generator(input) {
+	syntax_assert(input && input->size() > 0);
+}
+
+double Generator_modulo::generate(const Generator_variables *variables) {
+	unsigned int i;
+	double x = input[0]->generate(variables);
+
+	for (i = 1; i < input.size(); i++)
+		x = fmod(x, input[i]->generate(variables));
+
+	return x;
+}
+
 Generator_equal::Generator_equal(const vector<Generator *> *input):
 	Generator(input) {
 	syntax_assert(input && input->size() > 0);
@@ -393,6 +408,8 @@ Generator *Generator_generator::generate(char *code) const {
 		ret = new Generator_multiply(&generators);
 	else if (strcmp(name, "+") == 0)
 		ret = new Generator_add(&generators);
+	else if (strcmp(name, "%") == 0)
+		ret = new Generator_modulo(&generators);
 	else if (strcmp(name, "sum") == 0)
 		ret = new Generator_sum(&generators);
 	else if (strcmp(name, "uniform") == 0)

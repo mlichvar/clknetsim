@@ -142,6 +142,7 @@ Variables:
 Functions and their parameters supported in the expressions:
   (* [expr | float] ...) - multiplication
   (+ [expr | float] ...) - addition
+  (% [expr | float] ...) - modulo
   (sum [expr | float] ...)
                          - summation over consecutive evaluation of parameters
   (uniform)              - random number generator with standard uniform

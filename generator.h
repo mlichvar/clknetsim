@@ -151,6 +151,12 @@ class Generator_add: public Generator {
 	virtual double generate(const Generator_variables *variables);
 };
 
+class Generator_modulo: public Generator {
+	public:
+	Generator_modulo(const vector<Generator *> *input);
+	virtual double generate(const Generator_variables *variables);
+};
+
 class Generator_equal: public Generator {
 	public:
 	Generator_equal(const vector<Generator *> *input);
