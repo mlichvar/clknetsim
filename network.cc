@@ -373,7 +373,7 @@ void Network::send(struct Packet *packet) {
 		link_delay_variables["from"] = packet->from + 1;
 		link_delay_variables["to"] = packet->to + 1;
 		link_delay_variables["subnet"] = packet->subnet + 1;
-		link_delay_variables["port"] = packet->port;
+		link_delay_variables["port"] = packet->dst_port;
 		link_delay_variables["length"] = packet->len;
 
 		delay = link_delays[i]->generate(&link_delay_variables);
@@ -382,9 +382,10 @@ void Network::send(struct Packet *packet) {
 	stats[packet->from].update_packet_stats(false, delay);
 
 	if (packet_log)
-		fprintf(packet_log, "%e\t%d\t%d\t%e\t%d\t%d\n", time,
+		fprintf(packet_log, "%e\t%d\t%d\t%e\t%d\t%d\t%d\n", time,
 				packet->from + 1, packet->to + 1, delay,
-				packet->port, packet->subnet + 1);
+				packet->src_port, packet->dst_port,
+				packet->subnet + 1);
 
 	if (delay > 0.0) {
 		packet->receive_time = time + delay;

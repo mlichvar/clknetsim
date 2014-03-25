@@ -69,6 +69,7 @@
 
 #define MAX_SOCKETS 20
 #define BASE_SOCKET_FD 100
+#define BASE_SOCKET_DEFAULT_PORT 60000
 
 #define MAX_TIMERS 40
 #define BASE_TIMER_ID 0xC1230123
@@ -102,6 +103,7 @@ struct socket {
 	int port;
 	int iface;
 	int remote_node;
+	int remote_port;
 	int broadcast;
 	int time_stamping;
 };
@@ -386,7 +388,7 @@ static int find_recv_socket(int subnet, int port, int broadcast) {
 		if (!sockets[i].used ||
 				!socket_in_subnet(i, subnet) ||
 				sockets[i].type != SOCK_DGRAM ||
-				(port && sockets[i].port && sockets[i].port != port))
+				(port && sockets[i].port != port))
 			continue;
 		if (s < 0 || sockets[s].iface < sockets[i].iface ||
 				(broadcast && sockets[i].broadcast))
@@ -652,7 +654,7 @@ try_again:
 
 		case REPLY_SELECT_NORMAL:
 		case REPLY_SELECT_BROADCAST:
-			s = find_recv_socket(rep.subnet, rep.port,
+			s = find_recv_socket(rep.subnet, rep.dst_port,
 					rep.ret == REPLY_SELECT_BROADCAST);
 			recv_fd = s >= 0 ? get_socket_fd(s) : 0;
 
@@ -664,7 +666,7 @@ try_again:
 				if (rep.ret != REPLY_SELECT_BROADCAST)
 					fprintf(stderr, "clknetsim: dropped packet from "
 							"node %d on port %d in subnet %d\n",
-							recv_rep.from + 1, recv_rep.port,
+							recv_rep.from + 1, recv_rep.dst_port,
 							recv_rep.subnet + 1);
 
 				goto try_again;
@@ -839,6 +841,7 @@ int socket(int domain, int type, int protocol) {
 	memset(sockets + s, 0, sizeof (struct socket));
 	sockets[s].used = 1;
 	sockets[s].type = type;
+	sockets[s].port = BASE_SOCKET_DEFAULT_PORT + s;
 	sockets[s].remote_node = -1;
 
 	return get_socket_fd(s);
@@ -859,19 +862,17 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 	port = ntohs(((const struct sockaddr_in *)addr)->sin_port);
 	a = ntohl(((const struct sockaddr_in *)addr)->sin_addr.s_addr);
 
-	assert(!sockets[s].port || sockets[s].port == port);
-
 	get_target(s, a, &subnet, &node);
 
-	sockets[s].port = port;
 	sockets[s].iface = IFACE_ETH0 + subnet;
 	sockets[s].remote_node = node;
+	sockets[s].remote_port = port;
 
 	return 0;
 }
 
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
-	int s = get_socket_from_fd(sockfd);
+	int s = get_socket_from_fd(sockfd), port;
 	uint32_t a;
 
 	if (s < 0 || addr->sa_family != AF_INET) {
@@ -879,9 +880,11 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 		return -1;
 	}
 
+	port = ntohs(((struct sockaddr_in *)addr)->sin_port);
 	a = ntohl(((struct sockaddr_in *)addr)->sin_addr.s_addr);
 
-	sockets[s].port = ntohs(((struct sockaddr_in *)addr)->sin_port);
+	if (port)
+		sockets[s].port = port;
 
 	if (a == INADDR_ANY)
 		sockets[s].iface = IFACE_ALL;
@@ -1140,8 +1143,9 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 	assert(msg->msg_iov[0].iov_len <= MAX_PACKET_SIZE);
 
 	get_target(s, ntohl(sa->sin_addr.s_addr), &req.subnet, &req.to);
-	req.port = ntohs(sa->sin_port);
-	assert(!sockets[s].port || sockets[s].port == req.port);
+	req.src_port = sockets[s].port;
+	req.dst_port = ntohs(sa->sin_port);
+	assert(req.src_port && req.dst_port);
 
 	req.len = msg->msg_iov[0].iov_len;
 	memcpy(req.data, msg->msg_iov[0].iov_base, req.len);
@@ -1180,7 +1184,7 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags) {
 	}
 
 	sa.sin_family = AF_INET;
-	sa.sin_port = htons(sockets[s].port);
+	sa.sin_port = htons(sockets[s].remote_port);
 	sa.sin_addr.s_addr = htonl(NODE_ADDR(sockets[s].iface - IFACE_ETH0,
 				sockets[s].remote_node));
 
@@ -1202,7 +1206,8 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		assert(sockets[s].iface >= IFACE_ETH0);
 		rep.subnet = sockets[s].iface - IFACE_ETH0;
 		rep.from = node;
-		rep.port = sockets[s].port;
+		rep.src_port = sockets[s].remote_port;
+		rep.dst_port = sockets[s].port;
 		rep.len = 1;
 		rep.data[0] = 0;
 	} else
@@ -1214,14 +1219,15 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	}
 
 	assert(socket_in_subnet(s, rep.subnet));
-	assert(!sockets[s].port || sockets[s].port == rep.port);
+	assert(sockets[s].port == rep.dst_port);
+	assert(!sockets[s].remote_port || sockets[s].remote_port == rep.src_port);
 
 	if (msg->msg_name) {
 		assert(msg->msg_namelen >= sizeof (struct sockaddr_in));
 
 		sa = msg->msg_name;
 		sa->sin_family = AF_INET;
-		sa->sin_port = htons(rep.port);
+		sa->sin_port = htons(rep.src_port);
 		sa->sin_addr.s_addr = htonl(NODE_ADDR(rep.subnet, rep.from));
 		msg->msg_namelen = sizeof (struct sockaddr_in);
 	}

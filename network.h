@@ -32,7 +32,8 @@ struct Packet {
 	unsigned int subnet;
 	unsigned int from;
 	unsigned int to;
-	unsigned int port;
+	unsigned int src_port;
+	unsigned int dst_port;
 	unsigned int len;
 	char data[MAX_PACKET_SIZE];
 };

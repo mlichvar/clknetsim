@@ -20,7 +20,7 @@
 
 #include "sysheaders.h"
 
-#define MAX_REQ_SIZE 1024
+#define MAX_REQ_SIZE 1028
 
 #define REQ_REGISTER 1
 #define REQ_GETTIME 2
@@ -86,7 +86,7 @@ struct Request_select {
 struct Reply_select {
 	int ret;
 	unsigned int subnet; /* for NORMAL or BROADCAST */
-	unsigned int port; /* for NORMAL or BROADCAST */
+	unsigned int dst_port; /* for NORMAL or BROADCAST */
 	struct Reply_gettime time;
 };
 
@@ -95,7 +95,8 @@ struct Reply_select {
 struct Request_send {
 	unsigned int subnet;
 	unsigned int to;
-	unsigned int port;
+	unsigned int src_port;
+	unsigned int dst_port;
 	unsigned int len;
 	char data[MAX_PACKET_SIZE];
 };
@@ -103,7 +104,8 @@ struct Request_send {
 struct Reply_recv {
 	unsigned int subnet;
 	unsigned int from;
-	unsigned int port;
+	unsigned int src_port;
+	unsigned int dst_port;
 	unsigned int len;
 	char data[MAX_PACKET_SIZE];
 };

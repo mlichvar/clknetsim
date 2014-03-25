@@ -194,7 +194,7 @@ void Node::try_select() {
 			REPLY_SELECT_BROADCAST :
 			REPLY_SELECT_NORMAL;
 		rep.subnet = incoming_packets.back()->subnet;
-		rep.port = incoming_packets.back()->port;
+		rep.dst_port = incoming_packets.back()->dst_port;
 #ifdef DEBUG
 		printf("select returned for packet in %d at %f\n", index, clock.get_real_time());
 #endif
@@ -233,7 +233,8 @@ void Node::process_send(void *data) {
 		packet->subnet = req->subnet;
 		packet->from = index;
 		packet->to = req->to;
-		packet->port = req->port;
+		packet->src_port = req->src_port;
+		packet->dst_port = req->dst_port;
 		packet->len = req->len;
 		memcpy(packet->data, req->data, req->len);
 		network->send(packet);
@@ -249,7 +250,8 @@ void Node::process_recv() {
 	if (incoming_packets.empty()) {
 		rep.subnet = 0;
 		rep.from = -1;
-		rep.port = 0;
+		rep.src_port = 0;
+		rep.dst_port = 0;
 		rep.len = 0;
 		memset(rep.data, 0, sizeof (rep.data));
 		reply(&rep, sizeof (rep), REQ_RECV);
@@ -261,7 +263,8 @@ void Node::process_recv() {
 
 	rep.subnet = packet->subnet;
 	rep.from = packet->from;
-	rep.port = packet->port;
+	rep.src_port = packet->src_port;
+	rep.dst_port = packet->dst_port;
 	rep.len = packet->len;
 
 	assert(packet->len <= sizeof (rep.data));
