@@ -549,10 +549,11 @@ int ntp_adjtime(struct timex *buf) {
 }
 
 int clock_adjtime(clockid_t id, struct timex *tx) {
-	assert(id == CLOCK_REALTIME || id == SYSCLK_CLOCKID);
+	assert(id == CLOCK_REALTIME || id == SYSCLK_CLOCKID || id == REFCLK_ID);
 
-	/* allow large frequency adjustment by setting ticks */
 	if (id == SYSCLK_CLOCKID) {
+		/* allow large frequency adjustment by setting ticks */
+
 		long hz, base_tick, scaled_ppm_per_tick;
 		int r;
 
@@ -573,6 +574,14 @@ int clock_adjtime(clockid_t id, struct timex *tx) {
 		tx->tick = base_tick;
 
 		return r;
+	} else if (id == REFCLK_ID) {
+		if (tx->modes) {
+			errno = EINVAL;
+			return -1;
+		}
+
+		memset(tx, 0, sizeof (*tx));
+		return 0;
 	}
 
 	return adjtimex(tx);
