@@ -1537,3 +1537,31 @@ void srandom(unsigned int seed) {
 	}
 	_srandom(seed);
 }
+
+int initgroups(const char *user, gid_t group) {
+	return 0;
+}
+
+int setgroups(size_t size, const gid_t *list) {
+	return 0;
+}
+
+int setegid(gid_t gid) {
+	return 0;
+}
+
+int setgid(gid_t gid) {
+	return 0;
+}
+
+int seteuid(uid_t uid) {
+	return 0;
+}
+
+int setuid(uid_t uid) {
+	return 0;
+}
+
+int cap_set_proc() {
+	return 0;
+}
