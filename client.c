@@ -602,7 +602,22 @@ int adjtime(const struct timeval *delta, struct timeval *olddelta) {
 int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout) {
 	struct Request_select req;
 	struct Reply_select rep;
-	int timer, s, recv_fd = -1;
+	int i, timer, s, recv_fd = -1;
+
+	/* unknown reading fds are always ready (e.g. chronyd waiting
+	   for name resolving notification, or OpenSSL waiting for
+	   /dev/urandom) */
+	if (readfds) {
+		for (i = 0; i < nfds; i++) {
+			if (FD_ISSET(i, readfds) &&
+				       get_socket_from_fd(i) < 0 &&
+				       get_timer_from_fd(i) < 0) {
+				FD_ZERO(readfds);
+				FD_SET(i, readfds);
+				return 1;
+			}
+		}
+	}
 
 	timer = get_first_timer(readfds);
 
@@ -711,12 +726,6 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 	if (nfds == 1 && !fds[0].events && get_socket_from_fd(fds[0].fd) >= 0 &&
 		       sockets[get_socket_from_fd(fds[0].fd)].time_stamping) {
 		fds[0].revents = POLLERR;
-		return 1;
-	}
-
-	/* OpenSSL waiting for /dev/urandom */
-	if (nfds == 1 && fds[0].fd < BASE_SOCKET_FD && fds[0].events == POLLIN) {
-		fds[0].revents = POLLIN;
 		return 1;
 	}
 
