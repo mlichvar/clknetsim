@@ -604,6 +604,11 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	struct Reply_select rep;
 	int i, timer, s, recv_fd = -1;
 
+	if (writefds)
+		FD_ZERO(writefds);
+	if (exceptfds)
+		FD_ZERO(exceptfds);
+
 	/* unknown reading fds are always ready (e.g. chronyd waiting
 	   for name resolving notification, or OpenSSL waiting for
 	   /dev/urandom) */
