@@ -483,7 +483,6 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 			break;
 		case CLOCK_MONOTONIC:
 			time = get_monotonic_time();
-			time = network_time;
 			break;
 		case REFCLK_ID:
 			time = get_refclock_time();
