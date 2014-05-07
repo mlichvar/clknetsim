@@ -1327,6 +1327,7 @@ int timer_create(clockid_t which_clock, struct sigevent *timer_event_spec, timer
 	}
 
 	timers[t].used = 1;
+	timers[t].armed = 0;
 	timers[t].type = TIMER_TYPE_SIGNAL;
 	*created_timer_id = get_timerid(t);
 
@@ -1437,6 +1438,7 @@ int timerfd_create(int clockid, int flags) {
 	}
 
 	timers[t].used = 1;
+	timers[t].armed = 0;
 	timers[t].type = TIMER_TYPE_FD;
 
 	return get_timerfd(t);
