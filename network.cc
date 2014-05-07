@@ -394,13 +394,13 @@ void Network::send(struct Packet *packet) {
 #ifdef DEBUG
 		printf("sending packet from %d to %d:%d:%d at %f delay %f \n",
 				packet->from, packet->subnet, packet->to,
-				packet->port, time, delay);
+				packet->dst_port, time, delay);
 #endif
 	} else {
 #ifdef DEBUG
 		printf("dropping packet from %d to %d:%d:%d at %f\n",
 				packet->from, packet->subnet, packet->to,
-				packet->port, time);
+				packet->dst_port, time);
 #endif
 		delete packet;
 	}
