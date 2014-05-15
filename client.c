@@ -533,6 +533,9 @@ int adjtimex(struct timex *buf) {
 	struct Request_adjtimex req;
 	struct Reply_adjtimex rep;
 
+	if (buf->modes & ADJ_SETOFFSET)
+		local_time_valid = 0;
+
 	req.timex = *buf;
 	make_request(REQ_ADJTIMEX, &req, sizeof (req), &rep, sizeof (rep));
 	*buf = rep.timex;
