@@ -379,7 +379,7 @@ void Network::send(struct Packet *packet) {
 		delay = link_delays[i]->generate(&link_delay_variables);
 	}
 
-	stats[packet->from].update_packet_stats(false, delay);
+	stats[packet->from].update_packet_stats(false, time, delay);
 
 	if (packet_log)
 		fprintf(packet_log, "%e\t%d\t%d\t%e\t%d\t%d\t%d\n", time,
@@ -390,7 +390,7 @@ void Network::send(struct Packet *packet) {
 	if (delay > 0.0) {
 		packet->receive_time = time + delay;
 		packet_queue.insert(packet);
-		stats[packet->to].update_packet_stats(true, delay);
+		stats[packet->to].update_packet_stats(true, time + delay, delay);
 #ifdef DEBUG
 		printf("sending packet from %d to %d:%d:%d at %f delay %f \n",
 				packet->from, packet->subnet, packet->to,

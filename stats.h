@@ -39,6 +39,10 @@ class Stats {
 	double packets_out_sum2;
 	unsigned long packets_in;
 	unsigned long packets_out;
+	double packets_in_time_last;
+	double packets_out_time_last;
+	double packets_in_int_min;
+	double packets_out_int_min;
 
 	unsigned long wakeups;
 
@@ -47,7 +51,7 @@ class Stats {
 	~Stats();
 	void reset();
 	void update_clock_stats(double offset, double freq, double rawfreq);
-	void update_packet_stats(bool incoming, double delay);
+	void update_packet_stats(bool incoming, double time, double delay);
 	void update_wakeup_stats();
 	void print(int verbosity) const;
 };
