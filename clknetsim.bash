@@ -222,7 +222,9 @@ get_stat() {
 
 check_stat() {
     local value=$1 min=$2 max=$3
-    awk "BEGIN { exit !($value >= $min && $value <= $max) }"
+    awk "BEGIN { exit !((\"$value\" == \"inf\" || $value >= $min) &&
+			(\"$max\" == \"inf\" ||
+			(\"$value\" != \"inf\" && $value <= $max))) }"
 }
 
 if [ -z "$CLKNETSIM_PATH" ]; then
