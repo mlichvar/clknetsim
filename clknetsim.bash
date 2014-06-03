@@ -221,10 +221,11 @@ get_stat() {
 }
 
 check_stat() {
-    local value=$1 min=$2 max=$3
-    awk "BEGIN { exit !((\"$value\" == \"inf\" || $value >= $min) &&
+    local value=$1 min=$2 max=$3 tolerance=$4
+    [ -z "$tolerance" ] && tolerance=0.0
+    awk "BEGIN { exit !((\"$value\" == \"inf\" || $value + $tolerance >= $min) &&
 			(\"$max\" == \"inf\" ||
-			(\"$value\" != \"inf\" && $value <= $max))) }"
+			(\"$value\" != \"inf\" && $value - $tolerance <= $max))) }"
 }
 
 if [ -z "$CLKNETSIM_PATH" ]; then
