@@ -326,7 +326,7 @@ void Network::print_stats(int verbosity) const {
 
 	for (i = 0; i < n; i++) {
 		if (verbosity > 1)
-			printf("\n------------------ Node %d ------------------\n\n", i + 1); 
+			printf("\n---------------------- Node %d ----------------------\n\n", i + 1);
 		stats[i].print(verbosity);
 	}
 	if (verbosity == 1)

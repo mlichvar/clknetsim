@@ -105,42 +105,42 @@ void Stats::print(int verbosity) const {
 		return;
 	}
 
-	printf("RMS offset:                    \t%e\n", sqrt(offset_sum2 / samples));
-	printf("Maximum absolute offset:       \t%e\n", offset_abs_max);
-	printf("Mean absolute offset:          \t%e\n", offset_abs_sum / samples);
-	printf("Mean offset:                   \t%e\n", offset_sum / samples);
-	printf("RMS frequency:                 \t%e\n", sqrt(freq_sum2 / samples));
-	printf("Maximum absolute frequency:    \t%e\n", freq_abs_max);
-	printf("Mean absolute frequency:       \t%e\n", freq_abs_sum / samples);
-	printf("Mean frequency:                \t%e\n", freq_sum / samples);
-	printf("RMS raw frequency:             \t%e\n", sqrt(rawfreq_sum2 / samples));
-	printf("Maximum absolute raw frequency:\t%e\n", rawfreq_abs_max);
-	printf("Mean absolute raw frequency:   \t%e\n", rawfreq_abs_sum / samples);
-	printf("Mean raw frequency:            \t%e\n", rawfreq_sum / samples);
+	printf("RMS offset:                            \t%e\n", sqrt(offset_sum2 / samples));
+	printf("Maximum absolute offset:               \t%e\n", offset_abs_max);
+	printf("Mean absolute offset:                  \t%e\n", offset_abs_sum / samples);
+	printf("Mean offset:                           \t%e\n", offset_sum / samples);
+	printf("RMS frequency:                         \t%e\n", sqrt(freq_sum2 / samples));
+	printf("Maximum absolute frequency:            \t%e\n", freq_abs_max);
+	printf("Mean absolute frequency:               \t%e\n", freq_abs_sum / samples);
+	printf("Mean frequency:                        \t%e\n", freq_sum / samples);
+	printf("RMS raw frequency:                     \t%e\n", sqrt(rawfreq_sum2 / samples));
+	printf("Maximum absolute raw frequency:        \t%e\n", rawfreq_abs_max);
+	printf("Mean absolute raw frequency:           \t%e\n", rawfreq_abs_sum / samples);
+	printf("Mean raw frequency:                    \t%e\n", rawfreq_sum / samples);
 	if (packets_in) {
-		printf("RMS incoming packet delay: \t%e\n", (double)sqrt(packets_in_sum2 / packets_in));
-		printf("Mean incoming packet interval: \t%e\n", (double)samples / packets_in);
+		printf("RMS incoming packet delay:             \t%e\n", (double)sqrt(packets_in_sum2 / packets_in));
+		printf("Mean incoming packet interval:         \t%e\n", (double)samples / packets_in);
 	} else {
-		printf("RMS incoming packet delay: \tinf\n");
-		printf("Mean incoming packet interval: \tinf\n");
+		printf("RMS incoming packet delay:             \tinf\n");
+		printf("Mean incoming packet interval:         \tinf\n");
 	}
 	if (packets_in >= 2)
-		printf("Minimum incoming packet interval: \t%e\n", packets_in_int_min);
+		printf("Minimum incoming packet interval:      \t%e\n", packets_in_int_min);
 	else
-		printf("Minimum incoming packet interval: \tinf\n");
+		printf("Minimum incoming packet interval:      \tinf\n");
 	if (packets_out) {
-		printf("RMS outgoing packet delay: \t%e\n", (double)sqrt(packets_out_sum2 / packets_out));
-		printf("Mean outgoing packet interval: \t%e\n", (double)samples / packets_out);
+		printf("RMS outgoing packet delay:             \t%e\n", (double)sqrt(packets_out_sum2 / packets_out));
+		printf("Mean outgoing packet interval:         \t%e\n", (double)samples / packets_out);
 	} else {
-		printf("RMS outgoing packet delay: \tinf\n");
-		printf("Mean outgoing packet interval: \tinf\n");
+		printf("RMS outgoing packet delay:             \tinf\n");
+		printf("Mean outgoing packet interval:         \tinf\n");
 	}
 	if (packets_out >= 2)
-		printf("Minimum outgoing packet interval: \t%e\n", packets_out_int_min);
+		printf("Minimum outgoing packet interval:      \t%e\n", packets_out_int_min);
 	else
-		printf("Minimum outgoing packet interval: \tinf\n");
+		printf("Minimum outgoing packet interval:      \tinf\n");
 	if (wakeups)
-		printf("Mean wakeup interval:          \t%e\n", (double)samples / wakeups);
+		printf("Mean wakeup interval:                  \t%e\n", (double)samples / wakeups);
 	else
-		printf("Mean wakeup interval:          \tinf\n");
+		printf("Mean wakeup interval:                  \tinf\n");
 }
