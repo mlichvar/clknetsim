@@ -157,7 +157,7 @@ int main(int argc, char **argv) {
 		printf("usage: clknetsim [options] config nodes\n");
 		printf("   or: clknetsim -G expr num\n");
 		printf("       -l secs       set time limit to secs (default 10000)\n");
-		printf("       -r secs       reset stats after secs (default 0)\n");
+		printf("       -r secs       reset clock stats after secs (default 0)\n");
 		printf("       -R rate       set freq/log/stats update rate (default 1 per second)\n");
 		printf("       -n subnets    set number of subnetworks (default 1)\n");
 		printf("       -o file       log time offsets to file\n");
@@ -205,7 +205,7 @@ int main(int argc, char **argv) {
 
 	if (reset && reset < limit) {
 		r = network->run(reset);
-		network->reset_stats();
+		network->reset_clock_stats();
 	} else
 		r = true;
 

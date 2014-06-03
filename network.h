@@ -84,6 +84,7 @@ class Network {
 	void open_packet_log(const char *log);
 	void print_stats(int verbosity) const;
 	void reset_stats();
+	void reset_clock_stats();
 
 	void send(struct Packet *packet);
 	double get_time() const;

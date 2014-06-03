@@ -340,6 +340,13 @@ void Network::reset_stats() {
 		stats[i].reset();
 }
 
+void Network::reset_clock_stats() {
+	int i, n = nodes.size();
+
+	for (i = 0; i < n; i++)
+		stats[i].reset_clock_stats();
+}
+
 void Network::send(struct Packet *packet) {
 	double delay = -1.0;
 	unsigned int i;

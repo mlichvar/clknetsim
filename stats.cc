@@ -23,7 +23,28 @@ Stats::Stats() {
 	reset();
 }
 
+Stats::~Stats() {
+}
+
 void Stats::reset() {
+	reset_clock_stats();
+
+	packets_in_sum2 = 0.0;
+	packets_out_sum2 = 0.0;
+	packets_in = 0;
+	packets_out = 0;
+	packets_in_time_last = 0.0;
+	packets_out_time_last = 0.0;
+	packets_in_int_sum = 0.0;
+	packets_out_int_sum = 0.0;
+	packets_in_int_min = 0.0;
+	packets_out_int_min = 0.0;
+
+	wakeups_int_sum = 0;
+	wakeups = 0;
+}
+
+void Stats::reset_clock_stats() {
 	offset_sum2 = 0.0;
 	offset_abs_sum = 0.0;
 	offset_sum = 0.0;
@@ -37,20 +58,6 @@ void Stats::reset() {
 	rawfreq_sum = 0.0;
 	rawfreq_abs_max = 0.0;
 	samples = 0;
-	packets_in_sum2 = 0.0;
-	packets_out_sum2 = 0.0;
-	packets_in = 0;
-	packets_out = 0;
-	packets_in_time_last = 0.0;
-	packets_out_time_last = 0.0;
-	packets_in_int_sum = 0.0;
-	packets_out_int_sum = 0.0;
-	packets_in_int_min = 0.0;
-	packets_out_int_min = 0.0;
-	wakeups = 0;
-}
-
-Stats::~Stats() {
 }
 
 void Stats::update_clock_stats(double offset, double freq, double rawfreq) {
@@ -73,6 +80,7 @@ void Stats::update_clock_stats(double offset, double freq, double rawfreq) {
 		rawfreq_abs_max = fabs(rawfreq);
 
 	samples++;
+	wakeups_int_sum++;
 }
 
 void Stats::update_packet_stats(bool incoming, double time, double delay) {
@@ -148,7 +156,7 @@ void Stats::print(int verbosity) const {
 		printf("Minimum outgoing packet interval:      \tinf\n");
 	}
 	if (wakeups)
-		printf("Mean wakeup interval:                  \t%e\n", (double)samples / wakeups);
+		printf("Mean wakeup interval:                  \t%e\n", (double)wakeups_int_sum / wakeups);
 	else
 		printf("Mean wakeup interval:                  \tinf\n");
 }

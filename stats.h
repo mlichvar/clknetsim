@@ -46,12 +46,14 @@ class Stats {
 	double packets_in_int_min;
 	double packets_out_int_min;
 
+	unsigned long wakeups_int_sum;
 	unsigned long wakeups;
 
 	public:
 	Stats();
 	~Stats();
 	void reset();
+	void reset_clock_stats();
 	void update_clock_stats(double offset, double freq, double rawfreq);
 	void update_packet_stats(bool incoming, double time, double delay);
 	void update_wakeup_stats();
