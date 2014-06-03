@@ -41,6 +41,8 @@ class Stats {
 	unsigned long packets_out;
 	double packets_in_time_last;
 	double packets_out_time_last;
+	double packets_in_int_sum;
+	double packets_out_int_sum;
 	double packets_in_int_min;
 	double packets_out_int_min;
 

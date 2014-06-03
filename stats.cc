@@ -43,6 +43,8 @@ void Stats::reset() {
 	packets_out = 0;
 	packets_in_time_last = 0.0;
 	packets_out_time_last = 0.0;
+	packets_in_int_sum = 0.0;
+	packets_out_int_sum = 0.0;
 	packets_in_int_min = 0.0;
 	packets_out_int_min = 0.0;
 	wakeups = 0;
@@ -79,16 +81,20 @@ void Stats::update_packet_stats(bool incoming, double time, double delay) {
 	if (incoming) {
 		packets_in++;
 		packets_in_sum2 += delay * delay;
-		if (packets_in == 2 || (packets_in > 2 &&
-					packets_in_int_min > time - packets_in_time_last))
-			packets_in_int_min = time - packets_in_time_last;
+		if (packets_in >= 2) {
+			packets_in_int_sum += time - packets_in_time_last;
+			if (packets_in == 2 || packets_in_int_min > time - packets_in_time_last)
+				packets_in_int_min = time - packets_in_time_last;
+		}
 		packets_in_time_last = time;
 	} else {
 		packets_out++;
 		packets_out_sum2 += delay * delay;
-		if (packets_out == 2 || (packets_out > 2 &&
-					packets_out_int_min > time - packets_out_time_last))
-			packets_out_int_min = time - packets_out_time_last;
+		if (packets_out >= 2) {
+			packets_out_int_sum += time - packets_out_time_last;
+			if (packets_out == 2 || packets_out_int_min > time - packets_out_time_last)
+				packets_out_int_min = time - packets_out_time_last;
+		}
 		packets_out_time_last = time;
 	}
 }
@@ -119,26 +125,28 @@ void Stats::print(int verbosity) const {
 	printf("Mean raw frequency:                    \t%e\n", rawfreq_sum / samples);
 	if (packets_in) {
 		printf("RMS incoming packet delay:             \t%e\n", (double)sqrt(packets_in_sum2 / packets_in));
-		printf("Mean incoming packet interval:         \t%e\n", (double)samples / packets_in);
 	} else {
 		printf("RMS incoming packet delay:             \tinf\n");
-		printf("Mean incoming packet interval:         \tinf\n");
 	}
-	if (packets_in >= 2)
+	if (packets_in >= 2) {
+		printf("Mean incoming packet interval:         \t%e\n", packets_in_int_sum / (packets_in - 1));
 		printf("Minimum incoming packet interval:      \t%e\n", packets_in_int_min);
-	else
+	} else {
+		printf("Mean incoming packet interval:         \tinf\n");
 		printf("Minimum incoming packet interval:      \tinf\n");
+	}
 	if (packets_out) {
 		printf("RMS outgoing packet delay:             \t%e\n", (double)sqrt(packets_out_sum2 / packets_out));
-		printf("Mean outgoing packet interval:         \t%e\n", (double)samples / packets_out);
 	} else {
 		printf("RMS outgoing packet delay:             \tinf\n");
-		printf("Mean outgoing packet interval:         \tinf\n");
 	}
-	if (packets_out >= 2)
+	if (packets_out >= 2) {
+		printf("Mean outgoing packet interval:         \t%e\n", packets_out_int_sum / (packets_out - 1));
 		printf("Minimum outgoing packet interval:      \t%e\n", packets_out_int_min);
-	else
+	} else {
+		printf("Mean outgoing packet interval:         \tinf\n");
 		printf("Minimum outgoing packet interval:      \tinf\n");
+	}
 	if (wakeups)
 		printf("Mean wakeup interval:                  \t%e\n", (double)samples / wakeups);
 	else
