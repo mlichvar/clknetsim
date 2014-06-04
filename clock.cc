@@ -193,7 +193,7 @@ void Clock::update(bool second) {
 		ss_slew = 0;
 
 	if (ntp_timex.status & (STA_INS | STA_DEL)) {
-		if ((time_t)time % 86400 == 0) {
+		if ((time_t)(time + 0.5) % (24 * 3600) <= 1) {
 			if (ntp_timex.status & STA_INS)
 				time -= 1.0;
 			else
