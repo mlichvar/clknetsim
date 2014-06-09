@@ -36,6 +36,7 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <pwd.h>
 #include <stdarg.h>
 #include <signal.h>
 #include <ifaddrs.h>
@@ -1554,6 +1555,20 @@ void srandom(unsigned int seed) {
 		fclose(f);
 	}
 	_srandom(seed);
+}
+
+struct passwd *getpwnam(const char *name) {
+	static struct passwd pw = {
+		.pw_name = "",
+		.pw_passwd = "",
+		.pw_uid = 0,
+		.pw_gid = 0,
+		.pw_gecos = "",
+		.pw_dir = "",
+		.pw_shell = ""
+	};
+
+	return &pw;
 }
 
 int initgroups(const char *user, gid_t group) {
