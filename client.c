@@ -480,6 +480,7 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 
 	switch (which_clock) {
 		case CLOCK_REALTIME:
+		case SYSCLK_CLOCKID:
 			time = get_real_time();
 			break;
 		case CLOCK_MONOTONIC:
