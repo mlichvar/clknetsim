@@ -1163,6 +1163,10 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 	}
 
 	if (sockets[s].remote_node >= 0) {
+		if (msg->msg_name) {
+			errno = EISCONN;
+			return -1;
+		}
 		sa = &connected_sa;
 		sa->sin_family = AF_INET;
 		sa->sin_port = htons(sockets[s].remote_port);
