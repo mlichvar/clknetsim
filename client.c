@@ -1153,7 +1153,7 @@ void freeifaddrs(struct ifaddrs *ifa) {
 
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 	struct Request_send req;
-	struct sockaddr_in *sa;
+	struct sockaddr_in connected_sa, *sa;
 	int s = get_socket_from_fd(sockfd);
 
 	if (s < 0 || sockets[s].type != SOCK_DGRAM) {
@@ -1162,10 +1162,18 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 		return -1;
 	}
 
-	sa = msg->msg_name;
+	if (sockets[s].remote_node >= 0) {
+		sa = &connected_sa;
+		sa->sin_family = AF_INET;
+		sa->sin_port = htons(sockets[s].remote_port);
+		sa->sin_addr.s_addr = htonl(NODE_ADDR(sockets[s].iface - IFACE_ETH0,
+					sockets[s].remote_node));
+	} else {
+		sa = msg->msg_name;
+		assert(sa && msg->msg_namelen >= sizeof (struct sockaddr_in));
+		assert(sa->sin_family == AF_INET);
+	}
 
-	assert(sa && msg->msg_namelen >= sizeof (struct sockaddr_in));
-	assert(sa->sin_family == AF_INET);
 	assert(msg->msg_iovlen == 1);
 	assert(msg->msg_iov[0].iov_len <= MAX_PACKET_SIZE);
 
@@ -1200,22 +1208,7 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags, const struct 
 }
 
 ssize_t send(int sockfd, const void *buf, size_t len, int flags) {
-	struct sockaddr_in sa;
-	socklen_t addrlen = sizeof (sa);
-	int s = get_socket_from_fd(sockfd);
-
-	if (s < 0 || sockets[s].iface < IFACE_ETH0 || sockets[s].remote_node < 0) {
-		assert(0);
-		errno = EINVAL;
-		return -1;
-	}
-
-	sa.sin_family = AF_INET;
-	sa.sin_port = htons(sockets[s].remote_port);
-	sa.sin_addr.s_addr = htonl(NODE_ADDR(sockets[s].iface - IFACE_ETH0,
-				sockets[s].remote_node));
-
-	return sendto(sockfd, buf, len, flags, (struct sockaddr *)&sa, addrlen);
+	return sendto(sockfd, buf, len, flags, NULL, 0);
 }
 
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
