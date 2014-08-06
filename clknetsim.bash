@@ -223,9 +223,15 @@ get_stat() {
 check_stat() {
     local value=$1 min=$2 max=$3 tolerance=$4
     [ -z "$tolerance" ] && tolerance=0.0
-    awk "BEGIN { exit !((\"$value\" == \"inf\" || $value + $tolerance >= $min) &&
-			(\"$max\" == \"inf\" ||
-			(\"$value\" != \"inf\" && $value - $tolerance <= $max))) }"
+    awk "
+    BEGIN {
+	eq = (\"$value\" == \"inf\" ||
+	      $value + $value / 1e6 + $tolerance >= $min) &&
+	     (\"$max\" == \"inf\" ||
+	      (\"$value\" != \"inf\" &&
+	      $value - $value / 1e6 - $tolerance <= $max))
+	exit !eq
+    }"
 }
 
 if [ -z "$CLKNETSIM_PATH" ]; then
