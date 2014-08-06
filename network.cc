@@ -128,7 +128,7 @@ bool Network::prepare_clients() {
 		Request_header *header;
 		Request_register *req;
 
-		fprintf(stderr, "\rWaiting for %ld clients...", nodes.size() - i);
+		fprintf(stderr, "\rWaiting for %u clients...", (unsigned int)nodes.size() - i);
 		fd = accept(sockfd, NULL, NULL);
 		if (fd < 0) {
 			fprintf(stderr, "accept() failed\n");
