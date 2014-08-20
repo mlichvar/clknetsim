@@ -623,6 +623,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	struct Request_select req;
 	struct Reply_select rep;
 	int i, timer, s, recv_fd = -1;
+	double elapsed = 0.0;
 
 	if (writefds)
 		FD_ZERO(writefds);
@@ -666,6 +667,7 @@ try_again:
 
 		make_request(REQ_SELECT, &req, sizeof (req), &rep, sizeof (rep));
 
+		elapsed += rep.time.monotonic_time - monotonic_time;
 		req.timeout -= rep.time.monotonic_time - monotonic_time;
 
 		real_time = rep.time.real_time;
@@ -737,6 +739,14 @@ try_again:
 		FD_ZERO(readfds);
 		if (recv_fd)
 			FD_SET(recv_fd, readfds);
+	}
+
+	if (timeout) {
+		time_to_timeval(timeval_to_time(timeout, 0) - elapsed, timeout);
+		if (timeout->tv_sec < 0) {
+			timeout->tv_sec = 0;
+			timeout->tv_usec = 0;
+		}
 	}
 
 	return recv_fd ? 1 : 0;
