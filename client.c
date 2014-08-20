@@ -459,13 +459,30 @@ static void rearm_timer(int timer)
 		timers[timer].armed = 0;
 }
 
+static void time_to_timeval(double d, struct timeval *tv) {
+	tv->tv_sec = floor(d);
+	tv->tv_usec = (d - tv->tv_sec) * 1e6;
+}
+
+static void time_to_timespec(double d, struct timespec *tp) {
+	tp->tv_sec = floor(d);
+	tp->tv_nsec = (d - tp->tv_sec) * 1e9;
+}
+
+static double timeval_to_time(const struct timeval *tv, time_t offset) {
+	return tv->tv_sec + offset + tv->tv_usec / 1e6;
+}
+
+static double timespec_to_time(const struct timespec *tp, time_t offset) {
+	return tp->tv_sec + offset + tp->tv_nsec / 1e9;
+}
+
 int gettimeofday(struct timeval *tv, struct timezone *tz) {
 	double time;
 
 	time = get_real_time() + 0.5e-6;
 
-	tv->tv_sec = floor(time);
-	tv->tv_usec = (time - tv->tv_sec) * 1e6;
+	time_to_timeval(time, tv);
 	tv->tv_sec += system_time_offset;
 
 	/* chrony clock precision routine hack */
@@ -494,8 +511,7 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 	}
 
 	time += 0.5e-9;
-	tp->tv_sec = floor(time);
-	tp->tv_nsec = (time - tp->tv_sec) * 1e9;
+	time_to_timespec(time, tp);
 	
 	if (which_clock == CLOCK_REALTIME || which_clock == REFCLK_ID)
 		tp->tv_sec += system_time_offset;
@@ -521,13 +537,13 @@ time_t time(time_t *t) {
 
 int settimeofday(const struct timeval *tv, const struct timezone *tz) {
 	assert(tv);
-	settime(tv->tv_sec - system_time_offset + tv->tv_usec / 1e6);
+	settime(timeval_to_time(tv, -system_time_offset));
 	return 0;
 }
 
 int clock_settime(clockid_t which_clock, const struct timespec *tp) {
 	assert(tp && which_clock == CLOCK_REALTIME);
-	settime(tp->tv_sec - system_time_offset + tp->tv_nsec * 1e-9);
+	settime(timespec_to_time(tp, -system_time_offset));
 	return 0;
 }
 
@@ -1361,9 +1377,8 @@ int timer_settime(timer_t timerid, int flags, const struct itimerspec *value, st
 
 	if (value->it_value.tv_sec || value->it_value.tv_nsec) {
 		timers[t].armed = 1;
-		timers[t].timeout = get_monotonic_time() +
-			value->it_value.tv_sec + value->it_value.tv_nsec * 1e-9;
-		timers[t].interval = value->it_interval.tv_sec + value->it_interval.tv_nsec * 1e-9;
+		timers[t].timeout = get_monotonic_time() + timespec_to_time(&value->it_value, 0);
+		timers[t].interval = timespec_to_time(&value->it_interval, 0);
 	} else {
 		timers[t].armed = 0;
 	}
@@ -1382,14 +1397,12 @@ int timer_gettime(timer_t timerid, struct itimerspec *value) {
 
 	if (timers[t].armed) {
 		timeout = timers[t].timeout - get_monotonic_time();
-		value->it_value.tv_sec = timeout;
-		value->it_value.tv_nsec = (timeout - value->it_value.tv_sec) * 1e9;
+		time_to_timespec(timeout, &value->it_value);
 	} else {
 		value->it_value.tv_sec = 0;
 		value->it_value.tv_nsec = 0;
 	}
-	value->it_interval.tv_sec = timers[t].interval;
-	value->it_interval.tv_nsec = (timers[t].interval - value->it_interval.tv_sec) * 1e9;
+	time_to_timespec(timers[t].interval, &value->it_interval);
 
 	return 0;
 }
