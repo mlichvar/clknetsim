@@ -666,6 +666,8 @@ try_again:
 
 		make_request(REQ_SELECT, &req, sizeof (req), &rep, sizeof (rep));
 
+		req.timeout -= rep.time.monotonic_time - monotonic_time;
+
 		real_time = rep.time.real_time;
 		monotonic_time = rep.time.monotonic_time;
 		network_time = rep.time.network_time;
