@@ -74,7 +74,9 @@ start_client() {
 	    args=($opts $config)
 	    ;;
 	busybox)
-	    args=(ntpd -ddd -n -p $opts $config)
+	    args=(ntpd -ddd -n)
+	    while read line; do args+=(-p "$line"); done <<< "$config"
+	    args+=($opts)
 	    ;;
 	phc2sys)
 	    args=(-s /dev/ptp0 -O 0 $opts $config)
