@@ -760,10 +760,16 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 	fd_set rfds;
 
 	/* ptp4l waiting for tx SO_TIMESTAMPING */
-	if (nfds == 1 && !fds[0].events && get_socket_from_fd(fds[0].fd) >= 0 &&
-		       sockets[get_socket_from_fd(fds[0].fd)].time_stamping) {
-		fds[0].revents = POLLERR;
-		return 1;
+	if (nfds == 1 && fds[0].events != POLLOUT && get_socket_from_fd(fds[0].fd) >= 0 &&
+			sockets[get_socket_from_fd(fds[0].fd)].time_stamping) {
+		if (!fds[0].events) {
+			fds[0].revents = POLLERR;
+			return 1;
+		} else if (fds[0].events == POLLPRI) {
+			/* SO_SELECT_ERR_QUEUE option enabled */
+			fds[0].revents = POLLPRI;
+			return 1;
+		}
 	}
 
 	/* pmc waiting to send packet */
