@@ -795,7 +795,7 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 		ptv = &tv;
 	}
 
-	r = select(maxfd, &rfds, NULL, NULL, ptv);
+	r = select(maxfd + 1, &rfds, NULL, NULL, ptv);
 
 	for (i = 0; i < nfds; i++)
 		fds[i].revents = r > 0 && fds[i].fd >= 0 &&
