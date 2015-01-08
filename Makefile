@@ -1,14 +1,15 @@
 CC=gcc
 CXX=g++
-CFLAGS=-O2 -Wall -g
+CFLAGS=-O2 -Wall -g -fPIC
 CXXFLAGS=$(CFLAGS)
 
 all: clknetsim.so clknetsim
 
+clientobjs = client.o
 serverobjs = $(patsubst %.cc,%.o,$(wildcard *.cc))
 
-clknetsim.so: client.c
-	$(CC) $(CFLAGS) -fPIC -shared -o $@ $^ $(LDFLAGS) -ldl -lm
+clknetsim.so: $(clientobjs)
+	$(CC) $(CFLAGS) -shared -o $@ $^ $(LDFLAGS) -ldl -lm
 
 clknetsim: $(serverobjs)
 	$(CXX) $(CFLAGS) -o $@ $^ $(LDFLAGS)
@@ -19,7 +20,10 @@ clean:
 .deps:
 	@mkdir .deps
 
-.deps/%.d: %.cc .deps
+.deps/%.d: %.c .deps
+	@$(CC) -MM $(CPPFLAGS) -MT '$(<:%.c=%.o) $@' $< -o $@
+
+.deps/%.D: %.cc .deps
 	@$(CXX) -MM $(CPPFLAGS) -MT '$(<:%.cc=%.o) $@' $< -o $@
 
--include $(serverobjs:%.o=.deps/%.d)
+-include $(clientobjs:%.o=.deps/%.d) $(serverobjs:%.o=.deps/%.D)
