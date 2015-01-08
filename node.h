@@ -49,12 +49,12 @@ class Node {
 	bool process_fd();
 	void reply(void *data, int len, int request);
 	void process_gettime();
-	void process_settime(void *data);
-	void process_adjtimex(void *data);
-	void process_adjtime(void *data);
+	void process_settime(Request_settime *req);
+	void process_adjtimex(Request_adjtimex *req);
+	void process_adjtime(Request_adjtime *req);
 	void try_select();
-	void process_select(void *data);
-	void process_send(void *data);
+	void process_select(Request_select *req);
+	void process_send(Request_send *req);
 	void process_recv();
 	void process_getrefsample();
 	void process_getrefoffsets();

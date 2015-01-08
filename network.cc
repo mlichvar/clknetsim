@@ -124,9 +124,8 @@ bool Network::prepare_clients() {
 	}
 
 	for (i = 0; i < nodes.size(); i++) {
-		char buf[MAX_REQ_SIZE];
-		Request_header *header;
-		Request_register *req;
+		Request_packet req;
+		unsigned int node;
 
 		fprintf(stderr, "\rWaiting for %u clients...", (unsigned int)nodes.size() - i);
 		fd = accept(sockfd, NULL, NULL);
@@ -135,14 +134,14 @@ bool Network::prepare_clients() {
 			return false;
 		}
 
-		if (recv(fd, &buf, sizeof (buf), 0) != sizeof (Request_header) + sizeof (Request_register) ||
-				(header = (Request_header *)buf)->request != REQ_REGISTER) {
+		if (recv(fd, &req, sizeof (req), 0) != sizeof (Request_header) + sizeof (Request_register) ||
+				req.header.request != REQ_REGISTER) {
 			fprintf(stderr, "client didn't register correctly.\n");
 			return false;
 		}
-		req = (Request_register *)(buf + sizeof (Request_header));
-		assert(req->node < nodes.size() && nodes[req->node]->get_fd() < 0);
-		nodes[req->node]->set_fd(fd);
+		node = req.data._register.node;
+		assert(node < nodes.size() && nodes[node]->get_fd() < 0);
+		nodes[node]->set_fd(fd);
 	}
 	fprintf(stderr, "done\n");
 

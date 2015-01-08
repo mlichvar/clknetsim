@@ -225,22 +225,20 @@ static void fini(void) {
 }
 
 static void make_request(int request_id, const void *request_data, int reqlen, void *reply, int replylen) {
-	struct Request_header *header;
-	char buf[MAX_REQ_SIZE];
+	struct Request_packet request;
 	int sent, received = 0;
 
 	assert(initialized);
 
-	header = (struct Request_header *)buf;
-	header->request = request_id;
+	request.header.request = request_id;
 
-	assert(reqlen + sizeof (struct Request_header) <= MAX_REQ_SIZE);
+	assert(reqlen + sizeof (request.header) <= sizeof (request));
 
 	if (request_data)
-		memcpy(buf + sizeof (struct Request_header), request_data, reqlen);
-	reqlen += sizeof (struct Request_header);
+		memcpy(&request.data, request_data, reqlen);
+	reqlen += sizeof (request.header);
 
-	if ((sent = _send(clknetsim_fd, buf, reqlen, 0)) <= 0 ||
+	if ((sent = _send(clknetsim_fd, &request, reqlen, 0)) <= 0 ||
 			(reply && (received = recv(clknetsim_fd, reply, replylen, 0)) <= 0)) {
 		fprintf(stderr, "clknetsim: server connection closed.\n");
 		initialized = 0;
