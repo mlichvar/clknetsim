@@ -179,6 +179,9 @@ static void init(void) {
 	_usleep = (int (*)(useconds_t usec))dlsym(RTLD_NEXT, "usleep");
 	_srandom = (void (*)(unsigned int seed))dlsym(RTLD_NEXT, "srandom");
 
+	env = getenv("CLKNETSIM_RANDOM_SEED");
+	random_seed = env ? atoi(env) : 0;
+
 	env = getenv("CLKNETSIM_NODE");
 	if (!env) {
 		fprintf(stderr, "clknetsim: CLKNETSIM_NODE variable not set.\n");
@@ -1576,8 +1579,11 @@ long syscall(long number, ...) {
 void srandom(unsigned int seed) {
 	FILE *f;
 
-	/* the seed is likely based on the simulated time, make it truly random */
-	if ((f = fopen("/dev/urandom", "r"))) {
+	/* override the seed to the fixed seed if set or make it truly
+	   random in case it's based on the simulated time */
+	if (random_seed) {
+		seed = random_seed;
+	} else if ((f = fopen("/dev/urandom", "r"))) {
 		fread(&seed, sizeof (seed), 1, f);
 		fclose(f);
 	}
