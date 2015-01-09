@@ -1445,17 +1445,18 @@ int setitimer(__itimer_which_t which, const struct itimerval *new_value, struct 
 
 int getitimer(__itimer_which_t which, struct itimerval *curr_value) {
 	struct itimerspec timerspec;
-	int r;
 
 	assert(which == ITIMER_REAL);
 
-	r = timer_gettime(itimer_real_id, &timerspec);
+	if (timer_gettime(itimer_real_id, &timerspec))
+		return -1;
+
 	curr_value->it_interval.tv_sec = timerspec.it_interval.tv_sec;
 	curr_value->it_interval.tv_usec = timerspec.it_interval.tv_nsec / 1000;
 	curr_value->it_value.tv_sec = timerspec.it_value.tv_sec;
 	curr_value->it_value.tv_usec = timerspec.it_value.tv_nsec / 1000;
 
-	return r; 
+	return 0;
 }
 #endif
 
