@@ -18,6 +18,7 @@
 #include "node.h"
 #include "network.h"
 #include "protocol.h"
+#include "sysheaders.h"
 
 Node::Node(int index, Network *network) {
 	this->network = network;
@@ -97,7 +98,11 @@ bool Node::process_fd() {
 			process_select(&request.data.select);
 			break;
 		case REQ_SEND:
-			assert(reqlen == sizeof (Request_send));
+			/* request with variable length */
+			assert(reqlen >= (int)offsetof(Request_send, data) &&
+					reqlen <= (int)sizeof (Request_send));
+			assert(request.data.send.len <= sizeof (request.data.send.data));
+			assert((int)(request.data.send.len + offsetof(Request_send, data)) <= reqlen);
 			process_send(&request.data.send);
 			break;
 		case REQ_RECV:
@@ -214,8 +219,6 @@ void Node::process_select(Request_select *req) {
 void Node::process_send(Request_send *req) {
 	struct Packet *packet;
 
-	assert(req->len <= sizeof (packet->data));
-
 	if (!terminate) {
 		packet = new struct Packet;
 		packet->broadcast = req->to == (unsigned int)-1;
@@ -242,8 +245,7 @@ void Node::process_recv() {
 		rep.src_port = 0;
 		rep.dst_port = 0;
 		rep.len = 0;
-		memset(rep.data, 0, sizeof (rep.data));
-		reply(&rep, sizeof (rep), REQ_RECV);
+		reply(&rep, offsetof (Reply_recv, data), REQ_RECV);
 
 		return;
 	}
@@ -258,11 +260,10 @@ void Node::process_recv() {
 
 	assert(packet->len <= sizeof (rep.data));
 	memcpy(rep.data, packet->data, packet->len);
-	memset(rep.data + packet->len, 0, sizeof (rep.data) - packet->len);
 	
 	delete packet;
 
-	reply(&rep, sizeof (rep), REQ_RECV);
+	reply(&rep, offsetof (Reply_recv, data) + rep.len, REQ_RECV);
 
 	incoming_packets.pop_back();
 #ifdef DEBUG

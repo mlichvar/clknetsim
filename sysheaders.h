@@ -11,6 +11,7 @@
 #include <sys/timex.h>
 #include <assert.h>
 #include <math.h>
+#include <stddef.h>
 #include <stdlib.h>
 
 #ifdef __linux__

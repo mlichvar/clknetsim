@@ -32,6 +32,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 #include <assert.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <sys/ioctl.h>
@@ -270,7 +271,21 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 	}
 
 	assert(sent == reqlen);
-	assert(!reply || received == replylen);
+
+	if (!reply)
+		return;
+
+	/* check reply length */
+	switch (request_id) {
+		case REQ_RECV:
+			/* reply with variable length */
+			assert(received >= offsetof(struct Reply_recv, data));
+			assert(offsetof(struct Reply_recv, data) +
+				((struct Reply_recv *)reply)->len <= received);
+			break;
+		default:
+			assert(received == replylen);
+	}
 }
 
 static void fetch_time(void) {
@@ -1235,7 +1250,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 	}
 
 	assert(msg->msg_iovlen == 1);
-	assert(msg->msg_iov[0].iov_len <= MAX_PACKET_SIZE);
+	assert(msg->msg_iov[0].iov_len <= sizeof (req.data));
 
 	get_target(s, ntohl(sa->sin_addr.s_addr), &req.subnet, &req.to);
 	req.src_port = sockets[s].port;
@@ -1245,7 +1260,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 	req.len = msg->msg_iov[0].iov_len;
 	memcpy(req.data, msg->msg_iov[0].iov_base, req.len);
 
-	make_request(REQ_SEND, &req, sizeof (req), NULL, 0);
+	make_request(REQ_SEND, &req, offsetof(struct Request_send, data) + req.len, NULL, 0);
 
 	return req.len;
 }
