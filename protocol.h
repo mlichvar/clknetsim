@@ -88,7 +88,7 @@ struct Reply_select {
 	struct Reply_gettime time;
 };
 
-#define MAX_PACKET_SIZE 1000
+#define MAX_PACKET_SIZE 4000
 
 struct Request_send {
 	unsigned int subnet;
