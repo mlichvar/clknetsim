@@ -35,6 +35,7 @@ start_client() {
 		pidfile tmp/pidfile.$node
 		allow
 		cmdallow
+		bindcmdaddress 0.0.0.0
 		$config
 		EOF
 	    args=(-d -f tmp/conf.$node $opts)
