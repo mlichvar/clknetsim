@@ -50,6 +50,8 @@
 
 #include "protocol.h"
 
+#include "client_fuzz.c"
+
 /* first node in first subnet is 192.168.123.1 */
 #define BASE_ADDR 0xc0a87b00
 #define NETMASK 0xffffff00
@@ -85,11 +87,15 @@ static ssize_t (*_recvmsg)(int sockfd, struct msghdr *msg, int flags);
 static ssize_t (*_send)(int sockfd, const void *buf, size_t len, int flags);
 static int (*_usleep)(useconds_t usec);
 static void (*_srandom)(unsigned int seed);
+static int (*_shmget)(key_t key, size_t size, int shmflg);
+static void *(*_shmat)(int shmid, const void *shmaddr, int shmflg);
 
 static unsigned int node;
 static int initialized = 0;
 static int clknetsim_fd;
 static int precision_hack = 1;
+static unsigned int random_seed;
+static int fuzz_mode;
 
 enum {
 	IFACE_NONE = 0,
@@ -178,9 +184,19 @@ static void init(void) {
 	_send = (ssize_t (*)(int sockfd, const void *buf, size_t len, int flags))dlsym(RTLD_NEXT, "send");
 	_usleep = (int (*)(useconds_t usec))dlsym(RTLD_NEXT, "usleep");
 	_srandom = (void (*)(unsigned int seed))dlsym(RTLD_NEXT, "srandom");
+	_shmget = (int (*)(key_t key, size_t size, int shmflg))dlsym(RTLD_NEXT, "shmget");
+	_shmat = (void *(*)(int shmid, const void *shmaddr, int shmflg))dlsym(RTLD_NEXT, "shmat");
 
 	env = getenv("CLKNETSIM_RANDOM_SEED");
 	random_seed = env ? atoi(env) : 0;
+
+	if (fuzz_init()) {
+		fuzz_mode = 1;
+		node = 0;
+		subnets = 1;
+		initialized = 1;
+		return;
+	}
 
 	env = getenv("CLKNETSIM_NODE");
 	if (!env) {
@@ -232,6 +248,11 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 	int sent, received = 0;
 
 	assert(initialized);
+
+	if (fuzz_mode) {
+		fuzz_process_reply(request_id, request_data, reply, replylen);
+		return;
+	}
 
 	request.header.request = request_id;
 
@@ -1253,7 +1274,7 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags) {
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	struct Reply_recv rep;
 	struct sockaddr_in *sa;
-	int s = get_socket_from_fd(sockfd);
+	int msglen, s = get_socket_from_fd(sockfd);
 
 	if (sockfd == clknetsim_fd)
 		return _recvmsg(sockfd, msg, flags);
@@ -1292,8 +1313,8 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	}
 
 	assert(msg->msg_iovlen == 1);
-	assert(msg->msg_iov[0].iov_len >= rep.len);
-	memcpy(msg->msg_iov[0].iov_base, rep.data, rep.len);
+	msglen = msg->msg_iov[0].iov_len < rep.len ? msg->msg_iov[0].iov_len : rep.len;
+	memcpy(msg->msg_iov[0].iov_base, rep.data, msglen);
 
 #ifdef SO_TIMESTAMPING
 	if (sockets[s].time_stamping) {
@@ -1319,7 +1340,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 #endif
 		msg->msg_controllen = 0;
 
-	return rep.len;
+	return msglen;
 }
 
 ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *src_addr, socklen_t *addrlen) {
@@ -1490,12 +1511,19 @@ int timerfd_gettime(int fd, struct itimerspec *curr_value) {
 }
 
 int shmget(key_t key, size_t size, int shmflg) {
+	if (fuzz_mode)
+		return _shmget(key, size, shmflg);
+
 	if (key == SHMKEY)
 		return SHMKEY;
+
 	return -1;
 }
 
 void *shmat(int shmid, const void *shmaddr, int shmflg) {
+	if (fuzz_mode)
+		return _shmat(shmid, shmaddr, shmflg);
+
 	assert(shmid == SHMKEY);
 
 	refclock_shm_enabled = 1;
