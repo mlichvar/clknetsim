@@ -66,7 +66,7 @@ bool Node::process_fd() {
 	if (received < (int)sizeof (request.header))
 		return false;
 
-	reqlen = received - sizeof (request.header);
+	reqlen = received - (int)offsetof(Request_packet, data);
 
 	assert(pending_request == 0);
 	pending_request = request.header.request;

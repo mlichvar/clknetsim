@@ -134,8 +134,8 @@ bool Network::prepare_clients() {
 			return false;
 		}
 
-		if (recv(fd, &req, sizeof (req), 0) != sizeof (Request_header) + sizeof (Request_register) ||
-				req.header.request != REQ_REGISTER) {
+		if (recv(fd, &req, sizeof (req), 0) != offsetof(Request_packet, data) +
+				sizeof (Request_register) || req.header.request != REQ_REGISTER) {
 			fprintf(stderr, "client didn't register correctly.\n");
 			return false;
 		}

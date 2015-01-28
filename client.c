@@ -257,11 +257,11 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 
 	request.header.request = request_id;
 
-	assert(reqlen + sizeof (request.header) <= sizeof (request));
+	assert(offsetof(struct Request_packet, data) + reqlen <= sizeof (request));
 
 	if (request_data)
 		memcpy(&request.data, request_data, reqlen);
-	reqlen += sizeof (request.header);
+	reqlen += offsetof(struct Request_packet, data);
 
 	if ((sent = _send(clknetsim_fd, &request, reqlen, 0)) <= 0 ||
 			(reply && (received = recv(clknetsim_fd, reply, replylen, 0)) <= 0)) {
