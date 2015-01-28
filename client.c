@@ -256,6 +256,7 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 	}
 
 	request.header.request = request_id;
+	request.header._pad = 0;
 
 	assert(offsetof(struct Request_packet, data) + reqlen <= sizeof (request));
 

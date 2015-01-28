@@ -33,7 +33,8 @@
 #define REQ_DEREGISTER 11
 
 struct Request_header {
-	long request;
+	int request;
+	int _pad;
 };
 
 struct Request_register {
