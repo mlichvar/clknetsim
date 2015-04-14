@@ -430,7 +430,9 @@ static int find_recv_socket(int subnet, int port, int broadcast) {
 				(port && sockets[i].port != port))
 			continue;
 		if (s < 0 || sockets[s].iface < sockets[i].iface ||
-				(broadcast && sockets[i].broadcast))
+				(broadcast && sockets[i].broadcast) ||
+				(!broadcast && sockets[s].broadcast &&
+				 !sockets[i].broadcast))
 			s = i;
 	}
 
