@@ -1185,7 +1185,7 @@ int getifaddrs(struct ifaddrs **ifap) {
 	ifaces[0].ifaddrs = (struct ifaddrs){
 		.ifa_next = &ifaces[1].ifaddrs,
 		.ifa_name = "lo",
-		.ifa_flags = IFF_UP | IFF_LOOPBACK,
+		.ifa_flags = IFF_UP | IFF_LOOPBACK | IFF_RUNNING,
 		.ifa_addr = (struct sockaddr *)&ifaces[0].addr,
 		.ifa_netmask = (struct sockaddr *)&ifaces[0].netmask,
 		.ifa_broadaddr = (struct sockaddr *)&ifaces[0].broadaddr
@@ -1197,7 +1197,7 @@ int getifaddrs(struct ifaddrs **ifap) {
 	for (i = 0; i < subnets; i++) {
 		ifaces[i + 1].ifaddrs = (struct ifaddrs){
 			.ifa_next = &ifaces[i + 2].ifaddrs,
-			.ifa_flags = IFF_UP | IFF_BROADCAST,
+			.ifa_flags = IFF_UP | IFF_BROADCAST | IFF_RUNNING,
 			.ifa_addr = (struct sockaddr *)&ifaces[i + 1].addr,
 			.ifa_netmask = (struct sockaddr *)&ifaces[i + 1].netmask,
 			.ifa_broadaddr = (struct sockaddr *)&ifaces[i + 1].broadaddr
