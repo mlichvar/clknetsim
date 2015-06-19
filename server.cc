@@ -106,7 +106,7 @@ int main(int argc, char **argv) {
 	int nodes, subnets = 1, help = 0, verbosity = 2, generate_only = 0, rate = 1;
 	double limit = 10000.0, reset = 0.0;
 	const char *offset_log = NULL, *freq_log = NULL, *rawfreq_log = NULL,
-	      *packet_log = NULL, *config, *socket = "clknetsim.sock";
+	      *packet_log = NULL, *config, *socket = "clknetsim.sock", *env;
 	struct timeval tv;
 
 	int r, opt;
@@ -174,8 +174,13 @@ int main(int argc, char **argv) {
 	config = argv[optind];
 	nodes = atoi(argv[optind + 1]);
 
-	gettimeofday(&tv, NULL);
-	srandom(tv.tv_sec ^ tv.tv_usec);
+	env = getenv("CLKNETSIM_RANDOM_SEED");
+	if (env) {
+		srandom(atoi(env));
+	} else {
+		gettimeofday(&tv, NULL);
+		srandom(tv.tv_sec ^ tv.tv_usec);
+	}
 
 	if (generate_only) {
 		run_generator(argv[optind], nodes);
