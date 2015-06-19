@@ -171,14 +171,7 @@ void Network::set_link_delay_generator(unsigned int from, unsigned int to, Gener
 bool Network::run(double time_limit) {
 	int i, n = nodes.size(), waiting;
 	bool pending_update;
-	struct pollfd pollfds[n];
 	double min_timeout, timeout, next_update;
-
-	for (i = 0; i < n; i++) {
-		pollfds[i].fd = nodes[i]->get_fd();
-		pollfds[i].events = !nodes[i]->finished() ? POLLIN : 0;
-		pollfds[i].revents = 0;
-	}
 
 	while (time < time_limit) {
 		for (i = 0, waiting = 0; i < n; i++)
@@ -188,30 +181,13 @@ bool Network::run(double time_limit) {
 				stats[i].update_wakeup_stats();
 
 		while (waiting < n) {
-#if 1
-			if (poll(pollfds, n, -1) <= 0) {
-				fprintf(stderr, "poll() error.\n");
-				return false;
-			}
-#else
-			for (i = 0; i < n; i++)
-				if (!nodes[i]->waiting()) {
-					pollfds[i].revents = POLLIN;
-					break;
-				}
-#endif
 			for (i = 0; i < n; i++) {
-				if (!(pollfds[i].revents & POLLIN))
+				if (nodes[i]->waiting())
 					continue;
-				pollfds[i].revents = 0;
-
-				assert(!nodes[i]->waiting());
 				if (!nodes[i]->process_fd()) {
 					fprintf(stderr, "client %d failed.\n", i + 1);
 					return false;
 				}
-				if (nodes[i]->finished())
-					pollfds[i].events = 0;
 				if (nodes[i]->waiting())
 					waiting++;
 			}
