@@ -188,9 +188,6 @@ static void init(void) {
 	_shmget = (int (*)(key_t key, size_t size, int shmflg))dlsym(RTLD_NEXT, "shmget");
 	_shmat = (void *(*)(int shmid, const void *shmaddr, int shmflg))dlsym(RTLD_NEXT, "shmat");
 
-	env = getenv("CLKNETSIM_RANDOM_SEED");
-	random_seed = env ? atoi(env) : 0;
-
 	if (fuzz_init()) {
 		fuzz_mode = 1;
 		node = 0;
@@ -217,6 +214,9 @@ static void init(void) {
 	env = getenv("CLKNETSIM_CONNECT_TIMEOUT");
 	if (env)
 		connect_retries = 10 * atoi(env);
+
+	env = getenv("CLKNETSIM_RANDOM_SEED");
+	random_seed = env ? atoi(env) + node : 0;
 
 	clknetsim_fd = _socket(AF_UNIX, SOCK_SEQPACKET, 0);
 
