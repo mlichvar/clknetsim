@@ -44,7 +44,6 @@ start_client() {
 	    cat > tmp/conf.$node <<-EOF
 		pidfile tmp/pidfile.$node
 		restrict default
-		logconfig=syncstatus +allevents
 		$config
 		EOF
 	    args=(-n -c tmp/conf.$node $opts)
