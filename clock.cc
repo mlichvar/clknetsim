@@ -48,6 +48,8 @@ Clock::Clock() {
 	ntp_timex.tolerance = MAXFREQ_SCALED;
 	ntp_timex.precision = 1;
 
+	ntp_state = TIME_OK;
+
 	/* in Linux kernel SHIFT_PLL is 2 since 2.6.31 */
 	ntp_shift_pll = 2;
 	ntp_flags = 0;
@@ -192,14 +194,34 @@ void Clock::update(bool second) {
 	} else
 		ss_slew = 0;
 
-	if (ntp_timex.status & (STA_INS | STA_DEL)) {
-		if ((time_t)(time + 0.5) % (24 * 3600) <= 1) {
+	switch (ntp_state) {
+		case TIME_OK:
 			if (ntp_timex.status & STA_INS)
+				ntp_state = TIME_INS;
+			else if (ntp_timex.status & STA_DEL)
+				ntp_state = TIME_DEL;
+			break;
+		case TIME_INS:
+			if ((time_t)(time + 0.5) % (24 * 3600) <= 1) {
 				time -= 1.0;
-			else
+				ntp_state = TIME_OOP;
+			}
+			break;
+		case TIME_DEL:
+			if ((time_t)(time + 1.0 + 0.5) % (24 * 3600) <= 1) {
 				time += 1.0;
-			ntp_timex.status &= ~(STA_INS|STA_DEL);
-		}
+				ntp_state = TIME_WAIT;
+			}
+			break;
+		case TIME_OOP:
+			ntp_state = TIME_WAIT;
+			break;
+		case TIME_WAIT:
+			if (!(ntp_timex.status & (STA_INS | STA_DEL)))
+				ntp_state = TIME_OK;
+			break;
+		default:
+			assert(0);
 	}
 }
 
@@ -255,7 +277,7 @@ void Clock::update_ntp_offset(long offset) {
 }
 
 int Clock::adjtimex(struct timex *buf) {
-	int r = 0;
+	int r = ntp_state;
 	struct timex t;
 
 	if (buf->modes & ADJ_FREQUENCY) {

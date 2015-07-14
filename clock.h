@@ -36,6 +36,7 @@ class Clock {
 	long base_tick;
 
 	struct timex ntp_timex;
+	int ntp_state;
 	int ntp_shift_pll;
 	int ntp_flags;
 	long ntp_update_interval;
