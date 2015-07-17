@@ -95,7 +95,7 @@ static unsigned int node;
 static int initialized = 0;
 static int clknetsim_fd;
 static int precision_hack = 1;
-static unsigned int random_seed;
+static unsigned int random_seed = 0;
 static int fuzz_mode;
 
 enum {
@@ -188,6 +188,14 @@ static void init(void) {
 	_shmget = (int (*)(key_t key, size_t size, int shmflg))dlsym(RTLD_NEXT, "shmget");
 	_shmat = (void *(*)(int shmid, const void *shmaddr, int shmflg))dlsym(RTLD_NEXT, "shmat");
 
+	env = getenv("CLKNETSIM_START_DATE");
+	if (env)
+		system_time_offset = atol(env);
+
+	env = getenv("CLKNETSIM_RANDOM_SEED");
+	if (env)
+		random_seed = atoi(env);
+
 	if (fuzz_init()) {
 		fuzz_mode = 1;
 		node = 0;
@@ -207,16 +215,9 @@ static void init(void) {
 	if (env)
 		snprintf(s.sun_path, sizeof (s.sun_path), "%s", env);
 
-	env = getenv("CLKNETSIM_START_DATE");
-	if (env)
-		system_time_offset = atol(env);
-
 	env = getenv("CLKNETSIM_CONNECT_TIMEOUT");
 	if (env)
 		connect_retries = 10 * atoi(env);
-
-	env = getenv("CLKNETSIM_RANDOM_SEED");
-	random_seed = env ? atoi(env) + node : 0;
 
 	clknetsim_fd = _socket(AF_UNIX, SOCK_SEQPACKET, 0);
 
@@ -1629,7 +1630,7 @@ void srandom(unsigned int seed) {
 	/* override the seed to the fixed seed if set or make it truly
 	   random in case it's based on the simulated time */
 	if (random_seed) {
-		seed = random_seed;
+		seed = random_seed + node;
 	} else if ((f = fopen("/dev/urandom", "r"))) {
 		fread(&seed, sizeof (seed), 1, f);
 		fclose(f);
