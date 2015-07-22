@@ -100,6 +100,9 @@ static void fuzz_process_reply(int request_id, const union Request_data *request
 	static int packet_len = 0;
 	static char packet[MAX_PACKET_SIZE];
 
+	if (reply)
+		memset(reply, 0, replylen);
+
 	switch (request_id) {
 		case REQ_GETTIME:
 			reply->gettime.real_time = network_time;
@@ -172,13 +175,15 @@ static void fuzz_process_reply(int request_id, const union Request_data *request
 			packet_len = 0;
 			break;
 		case REQ_SETTIME:
-		case REQ_ADJTIMEX:
+			network_time = request->settime.time;
+			break;
 		case REQ_ADJTIME:
 		case REQ_GETREFSAMPLE:
 		case REQ_GETREFOFFSETS:
 		case REQ_DEREGISTER:
-			if (reply)
-				memset(reply, 0, replylen);
+			break;
+		case REQ_ADJTIMEX:
+			reply->adjtimex.timex.tick = 10000;
 			break;
 		case REQ_REGISTER:
 		default:
