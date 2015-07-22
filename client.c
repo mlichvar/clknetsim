@@ -96,7 +96,6 @@ static int initialized = 0;
 static int clknetsim_fd;
 static int precision_hack = 1;
 static unsigned int random_seed = 0;
-static int fuzz_mode;
 
 enum {
 	IFACE_NONE = 0,
@@ -197,7 +196,6 @@ static void init(void) {
 		random_seed = atoi(env);
 
 	if (fuzz_init()) {
-		fuzz_mode = 1;
 		node = 0;
 		subnets = 1;
 		initialized = 1;

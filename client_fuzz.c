@@ -21,6 +21,15 @@
    the client, and the client is terminated. Packets sent by the client from
    the port are written to stdout. */
 
+enum {
+	FUZZ_MODE_DISABLED = 0,
+	FUZZ_MODE_ONESHOT = 1,
+	FUZZ_MODE_BURST = 2,
+	FUZZ_MODE_REPLY = 3,
+	FUZZ_MODE_NONE = 4,
+};
+
+static int fuzz_mode;
 static int fuzz_port;
 static double fuzz_start;
 
@@ -30,6 +39,16 @@ static int fuzz_init(void) {
 	env = getenv("CLKNETSIM_FUZZ_MODE");
 	if (!env)
 		return 0;
+
+	fuzz_mode = atoi(env);
+
+	if (fuzz_mode == FUZZ_MODE_DISABLED)
+		return 0;
+
+	if (fuzz_mode < FUZZ_MODE_ONESHOT || fuzz_mode > FUZZ_MODE_NONE) {
+		fprintf(stderr, "clknetsim: unknown fuzz mode.\n");
+		exit(1);
+	}
 
 	env = getenv("CLKNETSIM_FUZZ_PORT");
 	if (!env) {
@@ -45,9 +64,41 @@ static int fuzz_init(void) {
 	return 1;
 }
 
+static int fuzz_read_packet(char *data, int maxlen) {
+	int len;
+	uint16_t slen;
+
+	if (fuzz_mode > FUZZ_MODE_ONESHOT) {
+		if (fread(&slen, 1, sizeof (slen), stdin) != sizeof (slen))
+			return 0;
+		len = ntohs(slen);
+		if (len > maxlen)
+			len = maxlen;
+	} else {
+		len = maxlen;
+	}
+
+	return fread(data, 1, len, stdin);
+}
+
+static void fuzz_write_packet(const char *data, int len) {
+	uint16_t slen;
+
+	if (fuzz_mode > FUZZ_MODE_ONESHOT) {
+		slen = htons(len);
+		fwrite(&slen, 1, sizeof (slen), stdout);
+	}
+
+	fwrite(data, 1, len, stdout);
+}
+
 static void fuzz_process_reply(int request_id, const union Request_data *request, union Reply_data *reply, int replylen) {
 	static double network_time = 0.0;
 	static int received = 0;
+	static int sent = 0;
+	static int dst_port = 0;
+	static int packet_len = 0;
+	static char packet[MAX_PACKET_SIZE];
 
 	switch (request_id) {
 		case REQ_GETTIME:
@@ -56,37 +107,69 @@ static void fuzz_process_reply(int request_id, const union Request_data *request
 			reply->gettime.network_time = network_time;
 			break;
 		case REQ_SELECT:
-			if (received) {
+			if (fuzz_mode == FUZZ_MODE_NONE) {
+				reply->select.ret = REPLY_SELECT_TIMEOUT;
+				return;
+			}
+
+			if (!packet_len && (!received || fuzz_mode != FUZZ_MODE_ONESHOT))
+				packet_len = fuzz_read_packet(packet, sizeof (packet));
+
+			if (!packet_len) {
 				reply->select.ret = REPLY_SELECT_TERMINATE;
-			} else if (network_time < fuzz_start) {
-				network_time += request->select.timeout;
-				if (network_time >= fuzz_start) {
-					network_time = fuzz_start;
-					reply->select.ret = REPLY_SELECT_NORMAL;
-				} else {
-					reply->select.ret = REPLY_SELECT_TIMEOUT;
-				}
 			} else {
-				reply->select.ret = REPLY_SELECT_NORMAL;
+				if (fuzz_mode == FUZZ_MODE_REPLY) {
+					if (sent > received) {
+						reply->select.ret = REPLY_SELECT_NORMAL;
+					} else {
+						network_time += request->select.timeout;
+						reply->select.ret = REPLY_SELECT_TIMEOUT;
+					}
+				} else {
+					if (network_time < fuzz_start && !sent) {
+						network_time += request->select.timeout;
+						if (network_time >= fuzz_start) {
+							network_time = fuzz_start;
+							reply->select.ret = REPLY_SELECT_NORMAL;
+						} else {
+							reply->select.ret = REPLY_SELECT_TIMEOUT;
+						}
+					} else {
+						reply->select.ret = REPLY_SELECT_NORMAL;
+					}
+				}
 			}
 
 			reply->select.subnet = 0;
-			reply->select.dst_port = fuzz_port;
+			reply->select.dst_port = dst_port ? dst_port : fuzz_port;
 			reply->select.time.real_time = network_time;
 			reply->select.time.monotonic_time = network_time;
 			reply->select.time.network_time = network_time;
 			break;
 		case REQ_SEND:
-			if (request->send.src_port == fuzz_port)
-				fwrite(request->send.data, 1, request->send.len, stdout);
+			if (request->send.to != 1)
+				break;
+
+			if (fuzz_mode == FUZZ_MODE_REPLY) {
+				if (request->send.dst_port != fuzz_port)
+					break;
+				dst_port = request->send.src_port;
+			} else if (request->send.src_port != fuzz_port)
+				break;
+
+			fuzz_write_packet(request->send.data, request->send.len);
+			sent++;
 			break;
 		case REQ_RECV:
+			network_time += 1e-1;
 			reply->recv.subnet = 0;
 			reply->recv.from = 1;
 			reply->recv.src_port = fuzz_port;
-			reply->recv.dst_port = fuzz_port;
-			reply->recv.len = fread(reply->recv.data, 1, sizeof (reply->recv.data), stdin);
-			received = 1;
+			reply->recv.dst_port = dst_port ? dst_port : fuzz_port;
+			memcpy(reply->recv.data, packet, packet_len);
+			reply->recv.len = packet_len;
+			received++;
+			packet_len = 0;
 			break;
 		case REQ_SETTIME:
 		case REQ_ADJTIMEX:
