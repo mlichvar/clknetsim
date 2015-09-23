@@ -650,10 +650,19 @@ int adjtime(const struct timeval *delta, struct timeval *olddelta) {
 	struct Request_adjtime req;
 	struct Reply_adjtime rep;
 
-	req.tv = *delta;
+	if (delta)
+		req.tv = *delta;
+	else
+		time_to_timeval(0.0, &req.tv);
+
 	make_request(REQ_ADJTIME, &req, sizeof (req), &rep, sizeof (rep));
 	if (olddelta)
 		*olddelta = rep.tv;
+
+	if (!delta) {
+		req.tv = rep.tv;
+		make_request(REQ_ADJTIME, &req, sizeof (req), &rep, sizeof (rep));
+	}
 	
 	return 0;
 }
