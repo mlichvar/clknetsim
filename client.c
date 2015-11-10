@@ -678,18 +678,23 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	if (exceptfds)
 		FD_ZERO(exceptfds);
 
+	req.read = 0;
+	req._pad = 0;
+
 	/* unknown reading fds are always ready (e.g. chronyd waiting
 	   for name resolving notification, or OpenSSL waiting for
 	   /dev/urandom) */
 	if (readfds) {
 		for (i = 0; i < nfds; i++) {
-			if (FD_ISSET(i, readfds) &&
-				       get_socket_from_fd(i) < 0 &&
-				       get_timer_from_fd(i) < 0) {
+			if (!FD_ISSET(i, readfds))
+				continue;
+			if (get_socket_from_fd(i) < 0 &&
+					get_timer_from_fd(i) < 0) {
 				FD_ZERO(readfds);
 				FD_SET(i, readfds);
 				return 1;
 			}
+			req.read = 1;
 		}
 	}
 

@@ -75,6 +75,8 @@ struct Reply_adjtime {
 
 struct Request_select {
 	double timeout;
+	int read;
+	int _pad;
 };
 
 #define REPLY_SELECT_TIMEOUT 0

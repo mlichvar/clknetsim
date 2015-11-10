@@ -186,7 +186,7 @@ void Node::try_select() {
 #ifdef DEBUG
 		printf("select returned on timeout in %d at %f\n", index, clock.get_real_time());
 #endif
-	} else if (incoming_packets.size() > 0) {
+	} else if (select_read && incoming_packets.size() > 0) {
 		rep.ret = incoming_packets.back()->broadcast ?
 			REPLY_SELECT_BROADCAST :
 			REPLY_SELECT_NORMAL;
@@ -209,9 +209,10 @@ void Node::process_select(Request_select *req) {
 	if (req->timeout < 0.0)
 		req->timeout = 0.0;
 	select_timeout = clock.get_monotonic_time() + req->timeout;
+	select_read = req->read;
 #ifdef DEBUG
-	printf("select called with timeout %f in %d at %f\n",
-			req->timeout, index, clock.get_real_time());
+	printf("select called with timeout %f read %d in %d at %f\n",
+			req->timeout, req->read, index, clock.get_real_time());
 #endif
 	try_select();
 }
