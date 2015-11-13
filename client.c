@@ -79,7 +79,11 @@
 #define BASE_TIMER_ID 0xC1230123
 #define BASE_TIMER_FD 200
 
+#define URANDOM_FILE (void *)0xD1230123
+
 static FILE *(*_fopen)(const char *path, const char *mode);
+static size_t (*_fread)(void *ptr, size_t size, size_t nmemb, FILE *stream);
+static int (*_fclose)(FILE *fp);
 static int (*_open)(const char *pathname, int flags);
 static int (*_close)(int fd);
 static int (*_socket)(int domain, int type, int protocol);
@@ -176,6 +180,8 @@ static void init(void) {
 	assert(!initialized);
 
 	_fopen = (FILE *(*)(const char *path, const char *mode))dlsym(RTLD_NEXT, "fopen");
+	_fread = (size_t (*)(void *ptr, size_t size, size_t nmemb, FILE *stream))dlsym(RTLD_NEXT, "fread");
+	_fclose = (int (*)(FILE *fp))dlsym(RTLD_NEXT, "fclose");
 	_open = (int (*)(const char *pathname, int flags))dlsym(RTLD_NEXT, "open");
 	_close = (int (*)(int fd))dlsym(RTLD_NEXT, "close");
 	_socket = (int (*)(int domain, int type, int protocol))dlsym(RTLD_NEXT, "socket");
@@ -902,9 +908,31 @@ FILE *fopen(const char *path, const char *mode) {
 	if (!strcmp(path, "/proc/net/if_inet6")) {
 		errno = ENOENT;
 		return NULL;
+	} else if (!strcmp(path, "/dev/urandom")) {
+		return URANDOM_FILE;
 	}
 
 	return _fopen(path, mode);
+}
+
+size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream) {
+
+	if (stream == URANDOM_FILE) {
+		size_t i, l = size * nmemb;
+
+		assert(!(l % 2));
+		for (i = 0; i < l / 2; i++)
+			((uint16_t *)ptr)[i] = random();
+		return nmemb;
+	}
+
+	return _fread(ptr, size, nmemb, stream);
+}
+
+int fclose(FILE *fp) {
+	if (fp == URANDOM_FILE)
+		return 0;
+	return _fclose(fp);
 }
 
 int open(const char *pathname, int flags) {
@@ -1643,7 +1671,7 @@ void srandom(unsigned int seed) {
 	   random in case it's based on the simulated time */
 	if (random_seed) {
 		seed = random_seed + node;
-	} else if ((f = fopen("/dev/urandom", "r"))) {
+	} else if ((f = _fopen("/dev/urandom", "r"))) {
 		fread(&seed, sizeof (seed), 1, f);
 		fclose(f);
 	}
