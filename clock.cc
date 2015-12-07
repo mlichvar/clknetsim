@@ -205,12 +205,16 @@ void Clock::update(bool second) {
 			if ((time_t)(time + 0.5) % (24 * 3600) <= 1) {
 				time -= 1.0;
 				ntp_state = TIME_OOP;
+			} else if (!(ntp_timex.status & STA_INS)) {
+				ntp_state = TIME_OK;
 			}
 			break;
 		case TIME_DEL:
 			if ((time_t)(time + 1.0 + 0.5) % (24 * 3600) <= 1) {
 				time += 1.0;
 				ntp_state = TIME_WAIT;
+			} else if (!(ntp_timex.status & STA_DEL)) {
+				ntp_state = TIME_OK;
 			}
 			break;
 		case TIME_OOP:
