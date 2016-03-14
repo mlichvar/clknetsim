@@ -200,6 +200,7 @@ static void init(void) {
 	env = getenv("CLKNETSIM_RANDOM_SEED");
 	if (env)
 		random_seed = atoi(env);
+	srandom(0);
 
 	if (fuzz_init()) {
 		node = 0;
