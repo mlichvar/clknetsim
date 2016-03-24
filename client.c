@@ -116,6 +116,7 @@ struct socket {
 	int remote_node;
 	int remote_port;
 	int broadcast;
+	int pkt_info;
 	int time_stamping;
 };
 
@@ -1102,6 +1103,8 @@ int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t
 			return -1;
 		}
 	}
+	else if (level == IPPROTO_IP && optname == IP_PKTINFO && optlen == sizeof (int))
+		sockets[s].pkt_info = !!(int *)optval;
 #ifdef SO_TIMESTAMPING
 	else if (level == SOL_SOCKET && optname == SO_TIMESTAMPING && optlen == sizeof (int))
 		sockets[s].time_stamping = !!(int *)optval;
@@ -1334,7 +1337,8 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags) {
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	struct Reply_recv rep;
 	struct sockaddr_in *sa;
-	int msglen, s = get_socket_from_fd(sockfd);
+	struct cmsghdr *cmsg;
+	int msglen, cmsglen, s = get_socket_from_fd(sockfd);
 
 	if (sockfd == clknetsim_fd)
 		return _recvmsg(sockfd, msg, flags);
@@ -1376,29 +1380,46 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	msglen = msg->msg_iov[0].iov_len < rep.len ? msg->msg_iov[0].iov_len : rep.len;
 	memcpy(msg->msg_iov[0].iov_base, rep.data, msglen);
 
+	cmsglen = 0;
+
+	if (sockets[s].pkt_info) {
+		struct in_pktinfo ipi;
+
+		cmsglen = CMSG_SPACE(sizeof (ipi));
+		assert(msg->msg_control && msg->msg_controllen >= cmsglen);
+
+		cmsg = CMSG_FIRSTHDR(msg);
+		cmsg->cmsg_level = IPPROTO_IP;
+		cmsg->cmsg_type = IP_PKTINFO;
+		cmsg->cmsg_len = cmsglen;
+
+		memset(&ipi, 0, sizeof (ipi));
+		ipi.ipi_spec_dst.s_addr = htonl(NODE_ADDR(sockets[s].iface - IFACE_ETH0, node));
+
+		memcpy(CMSG_DATA(cmsg), &ipi, sizeof (ipi));
+	}
+
 #ifdef SO_TIMESTAMPING
 	if (sockets[s].time_stamping) {
 		struct timespec ts;
-		struct cmsghdr *cmsg;
-		int len = CMSG_SPACE(3 * sizeof (struct timespec));
 
-		clock_gettime(CLOCK_REALTIME, &ts);
-
-		assert(msg->msg_control && msg->msg_controllen >= len);
+		assert(!cmsglen);
+		cmsglen = CMSG_SPACE(3 * sizeof (ts));
+		assert(msg->msg_control && msg->msg_controllen >= cmsglen);
 
 		cmsg = CMSG_FIRSTHDR(msg);
 		cmsg->cmsg_level = SOL_SOCKET;
 		cmsg->cmsg_type = SO_TIMESTAMPING;
-		cmsg->cmsg_len = len;
+		cmsg->cmsg_len = cmsglen;
+
+		clock_gettime(CLOCK_REALTIME, &ts);
 
 		/* copy as sw and hw time stamp */
 		memcpy((struct timespec *)CMSG_DATA(cmsg), &ts, sizeof (ts));
 		memcpy((struct timespec *)CMSG_DATA(cmsg) + 2, &ts, sizeof (ts));
-
-		msg->msg_controllen = len;
-	} else
+	}
 #endif
-		msg->msg_controllen = 0;
+	msg->msg_controllen = cmsglen;
 
 	return msglen;
 }
