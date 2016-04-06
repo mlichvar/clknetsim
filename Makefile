@@ -1,7 +1,7 @@
-CC=gcc
-CXX=g++
-CFLAGS=-O2 -Wall -g -fPIC
-CXXFLAGS=$(CFLAGS)
+CC ?= gcc
+CXX ?= g++
+CFLAGS += -O2 -Wall -g -fPIC
+CXXFLAGS += $(CFLAGS)
 
 all: clknetsim.so clknetsim
 
