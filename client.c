@@ -864,7 +864,7 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 	return r;
 }
 
-int __poll_chk(struct pollfd *fds, nfds_t nfds, int timeout) {
+int __poll_chk(struct pollfd *fds, nfds_t nfds, int timeout, size_t fdslen) {
 	return poll(fds, nfds, timeout);
 }
 
