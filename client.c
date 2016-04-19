@@ -1694,7 +1694,8 @@ void srandom(unsigned int seed) {
 	if (random_seed) {
 		seed = random_seed + node;
 	} else if ((f = _fopen("/dev/urandom", "r"))) {
-		fread(&seed, sizeof (seed), 1, f);
+		if (fread(&seed, sizeof (seed), 1, f) != 1)
+			;
 		fclose(f);
 	}
 	_srandom(seed);
