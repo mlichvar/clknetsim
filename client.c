@@ -145,7 +145,8 @@ static struct timer timers[MAX_TIMERS];
 
 static timer_t itimer_real_id;
 
-#define SHMKEY 0x4e545030
+#define SHM_KEY 0x4e545030
+#define SHM_REFCLOCKS 4
 
 static struct shmTime {
   int    mode;
@@ -161,10 +162,10 @@ static struct shmTime {
   int    clockTimeStampNSec;
   int    receiveTimeStampNSec;
   int    dummy[8]; 
-} shm_time;
+} shm_time[SHM_REFCLOCKS];
 
-static int refclock_shm_enabled = 0;
-static double refclock_time = 0.0;
+static int shm_refclocks = 0;
+static double shm_refclock_time = 0.0;
 static struct Reply_getrefoffsets refclock_offsets;
 static int refclock_offsets_used = REPLY_GETREFOFFSETS_SIZE;
 
@@ -318,13 +319,17 @@ static double get_monotonic_time(void) {
 	return monotonic_time;
 }
 
-static double get_refclock_time(void) {
-	fetch_time();
+static double get_refclock_offset(void) {
 	if (refclock_offsets_used >= REPLY_GETREFOFFSETS_SIZE) {
 		make_request(REQ_GETREFOFFSETS, NULL, 0, &refclock_offsets, sizeof (refclock_offsets));
 		refclock_offsets_used = 0;
 	}
-	return network_time - refclock_offsets.offsets[refclock_offsets_used++];
+	return refclock_offsets.offsets[refclock_offsets_used++];
+}
+
+static double get_refclock_time(void) {
+	fetch_time();
+	return network_time - get_refclock_offset();
 }
 
 static void settime(double time) {
@@ -339,34 +344,37 @@ static void settime(double time) {
 static void fill_refclock_sample(void) {
 	struct Reply_getrefsample r;
 	double clock_time, receive_time, round_corr;
+	int i;
 
-	if (!refclock_shm_enabled)
+	if (!shm_refclocks)
 		return;
 
 	make_request(REQ_GETREFSAMPLE, NULL, 0, &r, sizeof (r));
 
-	if (r.time == refclock_time || !r.valid)
+	if (r.time == shm_refclock_time || !r.valid)
 		return;
-	refclock_time = r.time;
+	shm_refclock_time = r.time;
 
-	clock_time = r.time - r.offset;
-	receive_time = r.time;
+	for (i = 0; i < shm_refclocks; i++) {
+		clock_time = r.time - (i > 0 ? get_refclock_offset() : r.offset);
+		receive_time = r.time;
 
-	round_corr = (clock_time * 1e6 - floor(clock_time * 1e6) + 0.5) / 1e6;
-	clock_time -= round_corr;
-	receive_time -= round_corr;
+		round_corr = (clock_time * 1e6 - floor(clock_time * 1e6) + 0.5) / 1e6;
+		clock_time -= round_corr;
+		receive_time -= round_corr;
 
-	shm_time.count++;
-	shm_time.clockTimeStampSec = floor(clock_time);
-	shm_time.clockTimeStampUSec = (clock_time - shm_time.clockTimeStampSec) * 1e6;
-	shm_time.clockTimeStampNSec = (clock_time - shm_time.clockTimeStampSec) * 1e9;
-	shm_time.clockTimeStampSec += system_time_offset;
-	shm_time.receiveTimeStampSec = floor(receive_time);
-	shm_time.receiveTimeStampUSec = (receive_time - shm_time.receiveTimeStampSec) * 1e6;
-	shm_time.receiveTimeStampNSec = (receive_time - shm_time.receiveTimeStampSec) * 1e9;
-	shm_time.receiveTimeStampSec += system_time_offset;
-	shm_time.leap = 0;
-	shm_time.valid = 1;
+		shm_time[i].count++;
+		shm_time[i].clockTimeStampSec = floor(clock_time);
+		shm_time[i].clockTimeStampUSec = (clock_time - shm_time[i].clockTimeStampSec) * 1e6;
+		shm_time[i].clockTimeStampNSec = (clock_time - shm_time[i].clockTimeStampSec) * 1e9;
+		shm_time[i].clockTimeStampSec += system_time_offset;
+		shm_time[i].receiveTimeStampSec = floor(receive_time);
+		shm_time[i].receiveTimeStampUSec = (receive_time - shm_time[i].receiveTimeStampSec) * 1e6;
+		shm_time[i].receiveTimeStampNSec = (receive_time - shm_time[i].receiveTimeStampSec) * 1e9;
+		shm_time[i].receiveTimeStampSec += system_time_offset;
+		shm_time[i].leap = 0;
+		shm_time[i].valid = 1;
+	}
 }
 
 static int socket_in_subnet(int socket, int subnet) {
@@ -1595,8 +1603,8 @@ int shmget(key_t key, size_t size, int shmflg) {
 	if (fuzz_mode)
 		return _shmget(key, size, shmflg);
 
-	if (key == SHMKEY)
-		return SHMKEY;
+	if (key >= SHM_KEY && key < SHM_KEY + SHM_REFCLOCKS)
+		return key;
 
 	return -1;
 }
@@ -1605,19 +1613,19 @@ void *shmat(int shmid, const void *shmaddr, int shmflg) {
 	if (fuzz_mode)
 		return _shmat(shmid, shmaddr, shmflg);
 
-	assert(shmid == SHMKEY);
+	assert(shmid >= SHM_KEY && shmid < SHM_KEY + SHM_REFCLOCKS);
 
-	refclock_shm_enabled = 1;
-	memset(&shm_time, 0, sizeof (shm_time));
-	shm_time.mode = 1;
-	shm_time.precision = -20;
+	if (shm_refclocks < shmid - SHM_KEY + 1)
+		shm_refclocks = shmid - SHM_KEY + 1;
+	memset(&shm_time[shmid - SHM_KEY], 0, sizeof (shm_time[0]));
+	shm_time[shmid - SHM_KEY].mode = 1;
+	shm_time[shmid - SHM_KEY].precision = -20;
 
-	return &shm_time;
+	return &shm_time[shmid - SHM_KEY];
 }
 
 int shmdt(const void *shmaddr) {
-	assert(shmaddr == &shm_time);
-	refclock_shm_enabled = 0;
+	assert(shmaddr >= (void *)&shm_time[0] && shmaddr < (void *)&shm_time[SHM_REFCLOCKS]);
 	return 0;
 }
 
