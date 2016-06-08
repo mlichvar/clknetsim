@@ -1397,6 +1397,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		assert(msg->msg_control && msg->msg_controllen >= cmsglen);
 
 		cmsg = CMSG_FIRSTHDR(msg);
+		memset(cmsg, 0, sizeof (*cmsg));
 		cmsg->cmsg_level = IPPROTO_IP;
 		cmsg->cmsg_type = IP_PKTINFO;
 		cmsg->cmsg_len = cmsglen;
@@ -1416,6 +1417,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		assert(msg->msg_control && msg->msg_controllen >= cmsglen);
 
 		cmsg = CMSG_FIRSTHDR(msg);
+		memset(cmsg, 0, sizeof (*cmsg));
 		cmsg->cmsg_level = SOL_SOCKET;
 		cmsg->cmsg_type = SO_TIMESTAMPING;
 		cmsg->cmsg_len = cmsglen;
@@ -1439,6 +1441,9 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *
 
 	iov.iov_base = (void *)buf;
 	iov.iov_len = len;
+
+	/* needed for compatibility with old glibc recvmsg() */
+	memset(&msg, 0, sizeof (msg));
 
 	msg.msg_name = (void *)src_addr;
 	msg.msg_namelen = *addrlen;
