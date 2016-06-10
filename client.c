@@ -356,8 +356,13 @@ static void fill_refclock_sample(void) {
 	shm_refclock_time = r.time;
 
 	for (i = 0; i < shm_refclocks; i++) {
-		clock_time = r.time - (i > 0 ? get_refclock_offset() : r.offset);
-		receive_time = r.time;
+		if (shm_refclocks == 1) {
+			clock_time = r.time - r.offset;
+			receive_time = r.time;
+		} else {
+			clock_time = get_refclock_time();
+			receive_time = get_real_time();
+		}
 
 		round_corr = (clock_time * 1e6 - floor(clock_time * 1e6) + 0.5) / 1e6;
 		clock_time -= round_corr;
