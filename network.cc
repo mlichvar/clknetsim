@@ -234,6 +234,7 @@ bool Network::run(double time_limit) {
 		while (packet_queue.get_timeout(time) <= 0) {
 			assert(packet_queue.get_timeout(time) > -1e-10);
 			struct Packet *packet = packet_queue.dequeue();
+			stats[packet->to].update_packet_stats(true, time, packet->delay);
 			nodes[packet->to]->receive(packet);
 		}
 	}
@@ -371,8 +372,8 @@ void Network::send(struct Packet *packet) {
 
 	if (delay > 0.0) {
 		packet->receive_time = time + delay;
+		packet->delay = delay;
 		packet_queue.insert(packet);
-		stats[packet->to].update_packet_stats(true, time + delay, delay);
 #ifdef DEBUG
 		printf("sending packet from %d to %d:%d:%d at %f delay %f \n",
 				packet->from, packet->subnet, packet->to,

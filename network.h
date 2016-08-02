@@ -28,6 +28,7 @@ using namespace std;
 
 struct Packet {
 	double receive_time;
+	double delay;
 	int broadcast;
 	unsigned int subnet;
 	unsigned int from;
