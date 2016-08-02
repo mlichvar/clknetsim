@@ -100,6 +100,7 @@ static int initialized = 0;
 static int clknetsim_fd;
 static int precision_hack = 1;
 static unsigned int random_seed = 0;
+static int recv_multiply = 1;
 
 enum {
 	IFACE_NONE = 0,
@@ -203,6 +204,10 @@ static void init(void) {
 	if (env)
 		random_seed = atoi(env);
 	srandom(0);
+
+	env = getenv("CLKNETSIM_RECV_MULTIPLY");
+	if (env)
+		recv_multiply = atoi(env);
 
 	if (fuzz_init()) {
 		node = 0;
@@ -1345,6 +1350,43 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags, const struct 
 
 ssize_t send(int sockfd, const void *buf, size_t len, int flags) {
 	return sendto(sockfd, buf, len, flags, NULL, 0);
+}
+
+int recvmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen, int flags, struct timespec *timeout) {
+	ssize_t len;
+	int i, n;
+
+	assert(vlen > 0);
+	len = recvmsg(sockfd, &msgvec[0].msg_hdr, flags);
+	if (len < 0)
+		return -1;
+	msgvec[0].msg_len = len;
+
+	if (recv_multiply <= 1 || vlen <= 1)
+		return 1;
+
+	n = random() % recv_multiply + 1;
+	if (n > vlen)
+		n = vlen;
+
+	for (i = 1; i < n; i++) {
+		struct msghdr *src = &msgvec[0].msg_hdr, *dst = &msgvec[i].msg_hdr;
+		if (dst->msg_name) {
+			memcpy(dst->msg_name, src->msg_name, src->msg_namelen);
+			dst->msg_namelen = src->msg_namelen;
+		}
+		assert(dst->msg_iovlen == 1 && dst->msg_iov[0].iov_len >= len);
+		memcpy(dst->msg_iov[0].iov_base, src->msg_iov[0].iov_base, len);
+		if (dst->msg_control) {
+			assert(dst->msg_controllen >= src->msg_controllen);
+			memcpy(dst->msg_control, src->msg_control, src->msg_controllen);
+			dst->msg_controllen = src->msg_controllen;
+		}
+		dst->msg_flags = src->msg_flags;
+		msgvec[i].msg_len = msgvec[0].msg_len;
+	}
+
+	return n;
 }
 
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
