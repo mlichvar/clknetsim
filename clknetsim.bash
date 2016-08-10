@@ -144,15 +144,19 @@ generate_config2() {
 }
 
 generate_config3() {
-    local topnodes=$1 nodes=$2 offset=$3 freqexpr=$4 delayexpr=$5 i j
+    local topnodes=$1 nodes=$2 offset=$3 freqexpr=$4 delayexprup=$5 delayexprdown=$6 i j
 
     for i in `seq $[$topnodes + 1] $nodes`; do
 	echo "node${i}_offset = $offset"
 	echo "node${i}_freq = $freqexpr"
 	for j in `seq 1 $topnodes`; do
 	    [ $i -eq $j ] && continue
-	    echo "node${i}_delay${j} = $delayexpr"
-	    echo "node${j}_delay${i} = $delayexpr"
+	    echo "node${i}_delay${j} = $delayexprup"
+	    if [ -n "$delayexprdown" ]; then
+		echo "node${j}_delay${i} = $delayexprdown"
+	    else
+		echo "node${j}_delay${i} = $delayexprup"
+	    fi
 	done
     done > tmp/conf
 }
