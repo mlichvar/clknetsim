@@ -1673,6 +1673,9 @@ void *shmat(int shmid, const void *shmaddr, int shmflg) {
 	shm_time[shmid - SHM_KEY].mode = 1;
 	shm_time[shmid - SHM_KEY].precision = -20;
 
+	/* don't wait for select() with starting of the refclock generator */
+	fill_refclock_sample();
+
 	return &shm_time[shmid - SHM_KEY];
 }
 
