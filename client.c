@@ -1447,7 +1447,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		memset(cmsg, 0, sizeof (*cmsg));
 		cmsg->cmsg_level = IPPROTO_IP;
 		cmsg->cmsg_type = IP_PKTINFO;
-		cmsg->cmsg_len = cmsglen;
+		cmsg->cmsg_len = CMSG_LEN(sizeof (ipi));
 
 		memset(&ipi, 0, sizeof (ipi));
 		ipi.ipi_spec_dst.s_addr = htonl(NODE_ADDR(sockets[s].iface - IFACE_ETH0, node));
@@ -1459,15 +1459,15 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	if (sockets[s].time_stamping) {
 		struct timespec ts;
 
-		assert(!cmsglen);
-		cmsglen = CMSG_SPACE(3 * sizeof (ts));
+		/* don't use CMSG_NXTHDR as it's buggy in glibc */
+		cmsg = (struct cmsghdr *)((char *)CMSG_FIRSTHDR(msg) + cmsglen);
+		cmsglen += CMSG_SPACE(3 * sizeof (ts));
 		assert(msg->msg_control && msg->msg_controllen >= cmsglen);
 
-		cmsg = CMSG_FIRSTHDR(msg);
 		memset(cmsg, 0, sizeof (*cmsg));
 		cmsg->cmsg_level = SOL_SOCKET;
 		cmsg->cmsg_type = SO_TIMESTAMPING;
-		cmsg->cmsg_len = cmsglen;
+		cmsg->cmsg_len = CMSG_LEN(3 * sizeof (ts));
 
 		clock_gettime(CLOCK_REALTIME, &ts);
 
