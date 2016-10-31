@@ -1450,7 +1450,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		cmsg->cmsg_len = CMSG_LEN(sizeof (ipi));
 
 		memset(&ipi, 0, sizeof (ipi));
-		ipi.ipi_spec_dst.s_addr = htonl(NODE_ADDR(sockets[s].iface - IFACE_ETH0, node));
+		ipi.ipi_spec_dst.s_addr = htonl(NODE_ADDR(rep.subnet, node));
 		ipi.ipi_addr.s_addr = ipi.ipi_spec_dst.s_addr;
 
 		memcpy(CMSG_DATA(cmsg), &ipi, sizeof (ipi));
