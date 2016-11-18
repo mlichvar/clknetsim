@@ -1352,7 +1352,11 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags) {
 	return sendto(sockfd, buf, len, flags, NULL, 0);
 }
 
-int recvmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen, int flags, struct timespec *timeout) {
+int recvmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen, int flags,
+#if !defined(__GLIBC_PREREQ) || !(__GLIBC_PREREQ(2, 20))
+		const
+#endif
+		struct timespec *timeout) {
 	ssize_t len;
 	int i, n;
 
