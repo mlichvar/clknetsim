@@ -83,6 +83,7 @@
 
 static FILE *(*_fopen)(const char *path, const char *mode);
 static size_t (*_fread)(void *ptr, size_t size, size_t nmemb, FILE *stream);
+static int (*_fileno)(FILE *stream);
 static int (*_fclose)(FILE *fp);
 static int (*_open)(const char *pathname, int flags);
 static int (*_close)(int fd);
@@ -184,6 +185,7 @@ static void init(void) {
 
 	_fopen = (FILE *(*)(const char *path, const char *mode))dlsym(RTLD_NEXT, "fopen");
 	_fread = (size_t (*)(void *ptr, size_t size, size_t nmemb, FILE *stream))dlsym(RTLD_NEXT, "fread");
+	_fileno = (int (*)(FILE *stream))dlsym(RTLD_NEXT, "fileno");
 	_fclose = (int (*)(FILE *fp))dlsym(RTLD_NEXT, "fclose");
 	_open = (int (*)(const char *pathname, int flags))dlsym(RTLD_NEXT, "open");
 	_close = (int (*)(int fd))dlsym(RTLD_NEXT, "close");
@@ -947,6 +949,13 @@ size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream) {
 	}
 
 	return _fread(ptr, size, nmemb, stream);
+}
+
+int fileno(FILE *stream) {
+	if (stream == URANDOM_FILE)
+		return -1;
+
+	return _fileno(stream);
 }
 
 int fclose(FILE *fp) {
