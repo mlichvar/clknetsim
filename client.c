@@ -102,6 +102,7 @@ static int clknetsim_fd;
 static int precision_hack = 1;
 static unsigned int random_seed = 0;
 static int recv_multiply = 1;
+static int timestamping = 1;
 
 enum {
 	IFACE_NONE = 0,
@@ -124,6 +125,15 @@ struct socket {
 
 static struct socket sockets[MAX_SOCKETS];
 static int subnets;
+
+struct ts_msg {
+	char data[MAX_PACKET_SIZE];
+	int len;
+	int subnet;
+	int to;
+	int port;
+	int sockfd;
+} last_ts_msg;
 
 static double real_time = 0.0;
 static double monotonic_time = 0.0;
@@ -210,6 +220,10 @@ static void init(void) {
 	env = getenv("CLKNETSIM_RECV_MULTIPLY");
 	if (env)
 		recv_multiply = atoi(env);
+
+	env = getenv("CLKNETSIM_TIMESTAMPING");
+	if (env)
+		timestamping = atoi(env);
 
 	if (fuzz_init()) {
 		node = 0;
@@ -703,8 +717,21 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 
 	if (writefds)
 		FD_ZERO(writefds);
-	if (exceptfds)
+
+	if (exceptfds) {
+		/* chronyd waiting for TX timestamp from the error queue */
+		for (i = 0; i < nfds; i++) {
+			if (!FD_ISSET(i, exceptfds) || i != last_ts_msg.sockfd)
+				continue;
+			if (readfds)
+				FD_ZERO(readfds);
+			FD_ZERO(exceptfds);
+			FD_SET(i, exceptfds);
+			return 1;
+		}
+
 		FD_ZERO(exceptfds);
+	}
 
 	req.read = 0;
 	req._pad = 0;
@@ -1133,8 +1160,13 @@ int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t
 	else if (level == IPPROTO_IP && optname == IP_PKTINFO && optlen == sizeof (int))
 		sockets[s].pkt_info = !!(int *)optval;
 #ifdef SO_TIMESTAMPING
-	else if (level == SOL_SOCKET && optname == SO_TIMESTAMPING && optlen == sizeof (int))
+	else if (level == SOL_SOCKET && optname == SO_TIMESTAMPING && optlen == sizeof (int)) {
+		if (!timestamping) {
+			errno = EINVAL;
+			return -1;
+		}
 		sockets[s].time_stamping = !!(int *)optval;
+	}
 #endif
 
 	/* unhandled options succeed too */
@@ -1337,6 +1369,18 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 
 	make_request(REQ_SEND, &req, offsetof(struct Request_send, data) + req.len, NULL, 0);
 
+	if (sockets[s].time_stamping) {
+		assert(req.len <= sizeof (last_ts_msg.data));
+		memcpy(last_ts_msg.data, req.data, req.len);
+		last_ts_msg.len = req.len;
+		last_ts_msg.subnet = req.subnet;
+		last_ts_msg.to = req.to;
+		last_ts_msg.port = req.dst_port;
+		last_ts_msg.sockfd = sockfd;
+	} else {
+		last_ts_msg.sockfd = -1;
+	}
+
 	return req.len;
 }
 
@@ -1413,15 +1457,36 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 
 	assert(s >= 0 && sockets[s].type == SOCK_DGRAM);
 
-	if (sockets[s].time_stamping && flags == MSG_ERRQUEUE) {
-		/* dummy message for tx time stamp */
-		assert(sockets[s].iface >= IFACE_ETH0);
-		rep.subnet = sockets[s].iface - IFACE_ETH0;
-		rep.from = node;
-		rep.src_port = sockets[s].remote_port;
+	if (sockets[s].time_stamping && flags & MSG_ERRQUEUE) {
+		uint32_t addr;
+		uint16_t port;
+
+		/* last message looped back to the error queue */
+
+		assert(sockfd == last_ts_msg.sockfd);
+		last_ts_msg.sockfd = -1;
+		msg->msg_flags = MSG_ERRQUEUE;
+
+		rep.subnet = last_ts_msg.subnet;
+		rep.from = last_ts_msg.to;
+		rep.src_port = last_ts_msg.port;
 		rep.dst_port = sockets[s].port;
-		rep.len = 1;
-		rep.data[0] = 0;
+
+		addr = htonl(NODE_ADDR(rep.subnet, rep.from));
+		port = htons(rep.src_port);
+
+		/* put the message in an Ethernet frame */
+		memset(rep.data, 0, 42);
+		rep.data[12] = 0x08;
+		rep.data[14] = 0x45;
+		rep.data[23] = 17;
+		memcpy(rep.data + 30, &addr, sizeof (addr));
+		memcpy(rep.data + 36, &port, sizeof (port));
+
+		assert(last_ts_msg.len + 42 <= sizeof (rep.data));
+		memcpy(rep.data + 42, last_ts_msg.data, last_ts_msg.len);
+
+		rep.len = 42 + last_ts_msg.len;
 	} else
 		make_request(REQ_RECV, NULL, 0, &rep, sizeof (rep));
 
