@@ -191,7 +191,8 @@ static void init(void) {
 	const char *env;
 	unsigned int connect_retries = 100; /* 10 seconds */
 
-	assert(!initialized);
+	if (initialized)
+		return;
 
 	_fopen = (FILE *(*)(const char *path, const char *mode))dlsym(RTLD_NEXT, "fopen");
 	_fread = (size_t (*)(void *ptr, size_t size, size_t nmemb, FILE *stream))dlsym(RTLD_NEXT, "fread");
@@ -960,6 +961,10 @@ FILE *fopen(const char *path, const char *mode) {
 	} else if (!strcmp(path, "/dev/urandom")) {
 		return URANDOM_FILE;
 	}
+
+	/* make sure _fopen is initialized in case it is called from another
+	   constructor (e.g. OpenSSL's libcrypto) */
+	init();
 
 	return _fopen(path, mode);
 }
