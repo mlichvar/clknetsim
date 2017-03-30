@@ -13,13 +13,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+[ -n "$CLKNETSIM_TMPDIR" ] || CLKNETSIM_TMPDIR=tmp
+
 client_pids=""
 
 start_client() {
     local node=$1 client=$2 config=$3 suffix=$4 opts=$5
     local args=() line lastpid
 
-    rm -f tmp/log.$node tmp/conf.$node
+    rm -f $CLKNETSIM_TMPDIR/log.$node $CLKNETSIM_TMPDIR/conf.$node
 
     [ $client = chrony ] && client=chronyd
     [ $client = ntp ] && client=ntpd
@@ -31,29 +33,29 @@ start_client() {
 
     case $client in
 	chronyd)
-	    cat > tmp/conf.$node <<-EOF
-		pidfile tmp/pidfile.$node
+	    cat > $CLKNETSIM_TMPDIR/conf.$node <<-EOF
+		pidfile $CLKNETSIM_TMPDIR/pidfile.$node
 		allow
 		cmdallow
 		bindcmdaddress 0.0.0.0
 		$config
 		EOF
-	    args=(-d -f tmp/conf.$node $opts)
+	    args=(-d -f $CLKNETSIM_TMPDIR/conf.$node $opts)
 	    ;;
 	ntpd)
-	    cat > tmp/conf.$node <<-EOF
-		pidfile tmp/pidfile.$node
+	    cat > $CLKNETSIM_TMPDIR/conf.$node <<-EOF
+		pidfile $CLKNETSIM_TMPDIR/pidfile.$node
 		restrict default
 		$config
 		EOF
-	    args=(-n -c tmp/conf.$node $opts)
+	    args=(-n -c $CLKNETSIM_TMPDIR/conf.$node $opts)
 	    ;;
 	ptp4l)
-	    cat > tmp/conf.$node <<-EOF
+	    cat > $CLKNETSIM_TMPDIR/conf.$node <<-EOF
 		[global]
 		$config
 		EOF
-	    args=(-f tmp/conf.$node $opts)
+	    args=(-f $CLKNETSIM_TMPDIR/conf.$node $opts)
 	    ;;
 	chronyc)
 	    args=($opts -m)
@@ -88,8 +90,8 @@ start_client() {
     esac
 
     LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
-    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=tmp/sock \
-    $client_wrapper $client$suffix "${args[@]}" &> tmp/log.$node &
+    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=$CLKNETSIM_TMPDIR/sock \
+    $client_wrapper $client$suffix "${args[@]}" &> $CLKNETSIM_TMPDIR/log.$node &
     lastpid=$!
     disown $lastpid
 
@@ -99,7 +101,8 @@ start_client() {
 start_server() {
     local nodes=$1 ret=0
     shift
-    $server_wrapper $CLKNETSIM_PATH/clknetsim "$@" -s tmp/sock tmp/conf $nodes > tmp/stats 2> tmp/log
+    $server_wrapper $CLKNETSIM_PATH/clknetsim "$@" -s $CLKNETSIM_TMPDIR/sock \
+	$CLKNETSIM_TMPDIR/conf $nodes > $CLKNETSIM_TMPDIR/stats 2> $CLKNETSIM_TMPDIR/log
     if [ $? -ne 0 ]; then
         echo clknetsim failed 1>&2
         ret=1
@@ -126,7 +129,7 @@ generate_config1() {
 	    echo "node1_delay${i} = $delayexprup"
 	fi
         [ -n "$refclockexpr" ] && echo "node${i}_refclock = $refclockexpr"
-    done > tmp/conf
+    done > $CLKNETSIM_TMPDIR/conf
 }
 
 generate_config2() {
@@ -140,7 +143,7 @@ generate_config2() {
 	    echo "node${i}_delay${j} = $delayexpr"
 	    echo "node${j}_delay${i} = $delayexpr"
 	done
-    done > tmp/conf
+    done > $CLKNETSIM_TMPDIR/conf
 }
 
 generate_config3() {
@@ -158,7 +161,7 @@ generate_config3() {
 		echo "node${j}_delay${i} = $delayexprup"
 	    fi
 	done
-    done > tmp/conf
+    done > $CLKNETSIM_TMPDIR/conf
 }
 
 generate_config4() {
@@ -177,7 +180,7 @@ generate_config4() {
 	    done
 	    added="$added $i"
 	done
-    done > tmp/conf
+    done > $CLKNETSIM_TMPDIR/conf
 }
 
 find_sync() {
@@ -219,9 +222,9 @@ get_stat() {
     local statname=$1 index=$2
 
     if [ -z "$index" ]; then
-	echo $(cat tmp/stats | grep "^$statname:" | cut -f 2)
+	echo $(cat $CLKNETSIM_TMPDIR/stats | grep "^$statname:" | cut -f 2)
     else
-	cat tmp/stats | grep "^$statname:" | cut -f 2 |
+	cat $CLKNETSIM_TMPDIR/stats | grep "^$statname:" | cut -f 2 |
 	head -n $index | tail -n 1
     fi
 }
@@ -250,4 +253,4 @@ if [ ! -x "$CLKNETSIM_PATH/clknetsim" -o ! -e "$CLKNETSIM_PATH/clknetsim.so" ]; 
     exit 1
 fi
 
-[ -d tmp ] || mkdir tmp
+[ -d $CLKNETSIM_TMPDIR ] || mkdir $CLKNETSIM_TMPDIR
