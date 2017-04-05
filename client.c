@@ -1285,7 +1285,7 @@ int getifaddrs(struct ifaddrs **ifap) {
 	struct iface {
 		struct ifaddrs ifaddrs;
 		struct sockaddr_in addr, netmask, broadaddr;
-		char name[10];
+		char name[11];
 	} *ifaces;
 	int i;
        
