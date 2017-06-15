@@ -1833,6 +1833,11 @@ long syscall(long number, ...) {
 }
 #endif
 
+ssize_t getrandom(void *buf, size_t length, unsigned int flags) {
+	errno = ENOTSUP;
+	return -1;
+}
+
 void srandom(unsigned int seed) {
 	FILE *f;
 
