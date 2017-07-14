@@ -216,7 +216,6 @@ static void init(void) {
 	env = getenv("CLKNETSIM_RANDOM_SEED");
 	if (env)
 		random_seed = atoi(env);
-	srandom(0);
 
 	env = getenv("CLKNETSIM_RECV_MULTIPLY");
 	if (env)
@@ -259,6 +258,9 @@ static void init(void) {
 		}
 		_usleep(100000);
 	}
+
+	/* this requires the node variable to be already set */
+	srandom(0);
 
 	initialized = 1;
 
