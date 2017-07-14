@@ -872,7 +872,8 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 
 	/* ptp4l waiting for tx SO_TIMESTAMPING */
 	if (nfds == 1 && fds[0].events != POLLOUT && get_socket_from_fd(fds[0].fd) >= 0 &&
-			sockets[get_socket_from_fd(fds[0].fd)].time_stamping) {
+	    sockets[get_socket_from_fd(fds[0].fd)].time_stamping &
+	    (SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_TX_HARDWARE)) {
 		if (!fds[0].events) {
 			fds[0].revents = POLLERR;
 			return 1;
@@ -1172,7 +1173,7 @@ int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t
 			errno = EINVAL;
 			return -1;
 		}
-		sockets[s].time_stamping = !!(int *)optval;
+		sockets[s].time_stamping = *(int *)optval;
 	}
 #endif
 
@@ -1376,7 +1377,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 
 	make_request(REQ_SEND, &req, offsetof(struct Request_send, data) + req.len, NULL, 0);
 
-	if (sockets[s].time_stamping) {
+	if (sockets[s].time_stamping & (SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_TX_HARDWARE)) {
 		assert(req.len <= sizeof (last_ts_msg.data));
 		memcpy(last_ts_msg.data, req.data, req.len);
 		last_ts_msg.len = req.len;
@@ -1464,7 +1465,8 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 
 	assert(s >= 0 && sockets[s].type == SOCK_DGRAM);
 
-	if (sockets[s].time_stamping && flags & MSG_ERRQUEUE) {
+	if (sockets[s].time_stamping & (SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_TX_HARDWARE) &&
+	    flags & MSG_ERRQUEUE) {
 		uint32_t addr;
 		uint16_t port;
 
@@ -1542,7 +1544,10 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	}
 
 #ifdef SO_TIMESTAMPING
-	if (sockets[s].time_stamping) {
+	if ((sockets[s].time_stamping & (SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_TX_HARDWARE) &&
+	     flags & MSG_ERRQUEUE) ||
+	    (sockets[s].time_stamping & (SOF_TIMESTAMPING_RX_SOFTWARE | SOF_TIMESTAMPING_RX_HARDWARE) &&
+	     !(flags & MSG_ERRQUEUE))) {
 		struct timespec ts;
 
 		/* don't use CMSG_NXTHDR as it's buggy in glibc */
@@ -1558,8 +1563,10 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		clock_gettime(CLOCK_REALTIME, &ts);
 
 		/* copy as sw and hw time stamp */
-		memcpy((struct timespec *)CMSG_DATA(cmsg), &ts, sizeof (ts));
-		memcpy((struct timespec *)CMSG_DATA(cmsg) + 2, &ts, sizeof (ts));
+		if (sockets[s].time_stamping & SOF_TIMESTAMPING_SOFTWARE)
+			memcpy((struct timespec *)CMSG_DATA(cmsg), &ts, sizeof (ts));
+		if (sockets[s].time_stamping & SOF_TIMESTAMPING_RAW_HARDWARE)
+			memcpy((struct timespec *)CMSG_DATA(cmsg) + 2, &ts, sizeof (ts));
 	}
 #endif
 	msg->msg_controllen = cmsglen;
