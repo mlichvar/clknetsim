@@ -1555,7 +1555,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		cmsglen += CMSG_SPACE(3 * sizeof (ts));
 		assert(msg->msg_control && msg->msg_controllen >= cmsglen);
 
-		memset(cmsg, 0, sizeof (*cmsg));
+		memset(cmsg, 0, CMSG_SPACE(3 * sizeof (ts)));
 		cmsg->cmsg_level = SOL_SOCKET;
 		cmsg->cmsg_type = SO_TIMESTAMPING;
 		cmsg->cmsg_len = CMSG_LEN(3 * sizeof (ts));
