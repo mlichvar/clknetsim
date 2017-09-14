@@ -1272,6 +1272,19 @@ int ioctl(int fd, unsigned long request, ...) {
 		/* maximum frequency in 32-bit timex.freq */
 		caps->max_adj = 32767999;
 #endif
+#ifdef PTP_SYS_OFFSET_PRECISE
+	} else if (request == PTP_SYS_OFFSET_PRECISE && fd == REFCLK_FD) {
+		struct ptp_sys_offset_precise *sys_off = va_arg(ap, struct ptp_sys_offset_precise *);
+		struct timespec ts;
+
+		clock_gettime(REFCLK_ID, &ts);
+		sys_off->device.sec = ts.tv_sec;
+		sys_off->device.nsec = ts.tv_nsec;
+
+		clock_gettime(CLOCK_REALTIME, &ts);
+		sys_off->sys_realtime.sec = ts.tv_sec;
+		sys_off->sys_realtime.nsec = ts.tv_nsec;
+#endif
 #ifdef SIOCSHWTSTAMP
 	} else if (request == SIOCSHWTSTAMP && s >= 0) {
 #endif
