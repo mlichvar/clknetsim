@@ -1261,7 +1261,7 @@ int ioctl(int fd, unsigned long request, ...) {
 				SOF_TIMESTAMPING_RAW_HARDWARE |
 				SOF_TIMESTAMPING_TX_HARDWARE | SOF_TIMESTAMPING_RX_HARDWARE;
 			info->tx_types = HWTSTAMP_TX_ON;
-			info->rx_filters = HWTSTAMP_FILTER_NONE | HWTSTAMP_FILTER_ALL;
+			info->rx_filters = 1 << HWTSTAMP_FILTER_NONE | 1 << HWTSTAMP_FILTER_ALL;
 		} else
 			ret = -1, errno = EINVAL;
 #endif
