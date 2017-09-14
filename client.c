@@ -1552,6 +1552,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		memset(&ipi, 0, sizeof (ipi));
 		ipi.ipi_spec_dst.s_addr = htonl(NODE_ADDR(rep.subnet, node));
 		ipi.ipi_addr.s_addr = ipi.ipi_spec_dst.s_addr;
+		ipi.ipi_ifindex = rep.subnet + 1;
 
 		memcpy(CMSG_DATA(cmsg), &ipi, sizeof (ipi));
 	}
