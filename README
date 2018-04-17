@@ -21,7 +21,7 @@ Supported programs:
 - chronyd and chronyc from chrony (http://chrony.tuxfamily.org/)
 - ntpd, ntpdate, sntp and ntpq from ntp (http://www.ntp.org/)
 - ntpd from busybox (http://www.busybox.net/)
-- ptp4l, phc2sys and pmc from linuxptp (http://linuxptp.sourceforge.net/)
+- ptp4l, phc2sys, pmc and nsm from linuxptp (http://linuxptp.sourceforge.net/)
 
 Limitations:
 - only Linux is supported

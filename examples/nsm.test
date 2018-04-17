@@ -1,0 +1,19 @@
+#!/bin/bash
+
+CLKNETSIM_PATH=..
+. ../clknetsim.bash
+
+generate_config4 "1 3" "1 2 3" 0.01 "(sum (* 1e-9 (normal)))" "(* 1e-8 (exponential))"
+
+echo 'node3_start = 50' >> tmp/conf
+
+start_client 1 ptp4l "hybrid_e2e 1
+net_sync_monitor 1" "" "-i eth0"
+start_client 2 ptp4l "hybrid_e2e 1
+net_sync_monitor 1" "" "-i eth0"
+start_client 3 nsm "NSM 192.168.123.1
+NSM 192.168.123.2" "" "-i eth0"
+
+start_server 3 -l 110
+
+cat tmp/log.3
