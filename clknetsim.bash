@@ -83,6 +83,10 @@ start_client() {
 	phc2sys)
 	    args=(-s /dev/ptp0 -O 0 $opts $config)
 	    ;;
+	nsm)
+	    args=($opts)
+	    while read line; do args+=("$line"); done <<< "$config"
+	    ;;
 	*)
 	    echo "unknown client $client"
 	    exit 1
