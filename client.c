@@ -111,6 +111,14 @@ enum {
 	IFACE_ETH0,
 };
 
+struct ts_message {
+	char data[MAX_PACKET_SIZE];
+	unsigned int len;
+	unsigned int subnet;
+	unsigned int to;
+	unsigned int port;
+};
+
 struct socket {
 	int used;
 	int type;
@@ -121,19 +129,11 @@ struct socket {
 	int broadcast;
 	int pkt_info;
 	int time_stamping;
+	struct ts_message last_ts_msg;
 };
 
 static struct socket sockets[MAX_SOCKETS];
 static int subnets;
-
-struct ts_msg {
-	char data[MAX_PACKET_SIZE];
-	int len;
-	int subnet;
-	int to;
-	int port;
-	int sockfd;
-} last_ts_msg;
 
 static double real_time = 0.0;
 static double monotonic_time = 0.0;
@@ -724,7 +724,8 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	if (exceptfds) {
 		/* chronyd waiting for TX timestamp from the error queue */
 		for (i = 0; i < nfds; i++) {
-			if (!FD_ISSET(i, exceptfds) || i != last_ts_msg.sockfd)
+			if (!FD_ISSET(i, exceptfds) || get_socket_from_fd(i) < 0 ||
+					!sockets[get_socket_from_fd(i)].last_ts_msg.len)
 				continue;
 			if (readfds)
 				FD_ZERO(readfds);
@@ -1391,15 +1392,14 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 	make_request(REQ_SEND, &req, offsetof(struct Request_send, data) + req.len, NULL, 0);
 
 	if (sockets[s].time_stamping & (SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_TX_HARDWARE)) {
-		assert(req.len <= sizeof (last_ts_msg.data));
-		memcpy(last_ts_msg.data, req.data, req.len);
-		last_ts_msg.len = req.len;
-		last_ts_msg.subnet = req.subnet;
-		last_ts_msg.to = req.to;
-		last_ts_msg.port = req.dst_port;
-		last_ts_msg.sockfd = sockfd;
-	} else {
-		last_ts_msg.sockfd = -1;
+		struct ts_message *last_ts_msg = &sockets[s].last_ts_msg;
+
+		assert(req.len <= sizeof (last_ts_msg->data));
+		memcpy(last_ts_msg->data, req.data, req.len);
+		last_ts_msg->len = req.len;
+		last_ts_msg->subnet = req.subnet;
+		last_ts_msg->to = req.to;
+		last_ts_msg->port = req.dst_port;
 	}
 
 	return req.len;
@@ -1480,18 +1480,20 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 
 	if (sockets[s].time_stamping & (SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_TX_HARDWARE) &&
 	    flags & MSG_ERRQUEUE) {
+		struct ts_message *last_ts_msg;
 		uint32_t addr;
 		uint16_t port;
 
 		/* last message looped back to the error queue */
 
-		assert(sockfd == last_ts_msg.sockfd);
-		last_ts_msg.sockfd = -1;
+		last_ts_msg = &sockets[s].last_ts_msg;
+		assert(last_ts_msg->len);
+
 		msg->msg_flags = MSG_ERRQUEUE;
 
-		rep.subnet = last_ts_msg.subnet;
-		rep.from = last_ts_msg.to;
-		rep.src_port = last_ts_msg.port;
+		rep.subnet = last_ts_msg->subnet;
+		rep.from = last_ts_msg->to;
+		rep.src_port = last_ts_msg->port;
 		rep.dst_port = sockets[s].port;
 
 		addr = htonl(NODE_ADDR(rep.subnet, rep.from));
@@ -1505,10 +1507,12 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		memcpy(rep.data + 30, &addr, sizeof (addr));
 		memcpy(rep.data + 36, &port, sizeof (port));
 
-		assert(last_ts_msg.len + 42 <= sizeof (rep.data));
-		memcpy(rep.data + 42, last_ts_msg.data, last_ts_msg.len);
+		assert(last_ts_msg->len + 42 <= sizeof (rep.data));
+		memcpy(rep.data + 42, last_ts_msg->data, last_ts_msg->len);
 
-		rep.len = 42 + last_ts_msg.len;
+		rep.len = 42 + last_ts_msg->len;
+
+		last_ts_msg->len = 0;
 	} else
 		make_request(REQ_RECV, NULL, 0, &rep, sizeof (rep));
 
