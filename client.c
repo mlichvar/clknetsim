@@ -1807,7 +1807,7 @@ uid_t getuid(void) {
 int uname(struct utsname *buf) {
 	memset(buf, 0, sizeof (*buf));
 	sprintf(buf->sysname, "Linux (clknetsim)");
-	sprintf(buf->release, "2.6.39");
+	sprintf(buf->release, "4.19");
 	return 0;
 }
 
