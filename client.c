@@ -864,7 +864,7 @@ try_again:
 	return recv_fd ? 1 : 0;
 }
 
-#if 1
+#ifndef CLKNETSIM_DISABLE_POLL
 int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 	struct timeval tv, *ptv = NULL;
 	int r, maxfd = 0;
@@ -1704,7 +1704,7 @@ int timer_gettime(timer_t timerid, struct itimerspec *value) {
 	return 0;
 }
 
-#if 1
+#ifndef CLKNETSIM_DISABLE_ITIMER
 int setitimer(__itimer_which_t which, const struct itimerval *new_value, struct itimerval *old_value) {
 	struct itimerspec timerspec;
 
@@ -1840,7 +1840,7 @@ void syslog(int priority, const char *format, ...) {
 void closelog(void) {
 }
 
-#if 1
+#ifndef CLKNETSIM_DISABLE_SYSCALL
 long syscall(long number, ...) {
 	va_list ap;
 	long r;
