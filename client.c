@@ -1261,7 +1261,7 @@ int ioctl(int fd, unsigned long request, ...) {
 		info = (struct ethtool_ts_info *)req->ifr_data;
 		memset(info, 0, sizeof (*info));
 		if (get_network_from_iface(req->ifr_name) >= 0) {
-			info->phc_index = SYSCLK_PHC_INDEX;
+			info->phc_index = timestamping > 1 ? REFCLK_PHC_INDEX : SYSCLK_PHC_INDEX;
 			info->so_timestamping = SOF_TIMESTAMPING_SOFTWARE |
 				SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_RX_SOFTWARE |
 				SOF_TIMESTAMPING_RAW_HARDWARE |
@@ -1583,13 +1583,14 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		cmsg->cmsg_type = SO_TIMESTAMPING;
 		cmsg->cmsg_len = CMSG_LEN(3 * sizeof (ts));
 
-		clock_gettime(CLOCK_REALTIME, &ts);
-
-		/* copy as sw and hw time stamp */
-		if (sockets[s].time_stamping & SOF_TIMESTAMPING_SOFTWARE)
+		if (sockets[s].time_stamping & SOF_TIMESTAMPING_SOFTWARE) {
+			clock_gettime(CLOCK_REALTIME, &ts);
 			memcpy((struct timespec *)CMSG_DATA(cmsg), &ts, sizeof (ts));
-		if (sockets[s].time_stamping & SOF_TIMESTAMPING_RAW_HARDWARE)
+		}
+		if (sockets[s].time_stamping & SOF_TIMESTAMPING_RAW_HARDWARE) {
+			clock_gettime(timestamping > 1 ? REFCLK_ID : CLOCK_REALTIME, &ts);
 			memcpy((struct timespec *)CMSG_DATA(cmsg) + 2, &ts, sizeof (ts));
+		}
 	}
 #endif
 	msg->msg_controllen = cmsglen;
