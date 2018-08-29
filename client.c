@@ -1008,7 +1008,7 @@ int fclose(FILE *fp) {
 int open(const char *pathname, int flags) {
 	int r;
 
-	assert(REFCLK_PHC_INDEX == 0 || SYSCLK_PHC_INDEX == 1);
+	assert(REFCLK_PHC_INDEX == 0 && SYSCLK_PHC_INDEX == 1);
 	if (!strcmp(pathname, "/dev/ptp0"))
 		return REFCLK_FD;
 	else if (!strcmp(pathname, "/dev/ptp1"))
