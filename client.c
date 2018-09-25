@@ -22,6 +22,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/syscall.h>
+#include <sys/timerfd.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <netinet/in.h>
@@ -149,6 +150,7 @@ struct timer {
 	int used;
 	int armed;
 	int type;
+	clockid_t clock_id;
 	double timeout;
 	double interval;
 };
@@ -1645,6 +1647,7 @@ int timer_create(clockid_t which_clock, struct sigevent *timer_event_spec, timer
 	timers[t].used = 1;
 	timers[t].armed = 0;
 	timers[t].type = TIMER_TYPE_SIGNAL;
+	timers[t].clock_id = which_clock;
 	*created_timer_id = get_timerid(t);
 
 	return 0;
@@ -1666,16 +1669,19 @@ int timer_delete(timer_t timerid) {
 int timer_settime(timer_t timerid, int flags, const struct itimerspec *value, struct itimerspec *ovalue) {
 	int t = get_timer_from_id(timerid);
 
-	assert(flags == 0 && value && ovalue == NULL);
-
 	if (t < 0) {
 		errno = EINVAL;
 		return -1;
 	}
 
+	assert(value && ovalue == NULL &&
+	       (flags == 0 || (flags == TIMER_ABSTIME && timers[t].clock_id == CLOCK_MONOTONIC)));
+
 	if (value->it_value.tv_sec || value->it_value.tv_nsec) {
 		timers[t].armed = 1;
-		timers[t].timeout = get_monotonic_time() + timespec_to_time(&value->it_value, 0);
+		timers[t].timeout = timespec_to_time(&value->it_value, 0);
+		if (!(flags & TIMER_ABSTIME))
+			timers[t].timeout += get_monotonic_time();
 		timers[t].interval = timespec_to_time(&value->it_interval, 0);
 	} else {
 		timers[t].armed = 0;
@@ -1754,14 +1760,18 @@ int timerfd_create(int clockid, int flags) {
 	timers[t].used = 1;
 	timers[t].armed = 0;
 	timers[t].type = TIMER_TYPE_FD;
+	timers[t].clock_id = clockid;
 
 	return get_timerfd(t);
 }
 
 int timerfd_settime(int fd, int flags, const struct itimerspec *new_value, struct itimerspec *old_value) {
-	assert(!flags);
+	if (flags == TFD_TIMER_ABSTIME)
+		flags = TIMER_ABSTIME;
+	else
+		assert(!flags);
 
-	return timer_settime(get_timerid(get_timer_from_fd(fd)), 0, new_value, old_value);
+	return timer_settime(get_timerid(get_timer_from_fd(fd)), flags, new_value, old_value);
 }
 
 int timerfd_gettime(int fd, struct itimerspec *curr_value) {
