@@ -981,13 +981,19 @@ FILE *fopen(const char *path, const char *mode) {
 }
 
 size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream) {
-
 	if (stream == URANDOM_FILE) {
 		size_t i, l = size * nmemb;
+		long r;
 
-		assert(!(l % 2));
-		for (i = 0; i < l / 2; i++)
-			((uint16_t *)ptr)[i] = random();
+		assert(RAND_MAX >= 0xffffff);
+		for (i = r = 0; i < l; i++) {
+			if (i % 3)
+				r >>= 8;
+			else
+				r = random();
+			((unsigned char *)ptr)[i] = r;
+		}
+
 		return nmemb;
 	}
 
