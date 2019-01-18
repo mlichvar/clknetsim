@@ -93,7 +93,7 @@ static void fuzz_switch_fuzz_port(void) {
 	fuzz_port_index = (fuzz_port_index + 1) % fuzz_ports_n;
 }
 
-static int fuzz_read_packet(char *data, int maxlen) {
+static int fuzz_read_packet(char *data, int maxlen, int *rlen) {
 	int len;
 	uint16_t slen;
 
@@ -107,7 +107,9 @@ static int fuzz_read_packet(char *data, int maxlen) {
 		len = maxlen;
 	}
 
-	return fread(data, 1, len, stdin);
+	*rlen = fread(data, 1, len, stdin);
+
+	return !len || rlen;
 }
 
 static void fuzz_write_packet(const char *data, int len) {
@@ -127,6 +129,7 @@ static void fuzz_process_reply(int request_id, const union Request_data *request
 	static int sent = 0;
 	static int dst_port = 0;
 	static int packet_len = 0;
+	static int valid_packet = 0;
 	static char packet[MAX_PACKET_SIZE];
 
 	if (reply)
@@ -144,10 +147,10 @@ static void fuzz_process_reply(int request_id, const union Request_data *request
 				return;
 			}
 
-			if (!packet_len && (!received || fuzz_mode != FUZZ_MODE_ONESHOT))
-				packet_len = fuzz_read_packet(packet, sizeof (packet));
+			if (!valid_packet && (!received || fuzz_mode != FUZZ_MODE_ONESHOT))
+				valid_packet = fuzz_read_packet(packet, sizeof (packet), &packet_len);
 
-			if (!packet_len) {
+			if (!valid_packet) {
 				reply->select.ret = REPLY_SELECT_TERMINATE;
 			} else {
 				if (fuzz_mode == FUZZ_MODE_REPLY) {
@@ -195,12 +198,13 @@ static void fuzz_process_reply(int request_id, const union Request_data *request
 		case REQ_RECV:
 			network_time += 1e-1;
 			reply->recv.subnet = 0;
-			reply->recv.from = 1;
+			reply->recv.from = valid_packet ? 1 : -1;
 			reply->recv.src_port = fuzz_get_fuzz_port();
 			reply->recv.dst_port = dst_port ? dst_port : fuzz_get_fuzz_port();
 			memcpy(reply->recv.data, packet, packet_len);
 			reply->recv.len = packet_len;
 			received++;
+			valid_packet = 0;
 			packet_len = 0;
 			fuzz_switch_fuzz_port();
 			break;
