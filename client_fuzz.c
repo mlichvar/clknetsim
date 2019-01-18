@@ -29,8 +29,11 @@ enum {
 	FUZZ_MODE_NONE = 4,
 };
 
+#define MAX_FUZZ_PORTS 16
+
 static int fuzz_mode;
-static int fuzz_port;
+static int fuzz_ports[MAX_FUZZ_PORTS];
+static int fuzz_port_index, fuzz_ports_n;
 static double fuzz_start;
 
 static int fuzz_init(void) {
@@ -51,17 +54,43 @@ static int fuzz_init(void) {
 	}
 
 	env = getenv("CLKNETSIM_FUZZ_PORT");
-	if (!env) {
-		fprintf(stderr, "clknetsim: CLKNETSIM_FUZZ_PORT variable not set.\n");
-		exit(1);
+
+	for (fuzz_ports_n = 0; env && fuzz_ports_n < MAX_FUZZ_PORTS; fuzz_ports_n++) {
+		fuzz_ports[fuzz_ports_n] = atoi(env);
+		if (!fuzz_ports[fuzz_ports_n])
+			break;
+		env = strchr(env, ',');
+		if (env)
+			env++;
 	}
 
-	fuzz_port = atoi(env);
+	if (!fuzz_ports_n) {
+		fprintf(stderr, "clknetsim: CLKNETSIM_FUZZ_PORT variable not set or invalid.\n");
+		exit(1);
+	}
+	fuzz_port_index = 0;
 
 	env = getenv("CLKNETSIM_FUZZ_START");
 	fuzz_start = env ? atof(env) : 0.1;
 
 	return 1;
+}
+
+static int fuzz_is_fuzz_port(int port) {
+	int i;
+
+	for (i = 0; i < fuzz_ports_n; i++)
+		if (fuzz_ports[i] == port)
+			return 1;
+	return 0;
+}
+
+static int fuzz_get_fuzz_port(void) {
+	return fuzz_ports[fuzz_port_index];
+}
+
+static void fuzz_switch_fuzz_port(void) {
+	fuzz_port_index = (fuzz_port_index + 1) % fuzz_ports_n;
 }
 
 static int fuzz_read_packet(char *data, int maxlen) {
@@ -144,7 +173,7 @@ static void fuzz_process_reply(int request_id, const union Request_data *request
 			}
 
 			reply->select.subnet = 0;
-			reply->select.dst_port = dst_port ? dst_port : fuzz_port;
+			reply->select.dst_port = dst_port ? dst_port : fuzz_get_fuzz_port();
 			reply->select.time.real_time = network_time;
 			reply->select.time.monotonic_time = network_time;
 			reply->select.time.network_time = network_time;
@@ -154,10 +183,10 @@ static void fuzz_process_reply(int request_id, const union Request_data *request
 				break;
 
 			if (fuzz_mode == FUZZ_MODE_REPLY) {
-				if (request->send.dst_port != fuzz_port)
+				if (!fuzz_is_fuzz_port(request->send.dst_port))
 					break;
 				dst_port = request->send.src_port;
-			} else if (request->send.src_port != fuzz_port)
+			} else if (!fuzz_is_fuzz_port(request->send.src_port))
 				break;
 
 			fuzz_write_packet(request->send.data, request->send.len);
@@ -167,12 +196,13 @@ static void fuzz_process_reply(int request_id, const union Request_data *request
 			network_time += 1e-1;
 			reply->recv.subnet = 0;
 			reply->recv.from = 1;
-			reply->recv.src_port = fuzz_port;
-			reply->recv.dst_port = dst_port ? dst_port : fuzz_port;
+			reply->recv.src_port = fuzz_get_fuzz_port();
+			reply->recv.dst_port = dst_port ? dst_port : fuzz_get_fuzz_port();
 			memcpy(reply->recv.data, packet, packet_len);
 			reply->recv.len = packet_len;
 			received++;
 			packet_len = 0;
+			fuzz_switch_fuzz_port();
 			break;
 		case REQ_SETTIME:
 			network_time = request->settime.time;
