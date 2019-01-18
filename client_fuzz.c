@@ -29,11 +29,14 @@ enum {
 	FUZZ_MODE_NONE = 4,
 };
 
+#define FUZZ_FLAG_TIMEOUT 1024
+
 #define MAX_FUZZ_PORTS 16
 
 static int fuzz_mode;
 static int fuzz_ports[MAX_FUZZ_PORTS];
 static int fuzz_port_index, fuzz_ports_n;
+static int fuzz_timeout;
 static double fuzz_start;
 
 static int fuzz_init(void) {
@@ -44,6 +47,11 @@ static int fuzz_init(void) {
 		return 0;
 
 	fuzz_mode = atoi(env);
+
+	if (fuzz_mode & FUZZ_FLAG_TIMEOUT) {
+		fuzz_timeout = 1;
+		fuzz_mode &= ~FUZZ_FLAG_TIMEOUT;
+	}
 
 	if (fuzz_mode == FUZZ_MODE_DISABLED)
 		return 0;
@@ -152,6 +160,10 @@ static void fuzz_process_reply(int request_id, const union Request_data *request
 
 			if (!valid_packet) {
 				reply->select.ret = REPLY_SELECT_TERMINATE;
+			} else if (!packet_len && fuzz_timeout) {
+				network_time += request->select.timeout;
+				reply->select.ret = REPLY_SELECT_TIMEOUT;
+				valid_packet = 0;
 			} else {
 				if (fuzz_mode == FUZZ_MODE_REPLY) {
 					if (sent > received) {
