@@ -194,7 +194,7 @@ static void fuzz_process_reply(int request_id, const union Request_data *request
 			reply->select.time.network_time = network_time;
 			break;
 		case REQ_SEND:
-			if (request->send.to != 1)
+			if (request->send.to != 1 && request->send.to != -1)
 				break;
 
 			if (fuzz_mode == FUZZ_MODE_REPLY) {
