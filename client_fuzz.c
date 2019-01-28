@@ -208,7 +208,7 @@ static void fuzz_process_reply(int request_id, const union Request_data *request
 			sent++;
 			break;
 		case REQ_RECV:
-			network_time += 1e-1;
+			network_time += 1e-5;
 			reply->recv.subnet = 0;
 			reply->recv.from = valid_packet ? 1 : -1;
 			reply->recv.src_port = fuzz_get_fuzz_port();
