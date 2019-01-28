@@ -1550,7 +1550,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	} else
 		make_request(REQ_RECV, NULL, 0, &rep, sizeof (rep));
 
-	if (rep.len == 0) {
+	if (rep.len == 0 && rep.from == -1) {
 		errno = EWOULDBLOCK;
 		return -1;
 	}
