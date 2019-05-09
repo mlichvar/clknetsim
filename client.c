@@ -1388,7 +1388,8 @@ void freeifaddrs(struct ifaddrs *ifa) {
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 	struct Request_send req;
 	struct sockaddr_in connected_sa, *sa;
-	int s = get_socket_from_fd(sockfd);
+	struct cmsghdr *cmsg;
+	int s = get_socket_from_fd(sockfd), timestamping;
 
 	if (s < 0 || sockets[s].type != SOCK_DGRAM) {
 		assert(0);
@@ -1425,7 +1426,13 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 
 	make_request(REQ_SEND, &req, offsetof(struct Request_send, data) + req.len, NULL, 0);
 
-	if (sockets[s].time_stamping & (SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_TX_HARDWARE)) {
+	timestamping = sockets[s].time_stamping;
+	for (cmsg = CMSG_FIRSTHDR(msg); cmsg; cmsg = CMSG_NXTHDR((struct msghdr *)msg, cmsg)) {
+		if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SO_TIMESTAMPING)
+			memcpy(&timestamping, CMSG_DATA(cmsg), sizeof (timestamping));
+	}
+
+	if (timestamping & (SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_TX_HARDWARE)) {
 		struct ts_message *last_ts_msg = &sockets[s].last_ts_msg;
 
 		assert(req.len <= sizeof (last_ts_msg->data));
@@ -1502,6 +1509,7 @@ int recvmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen, int flags,
 }
 
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
+	struct ts_message *last_ts_msg = NULL;
 	struct Reply_recv rep;
 	struct sockaddr_in *sa;
 	struct cmsghdr *cmsg;
@@ -1512,16 +1520,13 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 
 	assert(s >= 0 && sockets[s].type == SOCK_DGRAM);
 
-	if (sockets[s].time_stamping & (SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_TX_HARDWARE) &&
-	    flags & MSG_ERRQUEUE) {
-		struct ts_message *last_ts_msg;
+	if (sockets[s].last_ts_msg.len && flags & MSG_ERRQUEUE) {
 		uint32_t addr;
 		uint16_t port;
 
 		/* last message looped back to the error queue */
 
 		last_ts_msg = &sockets[s].last_ts_msg;
-		assert(last_ts_msg->len);
 
 		msg->msg_flags = MSG_ERRQUEUE;
 
@@ -1596,8 +1601,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	}
 
 #ifdef SO_TIMESTAMPING
-	if ((sockets[s].time_stamping & (SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_TX_HARDWARE) &&
-	     flags & MSG_ERRQUEUE) ||
+	if (last_ts_msg ||
 	    (sockets[s].time_stamping & (SOF_TIMESTAMPING_RX_SOFTWARE | SOF_TIMESTAMPING_RX_HARDWARE) &&
 	     !(flags & MSG_ERRQUEUE))) {
 		struct timespec ts;
