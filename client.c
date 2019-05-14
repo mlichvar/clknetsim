@@ -1323,6 +1323,17 @@ int ioctl(int fd, unsigned long request, ...) {
 #ifdef SIOCSHWTSTAMP
 	} else if (request == SIOCSHWTSTAMP && s >= 0) {
 #endif
+#ifdef SIOCGHWTSTAMP
+	} else if (request == SIOCGHWTSTAMP && s >= 0) {
+		struct hwtstamp_config *ts_config;
+
+		req = va_arg(ap, struct ifreq *);
+		ts_config = (struct hwtstamp_config *)req->ifr_data;
+
+		ts_config->flags = 0;
+		ts_config->tx_type = HWTSTAMP_TX_ON;
+		ts_config->rx_filter = HWTSTAMP_FILTER_ALL;
+#endif
 	} else {
 		ret = -1;
 		errno = EINVAL;
