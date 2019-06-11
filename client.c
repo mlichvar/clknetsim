@@ -112,7 +112,7 @@ enum {
 	IFACE_ETH0,
 };
 
-struct ts_message {
+struct message {
 	char data[MAX_PACKET_SIZE];
 	unsigned int len;
 	unsigned int subnet;
@@ -130,7 +130,7 @@ struct socket {
 	int broadcast;
 	int pkt_info;
 	int time_stamping;
-	struct ts_message last_ts_msg;
+	struct message last_ts_msg;
 };
 
 static struct socket sockets[MAX_SOCKETS];
@@ -1444,7 +1444,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 	}
 
 	if (timestamping & (SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_TX_HARDWARE)) {
-		struct ts_message *last_ts_msg = &sockets[s].last_ts_msg;
+		struct message *last_ts_msg = &sockets[s].last_ts_msg;
 
 		assert(req.len <= sizeof (last_ts_msg->data));
 		memcpy(last_ts_msg->data, req.data, req.len);
@@ -1520,7 +1520,7 @@ int recvmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen, int flags,
 }
 
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
-	struct ts_message *last_ts_msg = NULL;
+	struct message *last_ts_msg = NULL;
 	struct Reply_recv rep;
 	struct sockaddr_in *sa;
 	struct cmsghdr *cmsg;
