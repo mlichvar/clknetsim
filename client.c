@@ -482,6 +482,17 @@ static int find_recv_socket(struct Reply_select *rep) {
 		    (sockets[i].remote_port && sockets[i].remote_port != rep->src_port))
 			continue;
 
+		switch (rep->type) {
+			case MSG_TYPE_NO_MSG:
+				break;
+			case MSG_TYPE_UDP_DATA:
+				if (sockets[i].type != SOCK_DGRAM)
+					continue;
+				break;
+			default:
+				assert(0);
+		}
+
 		if (s < 0 || sockets[s].iface < sockets[i].iface ||
 		    (rep->ret == REPLY_SELECT_BROADCAST && sockets[i].broadcast) ||
 		    (rep->ret != REPLY_SELECT_BROADCAST && sockets[s].broadcast &&
@@ -850,10 +861,10 @@ try_again:
 
 				make_request(REQ_RECV, NULL, 0, &recv_rep, sizeof (recv_rep));
 				if (rep.ret != REPLY_SELECT_BROADCAST)
-					fprintf(stderr, "clknetsim: dropped packet from "
+					fprintf(stderr, "clknetsim: dropped packet of type %d from "
 							"node %d on port %d in subnet %d\n",
-							recv_rep.from + 1, recv_rep.dst_port,
-							recv_rep.subnet + 1);
+							recv_rep.type, recv_rep.from + 1,
+							recv_rep.dst_port, recv_rep.subnet + 1);
 
 				goto try_again;
 			}
@@ -1560,6 +1571,8 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 
 		msg->msg_flags = MSG_ERRQUEUE;
 
+		assert(sockets[s].type == SOCK_DGRAM);
+		rep.type = MSG_TYPE_UDP_DATA;
 		rep.subnet = last_ts_msg->subnet;
 		rep.from = last_ts_msg->to;
 		rep.src_port = last_ts_msg->port;

@@ -365,24 +365,24 @@ void Network::send(struct Packet *packet) {
 	stats[packet->from].update_packet_stats(false, time, delay);
 
 	if (packet_log)
-		fprintf(packet_log, "%e\t%d\t%d\t%e\t%d\t%d\t%d\n", time,
+		fprintf(packet_log, "%e\t%d\t%d\t%e\t%d\t%d\t%d\t%d\t%d\n", time,
 				packet->from + 1, packet->to + 1, delay,
 				packet->src_port, packet->dst_port,
-				packet->subnet + 1);
+				packet->subnet + 1, packet->len, packet->type);
 
 	if (delay > 0.0) {
 		packet->receive_time = time + delay;
 		packet->delay = delay;
 		packet_queue.insert(packet);
 #ifdef DEBUG
-		printf("sending packet from %d to %d:%d:%d at %f delay %f \n",
-				packet->from, packet->subnet, packet->to,
+		printf("sending packet of type %d from %d to %d:%d:%d at %f delay %f \n",
+				packet->type, packet->from, packet->subnet, packet->to,
 				packet->dst_port, time, delay);
 #endif
 	} else {
 #ifdef DEBUG
-		printf("dropping packet from %d to %d:%d:%d at %f\n",
-				packet->from, packet->subnet, packet->to,
+		printf("dropping packet of type %d from %d to %d:%d:%d at %f\n",
+				packet->type, packet->from, packet->subnet, packet->to,
 				packet->dst_port, time);
 #endif
 		delete packet;

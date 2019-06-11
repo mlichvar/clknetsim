@@ -30,6 +30,7 @@ struct Packet {
 	double receive_time;
 	double delay;
 	int broadcast;
+	unsigned int type;
 	unsigned int subnet;
 	unsigned int from;
 	unsigned int to;

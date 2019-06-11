@@ -190,6 +190,7 @@ void Node::try_select() {
 		rep.ret = incoming_packets.back()->broadcast ?
 			REPLY_SELECT_BROADCAST :
 			REPLY_SELECT_NORMAL;
+		rep.type = incoming_packets.back()->type;
 		rep.subnet = incoming_packets.back()->subnet;
 		rep.from = incoming_packets.back()->from;
 		rep.src_port = incoming_packets.back()->src_port;
@@ -224,6 +225,7 @@ void Node::process_send(Request_send *req) {
 
 	if (!terminate) {
 		packet = new struct Packet;
+		packet->type = req->type;
 		packet->broadcast = req->to == (unsigned int)-1;
 		packet->subnet = req->subnet;
 		packet->from = index;
@@ -243,6 +245,7 @@ void Node::process_recv() {
 	struct Packet *packet;
 
 	if (incoming_packets.empty()) {
+		rep.type = MSG_TYPE_NO_MSG;
 		rep.subnet = 0;
 		rep.from = -1;
 		rep.src_port = 0;
@@ -255,6 +258,7 @@ void Node::process_recv() {
 
 	packet = incoming_packets.back();
 
+	rep.type = packet->type;
 	rep.subnet = packet->subnet;
 	rep.from = packet->from;
 	rep.src_port = packet->src_port;

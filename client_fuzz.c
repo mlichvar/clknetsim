@@ -187,6 +187,7 @@ static void fuzz_process_reply(int request_id, const union Request_data *request
 				}
 			}
 
+			reply->select.type = valid_packet ? MSG_TYPE_UDP_DATA : MSG_TYPE_NO_MSG;
 			reply->select.subnet = 0;
 			reply->select.from = valid_packet ? 1 : -1;
 			reply->select.src_port = fuzz_get_fuzz_port();
@@ -211,6 +212,7 @@ static void fuzz_process_reply(int request_id, const union Request_data *request
 			break;
 		case REQ_RECV:
 			network_time += 1e-5;
+			reply->recv.type = valid_packet ? MSG_TYPE_UDP_DATA : MSG_TYPE_NO_MSG;
 			reply->recv.subnet = 0;
 			reply->recv.from = valid_packet ? 1 : -1;
 			reply->recv.src_port = fuzz_get_fuzz_port();

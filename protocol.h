@@ -86,6 +86,7 @@ struct Request_select {
 
 struct Reply_select {
 	int ret;
+	unsigned int type; /* for NORMAL */
 	unsigned int subnet; /* for NORMAL or BROADCAST */
 	unsigned int from; /* for NORMAL or BROADCAST */
 	unsigned int src_port; /* for NORMAL or BROADCAST */
@@ -95,7 +96,10 @@ struct Reply_select {
 
 #define MAX_PACKET_SIZE 4000
 
+#define MSG_TYPE_NO_MSG 0
+#define MSG_TYPE_UDP_DATA 1
 struct Request_send {
+	unsigned int type;
 	unsigned int subnet;
 	unsigned int to;
 	unsigned int src_port;
@@ -105,6 +109,7 @@ struct Request_send {
 };
 
 struct Reply_recv {
+	unsigned int type;
 	unsigned int subnet;
 	unsigned int from;
 	unsigned int src_port;
