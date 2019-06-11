@@ -1430,7 +1430,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 	struct Request_send req;
 	struct sockaddr_in connected_sa, *sa;
 	struct cmsghdr *cmsg;
-	int s = get_socket_from_fd(sockfd), timestamping;
+	int i, s = get_socket_from_fd(sockfd), timestamping;
 
 	if (s < 0 || sockets[s].type != SOCK_DGRAM) {
 		assert(0);
@@ -1454,16 +1454,17 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 		assert(sa->sin_family == AF_INET);
 	}
 
-	assert(msg->msg_iovlen == 1);
-	assert(msg->msg_iov[0].iov_len <= sizeof (req.data));
 
 	get_target(s, ntohl(sa->sin_addr.s_addr), &req.subnet, &req.to);
 	req.src_port = sockets[s].port;
 	req.dst_port = ntohs(sa->sin_port);
 	assert(req.src_port && req.dst_port);
 
-	req.len = msg->msg_iov[0].iov_len;
-	memcpy(req.data, msg->msg_iov[0].iov_base, req.len);
+	for (req.len = 0, i = 0; i < msg->msg_iovlen; i++) {
+		assert(req.len + msg->msg_iov[i].iov_len <= sizeof (req.data));
+		memcpy(req.data + req.len, msg->msg_iov[i].iov_base, msg->msg_iov[i].iov_len);
+		req.len += msg->msg_iov[i].iov_len;
+	}
 
 	make_request(REQ_SEND, &req, offsetof(struct Request_send, data) + req.len, NULL, 0);
 
