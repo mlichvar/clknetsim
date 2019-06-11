@@ -720,8 +720,21 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	int i, timer, s, recv_fd = -1;
 	double elapsed = 0.0;
 
-	if (writefds)
+	if (writefds) {
+		for (i = 0; i < nfds; i++) {
+			if (!FD_ISSET(i, writefds) || get_socket_from_fd(i) < 0)
+				continue;
+			FD_ZERO(writefds);
+			FD_SET(i, writefds);
+			if (exceptfds)
+				FD_ZERO(exceptfds);
+			if (readfds)
+				FD_ZERO(readfds);
+			return 1;
+		}
+
 		FD_ZERO(writefds);
+	}
 
 	if (exceptfds) {
 		/* chronyd waiting for TX timestamp from the error queue */
