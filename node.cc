@@ -191,6 +191,8 @@ void Node::try_select() {
 			REPLY_SELECT_BROADCAST :
 			REPLY_SELECT_NORMAL;
 		rep.subnet = incoming_packets.back()->subnet;
+		rep.from = incoming_packets.back()->from;
+		rep.src_port = incoming_packets.back()->src_port;
 		rep.dst_port = incoming_packets.back()->dst_port;
 #ifdef DEBUG
 		printf("select returned for packet in %d at %f\n", index, clock.get_real_time());

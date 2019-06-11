@@ -87,6 +87,8 @@ struct Request_select {
 struct Reply_select {
 	int ret;
 	unsigned int subnet; /* for NORMAL or BROADCAST */
+	unsigned int from; /* for NORMAL or BROADCAST */
+	unsigned int src_port; /* for NORMAL or BROADCAST */
 	unsigned int dst_port; /* for NORMAL or BROADCAST */
 	struct Reply_gettime time;
 };

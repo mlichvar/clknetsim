@@ -188,6 +188,8 @@ static void fuzz_process_reply(int request_id, const union Request_data *request
 			}
 
 			reply->select.subnet = 0;
+			reply->select.from = valid_packet ? 1 : -1;
+			reply->select.src_port = fuzz_get_fuzz_port();
 			reply->select.dst_port = dst_port ? dst_port : fuzz_get_fuzz_port();
 			reply->select.time.real_time = network_time;
 			reply->select.time.monotonic_time = network_time;

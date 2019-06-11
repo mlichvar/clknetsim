@@ -466,19 +466,26 @@ static int get_socket_fd(int s) {
 	return s + BASE_SOCKET_FD;
 }
 
-static int find_recv_socket(int subnet, int port, int broadcast) {
+static int find_recv_socket(struct Reply_select *rep) {
 	int i, s = -1;
 
 	for (i = 0; i < MAX_SOCKETS; i++) {
-		if (!sockets[i].used ||
-				!socket_in_subnet(i, subnet) ||
-				sockets[i].type != SOCK_DGRAM ||
-				(port && sockets[i].port != port))
+		if (!sockets[i].used)
 			continue;
+
+		if (rep == NULL)
+			return i;
+
+		if (!socket_in_subnet(i, rep->subnet) ||
+		    (rep->dst_port && sockets[i].port != rep->dst_port) ||
+		    (sockets[i].remote_node != -1 && sockets[i].remote_node != rep->from) ||
+		    (sockets[i].remote_port && sockets[i].remote_port != rep->src_port))
+			continue;
+
 		if (s < 0 || sockets[s].iface < sockets[i].iface ||
-				(broadcast && sockets[i].broadcast) ||
-				(!broadcast && sockets[s].broadcast &&
-				 !sockets[i].broadcast))
+		    (rep->ret == REPLY_SELECT_BROADCAST && sockets[i].broadcast) ||
+		    (rep->ret != REPLY_SELECT_BROADCAST && sockets[s].broadcast &&
+		     !sockets[i].broadcast))
 			s = i;
 	}
 
@@ -775,7 +782,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	timer = get_first_timer(readfds);
 
 	assert((timeout && (timeout->tv_sec > 0 || timeout->tv_usec > 0)) ||
-			timer >= 0 || find_recv_socket(0, 0, 0) >= 0);
+	       timer >= 0 || find_recv_socket(NULL) >= 0);
 
 	fetch_time();
 
@@ -834,8 +841,7 @@ try_again:
 
 		case REPLY_SELECT_NORMAL:
 		case REPLY_SELECT_BROADCAST:
-			s = find_recv_socket(rep.subnet, rep.dst_port,
-					rep.ret == REPLY_SELECT_BROADCAST);
+			s = find_recv_socket(&rep);
 			recv_fd = s >= 0 ? get_socket_fd(s) : 0;
 
 			/* fetch and drop the packet if no fd is waiting for it */
