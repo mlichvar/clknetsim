@@ -98,6 +98,10 @@ struct Reply_select {
 
 #define MSG_TYPE_NO_MSG 0
 #define MSG_TYPE_UDP_DATA 1
+#define MSG_TYPE_TCP_CONNECT 2
+#define MSG_TYPE_TCP_DATA 3
+#define MSG_TYPE_TCP_DISCONNECT 4
+
 struct Request_send {
 	unsigned int type;
 	unsigned int subnet;

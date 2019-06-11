@@ -127,10 +127,13 @@ struct socket {
 	int iface;
 	int remote_node;
 	int remote_port;
+	int listening;
+	int connected;
 	int broadcast;
 	int pkt_info;
 	int time_stamping;
 	struct message last_ts_msg;
+	struct message buffer;
 };
 
 static struct socket sockets[MAX_SOCKETS];
@@ -489,6 +492,16 @@ static int find_recv_socket(struct Reply_select *rep) {
 				if (sockets[i].type != SOCK_DGRAM)
 					continue;
 				break;
+			case MSG_TYPE_TCP_CONNECT:
+				if (sockets[i].type != SOCK_STREAM || sockets[i].connected)
+					continue;
+				break;
+			case MSG_TYPE_TCP_DATA:
+			case MSG_TYPE_TCP_DISCONNECT:
+				if (sockets[i].type != SOCK_STREAM ||
+				    sockets[i].listening || !sockets[i].connected)
+					continue;
+				break;
 			default:
 				assert(0);
 		}
@@ -501,6 +514,24 @@ static int find_recv_socket(struct Reply_select *rep) {
 	}
 
 	return s;
+}
+
+static void send_msg_to_peer(int s, int type) {
+	struct Request_send req;
+
+	assert(sockets[s].type == SOCK_STREAM);
+
+	if (sockets[s].remote_node == -1)
+		return;
+
+	req.type = type;
+	req.subnet = sockets[s].iface - IFACE_ETH0;
+	req.to = sockets[s].remote_node;
+	req.src_port = sockets[s].port;
+	req.dst_port = sockets[s].remote_port;
+	req.len = 0;
+
+	make_request(REQ_SEND, &req, offsetof(struct Request_send, data), NULL, 0);
 }
 
 static int get_free_timer(void) {
@@ -740,7 +771,11 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 
 	if (writefds) {
 		for (i = 0; i < nfds; i++) {
-			if (!FD_ISSET(i, writefds) || get_socket_from_fd(i) < 0)
+			if (!FD_ISSET(i, writefds))
+				continue;
+			s = get_socket_from_fd(i);
+			if (s < 0 ||
+			    (sockets[s].type == SOCK_STREAM && !sockets[s].connected))
 				continue;
 			FD_ZERO(writefds);
 			FD_SET(i, writefds);
@@ -780,8 +815,9 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 		for (i = 0; i < nfds; i++) {
 			if (!FD_ISSET(i, readfds))
 				continue;
-			if (get_socket_from_fd(i) < 0 &&
-					get_timer_from_fd(i) < 0) {
+			s = get_socket_from_fd(i);
+			if ((s < 0 && get_timer_from_fd(i) < 0) ||
+			    (s >= 0 && sockets[s].buffer.len > 0)) {
 				FD_ZERO(readfds);
 				FD_SET(i, readfds);
 				return 1;
@@ -868,8 +904,22 @@ try_again:
 
 				goto try_again;
 			}
-			break;
 
+			if (rep.type == MSG_TYPE_TCP_CONNECT &&
+			    !sockets[s].listening && !sockets[s].connected) {
+				struct Reply_recv recv_rep;
+
+				/* drop the connection packet and let the client repeat the call
+				   in order to see that the socket is ready for writing */
+				make_request(REQ_RECV, NULL, 0, &recv_rep, sizeof (recv_rep));
+
+				assert(recv_rep.type == MSG_TYPE_TCP_CONNECT);
+				assert(sockets[s].type == SOCK_STREAM);
+				sockets[s].connected = 1;
+				errno = EINTR;
+				return -1;
+			}
+			break;
 		default:
 			assert(0);
 			return 0;
@@ -1066,6 +1116,8 @@ int close(int fd) {
 	} else if ((t = get_timer_from_fd(fd)) >= 0) {
 		return timer_delete(get_timerid(t));
 	} else if ((s = get_socket_from_fd(fd)) >= 0) {
+		if (sockets[s].type == SOCK_STREAM)
+			shutdown(fd, SHUT_RDWR);
 		sockets[s].used = 0;
 		return 0;
 	}
@@ -1097,6 +1149,73 @@ int socket(int domain, int type, int protocol) {
 	return get_socket_fd(s);
 }
 
+int listen(int sockfd, int backlog) {
+	int s = get_socket_from_fd(sockfd);
+
+	if (s < 0 || sockets[s].type != SOCK_STREAM) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	sockets[s].listening = 1;
+
+	return 0;
+}
+
+int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
+	int s = get_socket_from_fd(sockfd), r;
+	struct sockaddr_in *in;
+	struct Reply_recv rep;
+
+	if (s < 0 || sockets[s].type != SOCK_STREAM) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	make_request(REQ_RECV, NULL, 0, &rep, sizeof (rep));
+	assert(rep.type == MSG_TYPE_TCP_CONNECT);
+
+	r = socket(AF_INET, SOCK_STREAM, 0);
+	s = get_socket_from_fd(r);
+	assert(s >= 0);
+
+	sockets[s].port = rep.dst_port;
+	sockets[s].iface = IFACE_ETH0 + rep.subnet;
+	sockets[s].remote_node = rep.from;
+	sockets[s].remote_port = rep.src_port;
+	sockets[s].connected = 1;
+
+	in = (struct sockaddr_in *)addr;
+	assert(*addrlen >= sizeof (*in));
+	*addrlen = sizeof (*in);
+	in->sin_family = AF_INET;
+	in->sin_port = htons(sockets[s].remote_port);
+	in->sin_addr.s_addr = htonl(NODE_ADDR(sockets[s].iface - IFACE_ETH0, node));
+
+	send_msg_to_peer(s, MSG_TYPE_TCP_CONNECT);
+
+	return r;
+}
+
+int shutdown(int sockfd, int how) {
+	int s = get_socket_from_fd(sockfd);
+
+	if (s < 0) {
+		assert(0);
+		errno = EINVAL;
+		return -1;
+	}
+
+	assert(sockets[s].type == SOCK_STREAM);
+
+	if (sockets[s].connected) {
+		send_msg_to_peer(s, MSG_TYPE_TCP_DISCONNECT);
+		sockets[s].connected = 0;
+	}
+
+	return 0;
+}
+
 int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 	/* ntpd uses connect() and getsockname() to find the interface
 	   which will be used to send packets to an address */
@@ -1117,6 +1236,9 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 	sockets[s].iface = IFACE_ETH0 + subnet;
 	sockets[s].remote_node = node;
 	sockets[s].remote_port = port;
+
+	if (sockets[s].type == SOCK_STREAM)
+		send_msg_to_peer(s, MSG_TYPE_TCP_CONNECT);
 
 	return 0;
 }
@@ -1222,6 +1344,24 @@ int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t
 #endif
 
 	/* unhandled options succeed too */
+	return 0;
+}
+
+int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen) {
+	int s = get_socket_from_fd(sockfd);
+
+	if (s < 0) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	if (level == SOL_SOCKET && optname == SO_ERROR && *optlen == sizeof (int)) {
+		*(int *)optval = 0;
+	} else {
+		errno = EINVAL;
+		return -1;
+	}
+
 	return 0;
 }
 
@@ -1432,7 +1572,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 	struct cmsghdr *cmsg;
 	int i, s = get_socket_from_fd(sockfd), timestamping;
 
-	if (s < 0 || sockets[s].type != SOCK_DGRAM) {
+	if (s < 0) {
 		assert(0);
 		errno = EINVAL;
 		return -1;
@@ -1454,6 +1594,17 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 		assert(sa->sin_family == AF_INET);
 	}
 
+	switch (sockets[s].type) {
+		case SOCK_DGRAM:
+			req.type = MSG_TYPE_UDP_DATA;
+			break;
+		case SOCK_STREAM:
+			assert(sockets[s].connected);
+			req.type = MSG_TYPE_TCP_DATA;
+			break;
+		default:
+			assert(0);
+	}
 
 	get_target(s, ntohl(sa->sin_addr.s_addr), &req.subnet, &req.to);
 	req.src_port = sockets[s].port;
@@ -1560,7 +1711,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	if (sockfd == clknetsim_fd)
 		return _recvmsg(sockfd, msg, flags);
 
-	assert(s >= 0 && sockets[s].type == SOCK_DGRAM);
+	assert(s >= 0);
 
 	if (sockets[s].last_ts_msg.len && flags & MSG_ERRQUEUE) {
 		uint32_t addr;
@@ -1596,12 +1747,46 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		rep.len = 42 + last_ts_msg->len;
 
 		last_ts_msg->len = 0;
-	} else
+	} else if (sockets[s].buffer.len > 0) {
+		assert(sockets[s].type == SOCK_STREAM && sockets[s].remote_node != -1);
+		assert(sockets[s].buffer.len <= sizeof (rep.data));
+
+		memcpy(rep.data, sockets[s].buffer.data, sockets[s].buffer.len);
+		rep.type = MSG_TYPE_TCP_DATA;
+		rep.subnet = sockets[s].iface - IFACE_ETH0;
+		rep.from = sockets[s].remote_node;
+		rep.src_port = sockets[s].remote_port;
+		rep.dst_port = sockets[s].port;
+		rep.len = sockets[s].buffer.len;
+
+		sockets[s].buffer.len = 0;
+	} else {
 		make_request(REQ_RECV, NULL, 0, &rep, sizeof (rep));
 
-	if (rep.len == 0 && rep.from == -1) {
-		errno = EWOULDBLOCK;
-		return -1;
+		switch (rep.type) {
+			case MSG_TYPE_NO_MSG:
+				errno = EWOULDBLOCK;
+				return -1;
+			case MSG_TYPE_UDP_DATA:
+				assert(sockets[s].type == SOCK_DGRAM);
+				break;
+			case MSG_TYPE_TCP_DATA:
+			case MSG_TYPE_TCP_DISCONNECT:
+				assert(sockets[s].type == SOCK_STREAM);
+				assert(sockets[s].remote_port && sockets[s].remote_node != -1);
+
+				if (!sockets[s].connected) {
+					errno = ENOTCONN;
+					return -1;
+				}
+				if (rep.type == MSG_TYPE_TCP_DISCONNECT) {
+					assert(rep.len == 0);
+					sockets[s].connected = 0;
+				}
+				break;
+			default:
+				assert(0);
+		}
 	}
 
 	assert(socket_in_subnet(s, rep.subnet));
@@ -1621,6 +1806,16 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	assert(msg->msg_iovlen == 1);
 	msglen = msg->msg_iov[0].iov_len < rep.len ? msg->msg_iov[0].iov_len : rep.len;
 	memcpy(msg->msg_iov[0].iov_base, rep.data, msglen);
+
+	if (sockets[s].type == SOCK_STREAM) {
+	       if (msglen < rep.len) {
+		       sockets[s].buffer.len = rep.len - msglen;
+		       assert(sockets[s].buffer.len <= sizeof (sockets[s].buffer.data));
+		       memcpy(sockets[s].buffer.data, rep.data + msglen, rep.len - msglen);
+	       } else {
+		       sockets[s].buffer.len = 0;
+	       }
+	}
 
 	cmsglen = 0;
 
