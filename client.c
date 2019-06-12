@@ -86,6 +86,7 @@ static FILE *(*_fopen)(const char *path, const char *mode);
 static size_t (*_fread)(void *ptr, size_t size, size_t nmemb, FILE *stream);
 static int (*_fileno)(FILE *stream);
 static int (*_fclose)(FILE *fp);
+static int (*_fcntl)(int fd, int cmd, ...);
 static int (*_open)(const char *pathname, int flags);
 static int (*_close)(int fd);
 static int (*_socket)(int domain, int type, int protocol);
@@ -203,6 +204,7 @@ static void init(void) {
 	_fread = (size_t (*)(void *ptr, size_t size, size_t nmemb, FILE *stream))dlsym(RTLD_NEXT, "fread");
 	_fileno = (int (*)(FILE *stream))dlsym(RTLD_NEXT, "fileno");
 	_fclose = (int (*)(FILE *fp))dlsym(RTLD_NEXT, "fclose");
+	_fcntl = (int (*)(int fd, int cmd, ...))dlsym(RTLD_NEXT, "fcntl");
 	_open = (int (*)(const char *pathname, int flags))dlsym(RTLD_NEXT, "open");
 	_close = (int (*)(int fd))dlsym(RTLD_NEXT, "close");
 	_socket = (int (*)(int domain, int type, int protocol))dlsym(RTLD_NEXT, "socket");
@@ -1368,6 +1370,22 @@ int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optl
 }
 
 int fcntl(int fd, int cmd, ...) {
+	int i, s = get_socket_from_fd(fd);
+	va_list ap;
+
+	if (s < 0) {
+		switch (cmd) {
+			/* including fcntl.h breaks open() declaration */
+			case 0: /* F_DUPFD */
+			case 3: /* F_GETFL */
+			case 4: /* F_SETFL */
+				va_start(ap, cmd);
+				i = va_arg(ap, int);
+				va_end(ap);
+				return _fcntl(fd, cmd, i);
+		}
+	}
+
 	return 0;
 }
 
