@@ -1,17 +1,19 @@
 #!/bin/bash
 
+export EVENT_NOEPOLL=1
+
 CLKNETSIM_PATH=..
 . ../clknetsim.bash
 
 generate_config1 3 10.0 "(sum (* 1e-9 (normal)))" "(+ 1e-3 (* 1e-3 (exponential)))"
 
-echo "node2_start = 100" >> tmp/conf
-echo "node3_start = 100" >> tmp/conf
+echo "node2_start = 330" >> tmp/conf
+echo "node3_start = 330" >> tmp/conf
 
 start_client 1 ntpd "server 127.127.1.0"
-start_client 2 sntp "-j 192.168.123.1"
-start_client 3 sntp "-s 192.168.123.1"
+start_client 2 sntp "-s 192.168.123.1"
+start_client 3 sntp "-S 192.168.123.1"
 
-start_server 3 -v 2 -o log.offset -r 110 -l 200
+start_server 3 -v 2 -o log.offset -r 340 -l 350
 
 cat tmp/stats
