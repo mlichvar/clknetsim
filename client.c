@@ -1049,6 +1049,11 @@ int clock_nanosleep(clockid_t clock_id, int flags,
 	return nanosleep(request, remain);
 }
 
+int eventfd(unsigned int initval, int flags) {
+	/* dummy file descriptor to disable libevent thread notification */
+	return timerfd_create(CLOCK_REALTIME, 0);
+}
+
 FILE *fopen(const char *path, const char *mode) {
 	if (!strcmp(path, "/proc/net/if_inet6")) {
 		errno = ENOENT;
