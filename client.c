@@ -794,7 +794,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	}
 
 	if (exceptfds) {
-		/* chronyd waiting for TX timestamp from the error queue */
+		/* TX timestamp available in the error queue */
 		for (i = 0; i < nfds; i++) {
 			if (!FD_ISSET(i, exceptfds) || get_socket_from_fd(i) < 0 ||
 					!sockets[get_socket_from_fd(i)].last_ts_msg.len)
@@ -953,39 +953,27 @@ try_again:
 #ifndef CLKNETSIM_DISABLE_POLL
 int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 	struct timeval tv, *ptv = NULL;
+	fd_set rfds, wfds, efds;
 	int r, maxfd = 0;
 	nfds_t i;
-	fd_set rfds;
-
-	/* ptp4l waiting for tx SO_TIMESTAMPING */
-	if (nfds == 1 && fds[0].events != POLLOUT && get_socket_from_fd(fds[0].fd) >= 0 &&
-	    sockets[get_socket_from_fd(fds[0].fd)].time_stamping &
-	    (SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_TX_HARDWARE)) {
-		if (!fds[0].events) {
-			fds[0].revents = POLLERR;
-			return 1;
-		} else if (fds[0].events == POLLPRI) {
-			/* SO_SELECT_ERR_QUEUE option enabled */
-			fds[0].revents = POLLPRI;
-			return 1;
-		}
-	}
-
-	/* pmc waiting to send packet */
-	if (nfds == 2 && (fds[1].events & POLLOUT) && get_socket_from_fd(fds[1].fd) >= 0) {
-		fds[0].revents = 0;
-		fds[1].revents = POLLOUT;
-		return 1;
-	}
 
 	FD_ZERO(&rfds);
+	FD_ZERO(&wfds);
+	FD_ZERO(&efds);
 
-	for (i = 0; i < nfds; i++)
-		if (fds[i].fd >= 0 && fds[i].events & POLLIN) {
+	for (i = 0; i < nfds; i++) {
+		if (fds[i].fd < 0)
+		       continue;
+		assert(fds[i].fd < FD_SETSIZE);
+		if (fds[i].events & POLLIN)
 			FD_SET(fds[i].fd, &rfds);
-			if (maxfd < fds[i].fd)
-				maxfd = fds[i].fd;
-		}
+		if (fds[i].events & POLLOUT)
+			FD_SET(fds[i].fd, &wfds);
+		if (fds[i].events & POLLPRI)
+			FD_SET(fds[i].fd, &efds);
+		if (maxfd < fds[i].fd)
+			maxfd = fds[i].fd;
+	}
 
 	if (timeout >= 0) {
 		tv.tv_sec = timeout / 1000;
@@ -993,11 +981,23 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 		ptv = &tv;
 	}
 
-	r = select(maxfd + 1, &rfds, NULL, NULL, ptv);
+	r = select(maxfd + 1, &rfds, &wfds, &efds, ptv);
+	if (r < 0)
+		return r;
 
-	for (i = 0; i < nfds; i++)
-		fds[i].revents = r > 0 && fds[i].fd >= 0 &&
-			FD_ISSET(fds[i].fd, &rfds) ? POLLIN : 0;
+	for (i = 0, r = 0; i < nfds; i++) {
+		fds[i].revents = 0;
+		if (fds[i].fd < 0)
+			continue;
+		if (FD_ISSET(fds[i].fd, &rfds))
+			fds[i].revents |= POLLIN;
+		if (FD_ISSET(fds[i].fd, &wfds))
+			fds[i].revents |= POLLOUT;
+		if (FD_ISSET(fds[i].fd, &efds))
+			fds[i].revents |= POLLPRI;
+		if (fds[i].revents)
+			r++;
+	}
 
 	return r;
 }
