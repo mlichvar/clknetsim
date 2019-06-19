@@ -34,6 +34,7 @@ enum {
 #define MAX_FUZZ_PORTS 16
 
 static int fuzz_mode;
+static int fuzz_msg_type;
 static int fuzz_ports[MAX_FUZZ_PORTS];
 static int fuzz_port_index, fuzz_ports_n;
 static int fuzz_timeout;
@@ -60,6 +61,9 @@ static int fuzz_init(void) {
 		fprintf(stderr, "clknetsim: unknown fuzz mode.\n");
 		exit(1);
 	}
+
+	env = getenv("CLKNETSIM_FUZZ_MSG_TYPE");
+	fuzz_msg_type = env ? atoi(env) : MSG_TYPE_UDP_DATA;
 
 	env = getenv("CLKNETSIM_FUZZ_PORT");
 
@@ -131,11 +135,30 @@ static void fuzz_write_packet(const char *data, int len) {
 	fwrite(data, 1, len, stdout);
 }
 
+static void get_recv_data(int valid_packet, int received, int last_tx_src_port,
+			  unsigned int *type, unsigned int *subnet, unsigned int *from,
+			  unsigned int *src_port, unsigned int *dst_port) {
+	if (valid_packet) {
+		if (fuzz_msg_type == MSG_TYPE_TCP_DATA && received == 0)
+			*type = MSG_TYPE_TCP_CONNECT;
+		else
+			*type = fuzz_msg_type;
+		*from = 1;
+	} else {
+		*type = MSG_TYPE_NO_MSG;
+		*from = -1;
+	}
+
+	*subnet = 0;
+	*src_port = fuzz_get_fuzz_port();
+	*dst_port = last_tx_src_port ? last_tx_src_port : fuzz_get_fuzz_port();
+}
+
 static void fuzz_process_reply(int request_id, const union Request_data *request, union Reply_data *reply, int replylen) {
 	static double network_time = 0.0;
 	static int received = 0;
 	static int sent = 0;
-	static int dst_port = 0;
+	static int last_tx_src_port = 0;
 	static int packet_len = 0;
 	static int valid_packet = 0;
 	static char packet[MAX_PACKET_SIZE];
@@ -187,11 +210,9 @@ static void fuzz_process_reply(int request_id, const union Request_data *request
 				}
 			}
 
-			reply->select.type = valid_packet ? MSG_TYPE_UDP_DATA : MSG_TYPE_NO_MSG;
-			reply->select.subnet = 0;
-			reply->select.from = valid_packet ? 1 : -1;
-			reply->select.src_port = fuzz_get_fuzz_port();
-			reply->select.dst_port = dst_port ? dst_port : fuzz_get_fuzz_port();
+			get_recv_data(valid_packet, received, last_tx_src_port,
+				      &reply->select.type, &reply->select.subnet, &reply->select.from,
+				      &reply->select.src_port, &reply->select.dst_port);
 			reply->select.time.real_time = network_time;
 			reply->select.time.monotonic_time = network_time;
 			reply->select.time.network_time = network_time;
@@ -203,7 +224,7 @@ static void fuzz_process_reply(int request_id, const union Request_data *request
 			if (fuzz_mode == FUZZ_MODE_REPLY) {
 				if (!fuzz_is_fuzz_port(request->send.dst_port))
 					break;
-				dst_port = request->send.src_port;
+				last_tx_src_port = request->send.src_port;
 			} else if (!fuzz_is_fuzz_port(request->send.src_port))
 				break;
 
@@ -212,14 +233,19 @@ static void fuzz_process_reply(int request_id, const union Request_data *request
 			break;
 		case REQ_RECV:
 			network_time += 1e-5;
-			reply->recv.type = valid_packet ? MSG_TYPE_UDP_DATA : MSG_TYPE_NO_MSG;
-			reply->recv.subnet = 0;
-			reply->recv.from = valid_packet ? 1 : -1;
-			reply->recv.src_port = fuzz_get_fuzz_port();
-			reply->recv.dst_port = dst_port ? dst_port : fuzz_get_fuzz_port();
+			get_recv_data(valid_packet, received, last_tx_src_port,
+				      &reply->recv.type, &reply->recv.subnet, &reply->recv.from,
+				      &reply->recv.src_port, &reply->recv.dst_port);
+
+			received++;
+
+			if (reply->recv.type != fuzz_msg_type) {
+				reply->recv.len = 0;
+				break;
+			}
+
 			memcpy(reply->recv.data, packet, packet_len);
 			reply->recv.len = packet_len;
-			received++;
 			valid_packet = 0;
 			packet_len = 0;
 			fuzz_switch_fuzz_port();
