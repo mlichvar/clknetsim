@@ -154,7 +154,8 @@ static void get_recv_data(int valid_packet, int received, int last_tx_src_port,
 	*dst_port = last_tx_src_port ? last_tx_src_port : fuzz_get_fuzz_port();
 }
 
-static void fuzz_process_reply(int request_id, const union Request_data *request, union Reply_data *reply, int replylen) {
+static void fuzz_process_request(int request_id, const union Request_data *request,
+				 union Reply_data *reply, int replylen) {
 	static double network_time = 0.0;
 	static int received = 0;
 	static int sent = 0;

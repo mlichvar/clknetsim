@@ -290,7 +290,7 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 	assert(initialized);
 
 	if (fuzz_mode) {
-		fuzz_process_reply(request_id, request_data, reply, replylen);
+		fuzz_process_request(request_id, request_data, reply, replylen);
 		return;
 	}
 
