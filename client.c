@@ -1462,7 +1462,9 @@ int ioctl(int fd, unsigned long request, ...) {
 		req = va_arg(ap, struct ifreq *);
 		cmd = (struct ethtool_cmd *)req->ifr_data;
 
-		if (0) {
+		if (cmd->cmd == ETHTOOL_GSET) {
+			memset(cmd, 0, sizeof (*cmd));
+			ethtool_cmd_speed_set(cmd, 100000);
 #ifdef ETHTOOL_GET_TS_INFO
 		} else if (cmd->cmd == ETHTOOL_GET_TS_INFO) {
 			struct ethtool_ts_info *info;
