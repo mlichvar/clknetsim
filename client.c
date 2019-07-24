@@ -1457,23 +1457,30 @@ int ioctl(int fd, unsigned long request, ...) {
 		} else
 			ret = -1, errno = EINVAL;
 		req->ifr_netmask.sa_family = AF_UNSPEC;
-#ifdef ETHTOOL_GET_TS_INFO
 	} else if (request == SIOCETHTOOL) {
-		struct ethtool_ts_info *info;
+		struct ethtool_cmd *cmd;
 		req = va_arg(ap, struct ifreq *);
-		info = (struct ethtool_ts_info *)req->ifr_data;
-		memset(info, 0, sizeof (*info));
-		if (get_network_from_iface(req->ifr_name) >= 0) {
-			info->phc_index = timestamping > 1 ? REFCLK_PHC_INDEX : SYSCLK_PHC_INDEX;
-			info->so_timestamping = SOF_TIMESTAMPING_SOFTWARE |
-				SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_RX_SOFTWARE |
-				SOF_TIMESTAMPING_RAW_HARDWARE |
-				SOF_TIMESTAMPING_TX_HARDWARE | SOF_TIMESTAMPING_RX_HARDWARE;
-			info->tx_types = HWTSTAMP_TX_ON;
-			info->rx_filters = 1 << HWTSTAMP_FILTER_NONE | 1 << HWTSTAMP_FILTER_ALL;
+		cmd = (struct ethtool_cmd *)req->ifr_data;
+
+		if (0) {
+#ifdef ETHTOOL_GET_TS_INFO
+		} else if (cmd->cmd == ETHTOOL_GET_TS_INFO) {
+			struct ethtool_ts_info *info;
+			info = (struct ethtool_ts_info *)req->ifr_data;
+			memset(info, 0, sizeof (*info));
+			if (get_network_from_iface(req->ifr_name) >= 0) {
+				info->phc_index = timestamping > 1 ? REFCLK_PHC_INDEX : SYSCLK_PHC_INDEX;
+				info->so_timestamping = SOF_TIMESTAMPING_SOFTWARE |
+					SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_RX_SOFTWARE |
+					SOF_TIMESTAMPING_RAW_HARDWARE |
+					SOF_TIMESTAMPING_TX_HARDWARE | SOF_TIMESTAMPING_RX_HARDWARE;
+				info->tx_types = HWTSTAMP_TX_ON;
+				info->rx_filters = 1 << HWTSTAMP_FILTER_NONE | 1 << HWTSTAMP_FILTER_ALL;
+			} else
+				ret = -1, errno = EINVAL;
+#endif
 		} else
 			ret = -1, errno = EINVAL;
-#endif
 #ifdef PTP_CLOCK_GETCAPS
 	} else if (request == PTP_CLOCK_GETCAPS && (fd == REFCLK_FD || fd == SYSCLK_FD)) {
 		struct ptp_clock_caps *caps = va_arg(ap, struct ptp_clock_caps *);
