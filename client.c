@@ -1896,6 +1896,27 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		if (sockets[s].time_stamping & SOF_TIMESTAMPING_RAW_HARDWARE) {
 			clock_gettime(timestamping > 1 ? REFCLK_ID : CLOCK_REALTIME, &ts);
 			memcpy((struct timespec *)CMSG_DATA(cmsg) + 2, &ts, sizeof (ts));
+
+#ifdef SCM_TIMESTAMPING_PKTINFO
+			if (!(flags & MSG_ERRQUEUE) &&
+			    (sockets[s].time_stamping & SOF_TIMESTAMPING_OPT_PKTINFO) ==
+			    SOF_TIMESTAMPING_OPT_PKTINFO) {
+				struct scm_ts_pktinfo tpi;
+
+				cmsg = (struct cmsghdr *)((char *)CMSG_FIRSTHDR(msg) + cmsglen);
+				cmsglen += CMSG_SPACE(sizeof (tpi));
+				assert(msg->msg_control && msg->msg_controllen >= cmsglen);
+				cmsg->cmsg_level = SOL_SOCKET;
+				cmsg->cmsg_type = SCM_TIMESTAMPING_PKTINFO;
+				cmsg->cmsg_len = CMSG_LEN(sizeof (tpi));
+
+				memset(&tpi, 0, sizeof (tpi));
+				tpi.if_index = rep.subnet + 1;
+				tpi.pkt_length = msglen + 42;
+
+				memcpy(CMSG_DATA(cmsg), &tpi, sizeof (tpi));
+			}
+#endif
 		}
 	}
 #endif
