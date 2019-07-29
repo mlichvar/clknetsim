@@ -1655,7 +1655,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 
 	timestamping = sockets[s].time_stamping;
 	for (cmsg = CMSG_FIRSTHDR(msg); cmsg; cmsg = CMSG_NXTHDR((struct msghdr *)msg, cmsg)) {
-		if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SO_TIMESTAMPING)
+		if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_TIMESTAMPING)
 			memcpy(&timestamping, CMSG_DATA(cmsg), sizeof (timestamping));
 	}
 
@@ -1886,7 +1886,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 
 		memset(cmsg, 0, CMSG_SPACE(3 * sizeof (ts)));
 		cmsg->cmsg_level = SOL_SOCKET;
-		cmsg->cmsg_type = SO_TIMESTAMPING;
+		cmsg->cmsg_type = SCM_TIMESTAMPING;
 		cmsg->cmsg_len = CMSG_LEN(3 * sizeof (ts));
 
 		if (sockets[s].time_stamping & SOF_TIMESTAMPING_SOFTWARE) {
