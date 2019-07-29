@@ -65,6 +65,8 @@
 #define PTP_PRIMARY_MCAST_ADDR 0xe0000181 /* 224.0.1.129 */
 #define PTP_PDELAY_MCAST_ADDR 0xe000006b /* 224.0.0.107 */
 
+#define LINK_SPEED 100000
+
 #define REFCLK_FD 1000
 #define REFCLK_ID ((~(clockid_t)REFCLK_FD << 3) | 3)
 #define REFCLK_PHC_INDEX 0
@@ -612,6 +614,23 @@ static double timeval_to_time(const struct timeval *tv, time_t offset) {
 
 static double timespec_to_time(const struct timespec *tp, time_t offset) {
 	return tp->tv_sec + offset + tp->tv_nsec / 1e9;
+}
+
+static void normalize_timespec(struct timespec *tp) {
+	while (tp->tv_nsec >= 1000000000) {
+		tp->tv_nsec -= 1000000000;
+		tp->tv_sec++;
+	}
+	while (tp->tv_nsec < 0) {
+		tp->tv_nsec += 1000000000;
+		tp->tv_sec--;
+	}
+}
+
+static void add_to_timespec(struct timespec *tp, double offset) {
+	tp->tv_sec += floor(offset);
+	tp->tv_nsec += (offset - floor(offset)) * 1e9;
+	normalize_timespec(tp);
 }
 
 int gettimeofday(struct timeval *tv, struct timezone *tz) {
@@ -1464,7 +1483,7 @@ int ioctl(int fd, unsigned long request, ...) {
 
 		if (cmd->cmd == ETHTOOL_GSET) {
 			memset(cmd, 0, sizeof (*cmd));
-			ethtool_cmd_speed_set(cmd, 100000);
+			ethtool_cmd_speed_set(cmd, LINK_SPEED);
 #ifdef ETHTOOL_GET_TS_INFO
 		} else if (cmd->cmd == ETHTOOL_GET_TS_INFO) {
 			struct ethtool_ts_info *info;
@@ -1895,6 +1914,9 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		}
 		if (sockets[s].time_stamping & SOF_TIMESTAMPING_RAW_HARDWARE) {
 			clock_gettime(timestamping > 1 ? REFCLK_ID : CLOCK_REALTIME, &ts);
+			if (!(flags & MSG_ERRQUEUE))
+				add_to_timespec(&ts, -(8 * (msglen + 42 + 4) / (1e6 * LINK_SPEED)));
+
 			memcpy((struct timespec *)CMSG_DATA(cmsg) + 2, &ts, sizeof (ts));
 
 #ifdef SCM_TIMESTAMPING_PKTINFO
