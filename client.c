@@ -2210,6 +2210,12 @@ long syscall(long number, ...) {
 			r = clock_adjtime(clock_id, timex);
 			break;
 #endif
+#ifdef __NR_getrandom
+		case __NR_getrandom:
+			r = -1;
+			errno = ENOTSUP;
+			break;
+#endif
 		default:
 			assert(0);
 	}
