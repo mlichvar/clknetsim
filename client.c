@@ -38,6 +38,7 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <netdb.h>
 #include <pwd.h>
 #include <stdarg.h>
 #include <signal.h>
@@ -2301,4 +2302,137 @@ int setuid(uid_t uid) {
 
 int cap_set_proc() {
 	return 0;
+}
+
+static struct addrinfo *get_addrinfo(uint32_t addr, int port, int type, struct addrinfo *next) {
+	struct sockaddr_in *sin;
+	struct addrinfo *r;
+
+	sin = malloc(sizeof *sin);
+	sin->sin_family = AF_INET;
+	sin->sin_port = htons(port);
+	sin->sin_addr.s_addr = htonl(addr);
+
+	r = malloc(sizeof *r);
+	memset(r, 0, sizeof *r);
+
+	r->ai_family = AF_INET;
+	r->ai_socktype = type;
+	r->ai_addrlen = sizeof *sin;
+	r->ai_addr = (struct sockaddr *)sin;
+
+	r->ai_next = next;
+
+	return r;
+}
+
+int getaddrinfo(const char *node, const char *service, const struct addrinfo *hints,
+		struct addrinfo **res) {
+	int port = 0, type = SOCK_DGRAM;
+	struct in_addr addr;
+
+	if (hints) {
+		if ((hints->ai_family != AF_UNSPEC && hints->ai_family != AF_INET) ||
+		    (hints->ai_socktype != SOCK_STREAM && hints->ai_socktype != SOCK_DGRAM &&
+		     hints->ai_socktype != 0))
+			return EAI_NONAME;
+		if (hints->ai_socktype == SOCK_STREAM)
+			type = SOCK_STREAM;
+	}
+
+	if (service) {
+		if (strcmp(service, "ntp") == 0)
+			port = 123;
+		else if (service[0] >= '0' && service[0] <= '9')
+			port = atoi(service);
+		else
+			return EAI_NONAME;
+	}
+
+	if (node == NULL) {
+		*res = get_addrinfo(INADDR_ANY, port, type, NULL);
+	} else if (inet_aton(node, &addr)) {
+		*res = get_addrinfo(ntohl(addr.s_addr), port, type, NULL);
+	} else if (strcmp(node + strlen(node) - 4, ".clk") == 0) {
+		const char *s = strstr(node, ".net");
+		int subnet;
+
+		if (s == NULL)
+			return EAI_NONAME;
+
+		subnet = atoi(s + 4) - 1;
+
+		if (strncmp(node, "nodes-", 6) == 0) {
+			s = node + 5;
+			*res = NULL;
+			do {
+				*res = get_addrinfo(NODE_ADDR(subnet, atoi(s + 1) - 1), port, type, *res);
+				s = strchr(s + 1, '-');
+			} while (s);
+		} else if (strncmp(node, "node", 4) == 0) {
+			*res = get_addrinfo(NODE_ADDR(subnet, atoi(node + 4) - 1), port, type, NULL);
+		} else {
+			return EAI_NONAME;
+		}
+	} else {
+		return EAI_NONAME;
+	}
+
+	return 0;
+}
+
+void freeaddrinfo(struct addrinfo *res) {
+	if (res->ai_next)
+		freeaddrinfo(res->ai_next);
+	free(res->ai_addr);
+	free(res);
+}
+
+int getnameinfo(const struct sockaddr *addr, socklen_t addrlen,
+		char *host, socklen_t hostlen,
+		char *serv, socklen_t servlen, int flags) {
+	const struct sockaddr_in *sin = (const struct sockaddr_in *)addr;
+	int node, subnet;
+
+	if (addrlen < sizeof *sin || sin->sin_family != AF_INET)
+		return EAI_NONAME;
+
+	assert(!(flags & NI_NOFQDN));
+	assert(!(flags & NI_NUMERICHOST));
+	assert(!(flags & NI_NUMERICSERV));
+
+	if (host && hostlen > 0) {
+		node = NODE_FROM_ADDR(ntohl(sin->sin_addr.s_addr));
+		subnet = SUBNET_FROM_ADDR(ntohl(sin->sin_addr.s_addr));
+		if (subnet < 0 || subnet > 100) {
+			assert(flags & NI_NAMEREQD);
+			return EAI_NONAME;
+		}
+		if (snprintf(host, hostlen, "node%d.net%d.clk", node + 1, subnet + 1) >= hostlen)
+			return EAI_OVERFLOW;
+	}
+
+	if (serv && servlen > 0) {
+		switch (ntohs(sin->sin_port)) {
+			case 123:
+				if (snprintf(serv, servlen, "ntp") >= servlen)
+					return EAI_OVERFLOW;
+				break;
+			default:
+				if (snprintf(serv, servlen, "%u", ntohs(sin->sin_port)) >= servlen)
+					return EAI_OVERFLOW;
+		}
+	}
+
+	return 0;
+}
+
+struct hostent *gethostbyname(const char *name) {
+	h_errno = HOST_NOT_FOUND;
+	return NULL;
+}
+
+struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type) {
+	h_errno = HOST_NOT_FOUND;
+	return NULL;
 }
