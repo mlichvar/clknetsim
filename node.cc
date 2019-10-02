@@ -63,6 +63,8 @@ bool Node::process_fd() {
 	int received, reqlen;
 
 	received = recv(fd, &request, sizeof (request), 0);
+	if (received < 0)
+		fprintf(stderr, "recv() failed: %s\n", strerror(errno));
 	if (received < (int)sizeof (request.header))
 		return false;
 

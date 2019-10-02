@@ -108,18 +108,18 @@ bool Network::prepare_clients() {
 
 	sockfd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
 	if (sockfd < 0) {
-		fprintf(stderr, "socket() failed\n");
+		fprintf(stderr, "socket() failed: %s\n", strerror(errno));
 		return false;
 	}
 
 	unlink(socket_name);
 	if (bind(sockfd, (struct sockaddr *)&s, sizeof (s)) < 0) {
-		fprintf(stderr, "bind() failed\n");
+		fprintf(stderr, "bind() failed: %s\n", strerror(errno));
 		return false;
 	}
 
 	if (listen(sockfd, nodes.size()) < 0) {
-		fprintf(stderr, "listen() failed\n");
+		fprintf(stderr, "listen() failed: %s\n", strerror(errno));
 		return false;
 	}
 
@@ -130,7 +130,7 @@ bool Network::prepare_clients() {
 		fprintf(stderr, "\rWaiting for %u clients...", (unsigned int)nodes.size() - i);
 		fd = accept(sockfd, NULL, NULL);
 		if (fd < 0) {
-			fprintf(stderr, "accept() failed\n");
+			fprintf(stderr, "\naccept() failed: %s\n", strerror(errno));
 			return false;
 		}
 
