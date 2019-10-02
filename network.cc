@@ -18,6 +18,8 @@
 #include "sysheaders.h"
 #include "network.h"
 
+#define CONNECT_TIMEOUT 10
+
 Packet_queue::Packet_queue() {
 }
 
@@ -100,6 +102,7 @@ Network::~Network() {
 
 bool Network::prepare_clients() {
 	struct sockaddr_un s;
+	struct timeval tv;
 	int sockfd, fd;
         unsigned int i;
 
@@ -120,6 +123,14 @@ bool Network::prepare_clients() {
 
 	if (listen(sockfd, nodes.size()) < 0) {
 		fprintf(stderr, "listen() failed: %s\n", strerror(errno));
+		return false;
+	}
+
+	tv.tv_sec = CONNECT_TIMEOUT;
+	tv.tv_usec = 0;
+
+	if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof (tv))) {
+		fprintf(stderr, "setsockopt() failed: %s\n", strerror(errno));
 		return false;
 	}
 
