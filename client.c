@@ -90,7 +90,7 @@ static size_t (*_fread)(void *ptr, size_t size, size_t nmemb, FILE *stream);
 static int (*_fileno)(FILE *stream);
 static int (*_fclose)(FILE *fp);
 static int (*_fcntl)(int fd, int cmd, ...);
-static int (*_open)(const char *pathname, int flags);
+static int (*_open)(const char *pathname, int flags, mode_t mode);
 static int (*_close)(int fd);
 static int (*_socket)(int domain, int type, int protocol);
 static int (*_connect)(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
@@ -208,7 +208,7 @@ static void init(void) {
 	_fileno = (int (*)(FILE *stream))dlsym(RTLD_NEXT, "fileno");
 	_fclose = (int (*)(FILE *fp))dlsym(RTLD_NEXT, "fclose");
 	_fcntl = (int (*)(int fd, int cmd, ...))dlsym(RTLD_NEXT, "fcntl");
-	_open = (int (*)(const char *pathname, int flags))dlsym(RTLD_NEXT, "open");
+	_open = (int (*)(const char *pathname, int flags, mode_t mode))dlsym(RTLD_NEXT, "open");
 	_close = (int (*)(int fd))dlsym(RTLD_NEXT, "close");
 	_socket = (int (*)(int domain, int type, int protocol))dlsym(RTLD_NEXT, "socket");
 	_connect = (int (*)(int sockfd, const struct sockaddr *addr, socklen_t addrlen))dlsym(RTLD_NEXT, "connect");
@@ -1122,7 +1122,7 @@ int fclose(FILE *fp) {
 	return _fclose(fp);
 }
 
-int open(const char *pathname, int flags) {
+int open(const char *pathname, int flags, mode_t mode) {
 	int r;
 
 	assert(REFCLK_PHC_INDEX == 0 && SYSCLK_PHC_INDEX == 1);
@@ -1131,7 +1131,7 @@ int open(const char *pathname, int flags) {
 	else if (!strcmp(pathname, "/dev/ptp1"))
 		return SYSCLK_FD;
 
-	r = _open(pathname, flags);
+	r = _open(pathname, flags, mode);
 	assert(r < 0 || (r < BASE_SOCKET_FD && r < BASE_TIMER_FD));
 
 	return r;
