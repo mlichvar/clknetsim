@@ -1,5 +1,3 @@
-CC ?= gcc
-CXX ?= g++
 CFLAGS += -O2 -Wall -g -fPIC
 CXXFLAGS += $(CFLAGS)
 
