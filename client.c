@@ -634,7 +634,13 @@ static void add_to_timespec(struct timespec *tp, double offset) {
 	normalize_timespec(tp);
 }
 
-int gettimeofday(struct timeval *tv, struct timezone *tz) {
+int gettimeofday(struct timeval *tv,
+#if !defined(__GLIBC_PREREQ) || __GLIBC_PREREQ(2, 31) || defined(GETTIMEOFDAY_VOID)
+		 void *tz
+#else
+		 struct timezone *tz
+#endif
+		 ) {
 	double time;
 
 	time = get_real_time() + 0.5e-6;

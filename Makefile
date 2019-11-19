@@ -1,7 +1,10 @@
 CFLAGS += -O2 -Wall -g -fPIC
 CXXFLAGS += $(CFLAGS)
+CPPFLAGS += $(apiflags)
 
 all: clknetsim.so clknetsim
+
+apiflags := $(shell grep -q __timezone_ptr_t /usr/include/sys/time.h || echo -DGETTIMEOFDAY_VOID)
 
 clientobjs = client.o
 serverobjs = $(patsubst %.cc,%.o,$(wildcard *.cc))
