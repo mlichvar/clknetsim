@@ -74,6 +74,7 @@
 #define SYSCLK_FD 1001
 #define SYSCLK_CLOCKID ((~(clockid_t)SYSCLK_FD << 3) | 3)
 #define SYSCLK_PHC_INDEX 1
+#define URANDOM_FD 1010
 
 #define MAX_SOCKETS 20
 #define BASE_SOCKET_FD 100
@@ -86,6 +87,7 @@
 #define URANDOM_FILE (void *)0xD1230123
 
 static FILE *(*_fopen)(const char *path, const char *mode);
+static FILE *(*_fdopen)(int fd, const char *mode);
 static size_t (*_fread)(void *ptr, size_t size, size_t nmemb, FILE *stream);
 static int (*_fileno)(FILE *stream);
 static int (*_fclose)(FILE *fp);
@@ -204,6 +206,7 @@ static void init(void) {
 		return;
 
 	_fopen = (FILE *(*)(const char *path, const char *mode))dlsym(RTLD_NEXT, "fopen");
+	_fdopen = (FILE *(*)(int fd, const char *mode))dlsym(RTLD_NEXT, "fdopen");
 	_fread = (size_t (*)(void *ptr, size_t size, size_t nmemb, FILE *stream))dlsym(RTLD_NEXT, "fread");
 	_fileno = (int (*)(FILE *stream))dlsym(RTLD_NEXT, "fileno");
 	_fclose = (int (*)(FILE *fp))dlsym(RTLD_NEXT, "fclose");
@@ -1095,6 +1098,13 @@ FILE *fopen(const char *path, const char *mode) {
 	return _fopen(path, mode);
 }
 
+FILE *fdopen(int fd, const char *mode) {
+	if (fd == URANDOM_FD)
+		return URANDOM_FILE;
+
+	return _fdopen(fd, mode);
+}
+
 size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream) {
 	if (stream == URANDOM_FILE) {
 		size_t i, l = size * nmemb;
@@ -1136,6 +1146,8 @@ int open(const char *pathname, int flags, mode_t mode) {
 		return REFCLK_FD;
 	else if (!strcmp(pathname, "/dev/ptp1"))
 		return SYSCLK_FD;
+	else if (!strcmp(pathname, "/dev/urandom"))
+		return URANDOM_FD;
 
 	r = _open(pathname, flags, mode);
 	assert(r < 0 || (r < BASE_SOCKET_FD && r < BASE_TIMER_FD));
@@ -1146,7 +1158,7 @@ int open(const char *pathname, int flags, mode_t mode) {
 int close(int fd) {
 	int t, s;
 
-	if (fd == REFCLK_FD || fd == SYSCLK_FD) {
+	if (fd == REFCLK_FD || fd == SYSCLK_FD || fd == URANDOM_FD) {
 		return 0;
 	} else if ((t = get_timer_from_fd(fd)) >= 0) {
 		return timer_delete(get_timerid(t));
