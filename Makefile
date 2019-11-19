@@ -15,7 +15,7 @@ clknetsim: $(serverobjs)
 	$(CXX) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 clean:
-	rm -rf server *.so *.o core.* .deps
+	rm -rf clknetsim *.so *.o core.* .deps
 
 .deps:
 	@mkdir .deps
