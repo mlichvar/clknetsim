@@ -21,6 +21,7 @@
 #include <sys/timex.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/timerfd.h>
 #include <sys/ipc.h>
@@ -93,6 +94,7 @@ static int (*_fileno)(FILE *stream);
 static int (*_fclose)(FILE *fp);
 static int (*_fcntl)(int fd, int cmd, ...);
 static int (*_open)(const char *pathname, int flags, mode_t mode);
+static ssize_t (*_read)(int fd, void *buf, size_t count);
 static int (*_close)(int fd);
 static int (*_socket)(int domain, int type, int protocol);
 static int (*_connect)(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
@@ -212,6 +214,7 @@ static void init(void) {
 	_fclose = (int (*)(FILE *fp))dlsym(RTLD_NEXT, "fclose");
 	_fcntl = (int (*)(int fd, int cmd, ...))dlsym(RTLD_NEXT, "fcntl");
 	_open = (int (*)(const char *pathname, int flags, mode_t mode))dlsym(RTLD_NEXT, "open");
+	_read = (ssize_t (*)(int fd, void *buf, size_t count))dlsym(RTLD_NEXT, "read");
 	_close = (int (*)(int fd))dlsym(RTLD_NEXT, "close");
 	_socket = (int (*)(int domain, int type, int protocol))dlsym(RTLD_NEXT, "socket");
 	_connect = (int (*)(int sockfd, const struct sockaddr *addr, socklen_t addrlen))dlsym(RTLD_NEXT, "connect");
@@ -1107,17 +1110,8 @@ FILE *fdopen(int fd, const char *mode) {
 
 size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream) {
 	if (stream == URANDOM_FILE) {
-		size_t i, l = size * nmemb;
-		long r;
-
-		assert(RAND_MAX >= 0xffffff);
-		for (i = r = 0; i < l; i++) {
-			if (i % 3)
-				r >>= 8;
-			else
-				r = random();
-			((unsigned char *)ptr)[i] = r;
-		}
+		if (read(URANDOM_FD, ptr, size * nmemb) != size * nmemb)
+		    assert(0);
 
 		return nmemb;
 	}
@@ -1153,6 +1147,26 @@ int open(const char *pathname, int flags, mode_t mode) {
 	assert(r < 0 || (r < BASE_SOCKET_FD && r < BASE_TIMER_FD));
 
 	return r;
+}
+
+ssize_t read(int fd, void *buf, size_t count) {
+	if (fd == URANDOM_FD) {
+		size_t i;
+		long r;
+
+		assert(RAND_MAX >= 0xffffff);
+		for (i = r = 0; i < count; i++) {
+			if (i % 3)
+				r >>= 8;
+			else
+				r = random();
+			((unsigned char *)buf)[i] = r;
+		}
+
+		return count;
+	}
+
+	return _read(fd, buf, count);
 }
 
 int close(int fd) {
