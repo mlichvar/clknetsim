@@ -2245,8 +2245,11 @@ long syscall(long number, ...) {
 #endif
 #ifdef __NR_getrandom
 		case __NR_getrandom:
-			r = -1;
-			errno = ENOTSUP;
+			if (1) {
+				void *buf = va_arg(ap, void *);
+				size_t length = va_arg(ap, size_t);
+				r = read(URANDOM_FD, buf, length);
+			}
 			break;
 #endif
 		default:
@@ -2259,8 +2262,7 @@ long syscall(long number, ...) {
 #endif
 
 ssize_t getrandom(void *buf, size_t length, unsigned int flags) {
-	errno = ENOTSUP;
-	return -1;
+	return read(URANDOM_FD, buf, length);
 }
 
 void srandom(unsigned int seed) {
