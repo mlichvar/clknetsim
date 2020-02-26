@@ -296,7 +296,7 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 	struct Request_packet request;
 	int sent, received = 0;
 
-	assert(initialized);
+	init();
 
 	if (fuzz_mode) {
 		fuzz_process_request(request_id, request_data, reply, replylen);
@@ -663,6 +663,9 @@ int gettimeofday(struct timeval *tv,
 
 int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 	double time;
+
+	/* Allow reading the clock from other constructors */
+	init();
 
 	switch (which_clock) {
 		case CLOCK_REALTIME:
