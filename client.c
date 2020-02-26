@@ -1104,6 +1104,10 @@ FILE *fopen(const char *path, const char *mode) {
 	return _fopen(path, mode);
 }
 
+FILE *fopen64(const char *path, const char *mode) {
+	return fopen(path, mode);
+}
+
 FILE *fdopen(int fd, const char *mode) {
 	if (fd == URANDOM_FD)
 		return URANDOM_FILE;
