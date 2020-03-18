@@ -31,6 +31,7 @@
 #include <time.h>
 #include <stdio.h>
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <sys/un.h>
 #include <unistd.h>
 #include <assert.h>
@@ -93,7 +94,7 @@ static size_t (*_fread)(void *ptr, size_t size, size_t nmemb, FILE *stream);
 static int (*_fileno)(FILE *stream);
 static int (*_fclose)(FILE *fp);
 static int (*_fcntl)(int fd, int cmd, ...);
-static int (*_open)(const char *pathname, int flags, mode_t mode);
+static int (*_open)(const char *pathname, int flags, ...);
 static ssize_t (*_read)(int fd, void *buf, size_t count);
 static int (*_close)(int fd);
 static int (*_socket)(int domain, int type, int protocol);
@@ -213,7 +214,7 @@ static void init(void) {
 	_fileno = (int (*)(FILE *stream))dlsym(RTLD_NEXT, "fileno");
 	_fclose = (int (*)(FILE *fp))dlsym(RTLD_NEXT, "fclose");
 	_fcntl = (int (*)(int fd, int cmd, ...))dlsym(RTLD_NEXT, "fcntl");
-	_open = (int (*)(const char *pathname, int flags, mode_t mode))dlsym(RTLD_NEXT, "open");
+	_open = (int (*)(const char *pathname, int flags, ...))dlsym(RTLD_NEXT, "open");
 	_read = (ssize_t (*)(int fd, void *buf, size_t count))dlsym(RTLD_NEXT, "read");
 	_close = (int (*)(int fd))dlsym(RTLD_NEXT, "close");
 	_socket = (int (*)(int domain, int type, int protocol))dlsym(RTLD_NEXT, "socket");
@@ -1139,8 +1140,18 @@ int fclose(FILE *fp) {
 	return _fclose(fp);
 }
 
-int open(const char *pathname, int flags, mode_t mode) {
-	int r;
+int open(const char *pathname, int flags, ...) {
+	int r, mode_arg = 0;
+	mode_t mode = 0;
+	va_list ap;
+
+	mode_arg = flags & O_CREAT || (flags & O_TMPFILE) == O_TMPFILE;
+
+	if (mode_arg) {
+		va_start(ap, flags);
+		mode = va_arg(ap, mode_t);
+		va_end(ap);
+	}
 
 	assert(REFCLK_PHC_INDEX == 0 && SYSCLK_PHC_INDEX == 1);
 	if (!strcmp(pathname, "/dev/ptp0"))
@@ -1150,7 +1161,11 @@ int open(const char *pathname, int flags, mode_t mode) {
 	else if (!strcmp(pathname, "/dev/urandom"))
 		return URANDOM_FD;
 
-	r = _open(pathname, flags, mode);
+	if (mode_arg)
+		r = _open(pathname, flags, mode);
+	else
+		r = _open(pathname, flags);
+
 	assert(r < 0 || (r < BASE_SOCKET_FD && r < BASE_TIMER_FD));
 
 	return r;
