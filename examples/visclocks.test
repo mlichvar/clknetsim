@@ -1,0 +1,24 @@
+#!/bin/bash
+
+CLKNETSIM_PATH=..
+. ../clknetsim.bash
+
+export CLKNETSIM_RANDOM_SEED
+
+CLKNETSIM_RANDOM_SEED=1011
+generate_seq '(sum (* 2e-9 (normal)))' 50000 > freq.input
+CLKNETSIM_RANDOM_SEED=1012
+generate_seq '(+ 1e-5 (* 1e-4 (exponential)))' 10000 > delay_up.input
+CLKNETSIM_RANDOM_SEED=1013
+generate_seq '(+ 1e-5 (* 1e-4 (exponential)))' 10000 > delay_down.input
+CLKNETSIM_RANDOM_SEED=1014
+
+generate_config1 3 0.0 "(file \"freq.input\")" \
+	"(file \"delay_up.input\")" "(file \"delay_down.input\")"
+
+start_client 1 chrony "local stratum 1"
+start_client 2 chrony "server 192.168.123.1 minpoll 6 maxpoll 6 minsamples 32"
+start_client 3 chrony "server 192.168.123.1 minpoll 6 maxpoll 6 maxsamples 16"
+start_server 3 -o log.offset -p log.packets -l 50000
+
+../visclocks.py freq.input log.offset log.packets
