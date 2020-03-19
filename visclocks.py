@@ -78,7 +78,7 @@ for i in range(len(delay_lines)):
 
     last_line = []
     for line in delay_lines[i]:
-        if len(last_line) == 4 and len(line) == 4 and last_line[2] == "1" and line[1] == "1":
+        if len(last_line) == 9 and len(line) == 9 and last_line[2] == "1" and line[1] == "1":
             delay1 = float(last_line[3])
             delay2 = float(line[3])
             delays[i].append((int(float(line[0])), (delay1 - delay2) / 2, (delay1 + delay2) / 2))
