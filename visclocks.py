@@ -29,7 +29,7 @@ pygame.init()
 window = pygame.display.set_mode((maxx, maxy))
 font = pygame.font.SysFont("monospace", 12)
 
-pygame.time.set_timer(pygame.USEREVENT, 1000 / 30)
+pygame.time.set_timer(pygame.USEREVENT, 1000 // 30)
 
 white = (255, 255, 255)
 black = (0, 0, 0)
@@ -142,7 +142,7 @@ while True:
         if offset == "":
             eof = True
             break
-        offsets.appendleft(map(float, offset.split()))
+        offsets.appendleft(list(map(float, offset.split())))
         while len(offsets) > histsize:
             offsets.pop()
 
