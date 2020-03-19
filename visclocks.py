@@ -50,7 +50,7 @@ frame_skip = 10
 
 offset_rms = [ 0, 0, 0, 0 ]
 offset_lock = 0
-delays_shown = 3
+delays_shown = 2
 eof = False
 paused = False
 game_mode = False
