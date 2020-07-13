@@ -929,6 +929,22 @@ try_again:
 		case REPLY_SELECT_NORMAL:
 		case REPLY_SELECT_BROADCAST:
 			s = find_recv_socket(&rep);
+
+			if (rep.type == MSG_TYPE_TCP_CONNECT &&
+			    !sockets[s].listening && !sockets[s].connected) {
+				struct Reply_recv recv_rep;
+
+				/* drop the connection packet and let the client repeat the call
+				   in order to see that the socket is ready for writing */
+				make_request(REQ_RECV, NULL, 0, &recv_rep, sizeof (recv_rep));
+
+				assert(recv_rep.type == MSG_TYPE_TCP_CONNECT);
+				assert(sockets[s].type == SOCK_STREAM);
+					sockets[s].connected = 1;
+				errno = EINTR;
+				return -1;
+			}
+
 			recv_fd = s >= 0 ? get_socket_fd(s) : 0;
 
 			/* fetch and drop the packet if no fd is waiting for it */
@@ -943,21 +959,6 @@ try_again:
 							recv_rep.dst_port, recv_rep.subnet + 1);
 
 				goto try_again;
-			}
-
-			if (rep.type == MSG_TYPE_TCP_CONNECT &&
-			    !sockets[s].listening && !sockets[s].connected) {
-				struct Reply_recv recv_rep;
-
-				/* drop the connection packet and let the client repeat the call
-				   in order to see that the socket is ready for writing */
-				make_request(REQ_RECV, NULL, 0, &recv_rep, sizeof (recv_rep));
-
-				assert(recv_rep.type == MSG_TYPE_TCP_CONNECT);
-				assert(sockets[s].type == SOCK_STREAM);
-				sockets[s].connected = 1;
-				errno = EINTR;
-				return -1;
 			}
 			break;
 		default:
