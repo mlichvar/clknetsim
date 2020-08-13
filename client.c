@@ -930,7 +930,7 @@ try_again:
 		case REPLY_SELECT_BROADCAST:
 			s = find_recv_socket(&rep);
 
-			if (rep.type == MSG_TYPE_TCP_CONNECT &&
+			if (s >= 0 && rep.type == MSG_TYPE_TCP_CONNECT &&
 			    !sockets[s].listening && !sockets[s].connected) {
 				struct Reply_recv recv_rep;
 
@@ -940,7 +940,7 @@ try_again:
 
 				assert(recv_rep.type == MSG_TYPE_TCP_CONNECT);
 				assert(sockets[s].type == SOCK_STREAM);
-					sockets[s].connected = 1;
+				sockets[s].connected = 1;
 				errno = EINTR;
 				return -1;
 			}
