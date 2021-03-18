@@ -47,6 +47,7 @@
 #include <ifaddrs.h>
 #include <linux/types.h>
 #include <linux/ethtool.h>
+#include <linux/pps.h>
 #include <linux/sockios.h>
 #ifdef SO_TIMESTAMPING
 #include <linux/ptp_clock.h>
@@ -76,6 +77,7 @@
 #define SYSCLK_FD 1001
 #define SYSCLK_CLOCKID ((~(clockid_t)SYSCLK_FD << 3) | 3)
 #define SYSCLK_PHC_INDEX 1
+#define PPS_FD 1002
 #define URANDOM_FD 1010
 
 #define MAX_SOCKETS 20
@@ -194,6 +196,7 @@ static int shm_refclocks = 0;
 static double shm_refclock_time = 0.0;
 static struct Reply_getrefoffsets refclock_offsets;
 static int refclock_offsets_used = REPLY_GETREFOFFSETS_SIZE;
+static int pps_fds = 0;
 
 static void make_request(int request_id, const void *request_data, int reqlen, void *reply, int replylen);
 
@@ -387,7 +390,7 @@ static void fill_refclock_sample(void) {
 	double clock_time, receive_time, round_corr;
 	int i;
 
-	if (!shm_refclocks)
+	if (shm_refclocks == 0 && pps_fds == 0)
 		return;
 
 	make_request(REQ_GETREFSAMPLE, NULL, 0, &r, sizeof (r));
@@ -1053,7 +1056,7 @@ int usleep(useconds_t usec) {
 	tv.tv_usec = usec % 1000000;
 
 	r = select(0, NULL, NULL, NULL, &tv);
-	assert(r == 0);
+	assert(r <= 0);
 
 	return 0;
 }
@@ -1159,6 +1162,8 @@ int open(const char *pathname, int flags, ...) {
 		return REFCLK_FD;
 	else if (!strcmp(pathname, "/dev/ptp1"))
 		return SYSCLK_FD;
+	else if (!strcmp(pathname, "/dev/pps0"))
+		return pps_fds++, PPS_FD;
 	else if (!strcmp(pathname, "/dev/urandom"))
 		return URANDOM_FD;
 
@@ -1196,6 +1201,9 @@ int close(int fd) {
 	int t, s;
 
 	if (fd == REFCLK_FD || fd == SYSCLK_FD || fd == URANDOM_FD) {
+		return 0;
+	} else if (fd == PPS_FD) {
+		pps_fds--;
 		return 0;
 	} else if ((t = get_timer_from_fd(fd)) >= 0) {
 		return timer_delete(get_timerid(t));
@@ -1613,6 +1621,35 @@ int ioctl(int fd, unsigned long request, ...) {
 		ts_config->tx_type = HWTSTAMP_TX_ON;
 		ts_config->rx_filter = HWTSTAMP_FILTER_ALL;
 #endif
+	} else if (request == PPS_GETCAP && fd == PPS_FD) {
+		int *mode = va_arg(ap, int *);
+		*mode = PPS_CAPTUREASSERT | PPS_TSFMT_TSPEC;
+	} else if (request == PPS_GETPARAMS && fd == PPS_FD) {
+		struct pps_kparams *params = va_arg(ap, struct pps_kparams *);
+		memset(params, 0, sizeof (*params));
+		params->mode = PPS_CAPTUREASSERT | PPS_TSFMT_TSPEC;
+	} else if (request == PPS_SETPARAMS && fd == PPS_FD) {
+		struct pps_kparams *params = va_arg(ap, struct pps_kparams *);
+		if (params->mode != (PPS_CAPTUREASSERT | PPS_TSFMT_TSPEC))
+			ret = -1, errno = EINVAL;
+	} else if (request == PPS_FETCH && fd == PPS_FD) {
+		static unsigned long seq = 0;
+		struct pps_fdata *data = va_arg(ap, struct pps_fdata *);
+		memset(&data->info, 0, sizeof (data->info));
+		if (data->timeout.flags & PPS_TIME_INVALID ||
+		    data->timeout.sec > 0 || data->timeout.nsec > 0) {
+			double d, prev_shm_time = shm_refclock_time;
+			while (prev_shm_time == shm_refclock_time) {
+				d = ceil(network_time) - network_time + 0.001;
+				usleep((d > 0.2 ? d : 0.2) * 1e6);
+			}
+		}
+		if (shm_refclock_time > 0.0) {
+			data->info.assert_sequence = ++seq;
+			data->info.assert_tu.sec = shm_refclock_time;
+			data->info.assert_tu.nsec = (shm_refclock_time - data->info.assert_tu.sec) * 1e9;
+			data->info.assert_tu.sec += system_time_offset;
+		}
 	} else {
 		ret = -1;
 		errno = EINVAL;
