@@ -207,6 +207,8 @@ static void init(void) {
 	struct sockaddr_un s = {AF_UNIX, "clknetsim.sock"};
 	const char *env;
 	unsigned int connect_retries = 100; /* 10 seconds */
+	char command[64];
+	FILE *f;
 
 	if (initialized)
 		return;
@@ -244,6 +246,20 @@ static void init(void) {
 	env = getenv("CLKNETSIM_TIMESTAMPING");
 	if (env)
 		timestamping = atoi(env);
+
+	f = _fopen("/proc/self/comm", "r");
+	if (f) {
+		command[0] = '\0';
+		if (!fgets(command, sizeof (command), f))
+			;
+		fclose(f);
+
+		if (strncmp(command, "valgrind", 8) == 0) {
+			/* don't connect to the server */
+			initialized = 1;
+			return;
+		}
+	}
 
 	if (fuzz_init()) {
 		node = 0;
