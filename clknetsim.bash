@@ -19,7 +19,7 @@ client_pids=""
 
 start_client() {
     local node=$1 client=$2 config=$3 suffix=$4 opts=$5
-    local args=() line lastpid
+    local args=() line lastpid wrapper_options=""
 
     rm -f $CLKNETSIM_TMPDIR/log.$node $CLKNETSIM_TMPDIR/conf.$node
 
@@ -93,9 +93,15 @@ start_client() {
 	    ;;
     esac
 
+    if [[ $CLKNETSIM_CLIENT_WRAPPER == *valgrind* ]]; then
+	    wrapper_options="--log-file=$CLKNETSIM_TMPDIR/valgrind.$node"
+    fi
+
     LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
-    CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=$CLKNETSIM_TMPDIR/sock \
-    $CLKNETSIM_CLIENT_WRAPPER $client$suffix "${args[@]}" &> $CLKNETSIM_TMPDIR/log.$node &
+	CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=$CLKNETSIM_TMPDIR/sock \
+	$CLKNETSIM_CLIENT_WRAPPER $wrapper_options \
+	$client$suffix "${args[@]}" &> $CLKNETSIM_TMPDIR/log.$node &
+
     lastpid=$!
     disown $lastpid
 
@@ -103,16 +109,32 @@ start_client() {
 }
 
 start_server() {
-    local nodes=$1 ret=0
+    local nodes=$1 ret=0 wrapper_options=""
     shift
-    $CLKNETSIM_SERVER_WRAPPER $CLKNETSIM_PATH/clknetsim "$@" -s $CLKNETSIM_TMPDIR/sock \
+
+    if [[ $CLKNETSIM_SERVER_WRAPPER == *valgrind* ]]; then
+	    wrapper_options="--log-file=$CLKNETSIM_TMPDIR/valgrind.0"
+    fi
+
+    $CLKNETSIM_SERVER_WRAPPER $wrapper_options \
+	$CLKNETSIM_PATH/clknetsim "$@" -s $CLKNETSIM_TMPDIR/sock \
 	$CLKNETSIM_TMPDIR/conf $nodes > $CLKNETSIM_TMPDIR/stats 2> $CLKNETSIM_TMPDIR/log
+
     if [ $? -ne 0 ]; then
         echo clknetsim failed 1>&2
         ret=1
     fi
+
     kill $client_pids &> /dev/null
     client_pids=" "
+
+    if ls tmp/valgrind.* &> /dev/null; then
+	if grep -q 'ERROR SUMMARY: [^0]' tmp/valgrind.*; then
+		echo " valgrind error" 1>&2
+		ret=1
+	fi
+    fi
+
     return $ret
 }
 
