@@ -95,7 +95,7 @@ start_client() {
 
     LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
     CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=$CLKNETSIM_TMPDIR/sock \
-    $client_wrapper $client$suffix "${args[@]}" &> $CLKNETSIM_TMPDIR/log.$node &
+    $CLKNETSIM_CLIENT_WRAPPER $client$suffix "${args[@]}" &> $CLKNETSIM_TMPDIR/log.$node &
     lastpid=$!
     disown $lastpid
 
@@ -105,7 +105,7 @@ start_client() {
 start_server() {
     local nodes=$1 ret=0
     shift
-    $server_wrapper $CLKNETSIM_PATH/clknetsim "$@" -s $CLKNETSIM_TMPDIR/sock \
+    $CLKNETSIM_SERVER_WRAPPER $CLKNETSIM_PATH/clknetsim "$@" -s $CLKNETSIM_TMPDIR/sock \
 	$CLKNETSIM_TMPDIR/conf $nodes > $CLKNETSIM_TMPDIR/stats 2> $CLKNETSIM_TMPDIR/log
     if [ $? -ne 0 ]; then
         echo clknetsim failed 1>&2
