@@ -748,7 +748,23 @@ int adjtimex(struct timex *buf) {
 	if (buf->modes & ADJ_SETOFFSET)
 		local_time_valid = 0;
 
-	req.timex = *buf;
+	memset(&req, 0, sizeof (req));
+	req.timex.modes = buf->modes;
+	if (buf->modes & ADJ_FREQUENCY)
+		req.timex.freq = buf->freq;
+	if (buf->modes & ADJ_MAXERROR)
+		req.timex.maxerror = buf->maxerror;
+	if (buf->modes & ADJ_STATUS)
+		req.timex.status = buf->status;
+	if ((buf->modes & ADJ_TIMECONST) || (buf->modes & ADJ_TAI))
+		req.timex.constant = buf->constant;
+	if (buf->modes & ADJ_TICK)
+		req.timex.tick = buf->tick;
+	if (buf->modes & ADJ_OFFSET)
+		req.timex.offset = buf->offset;
+	if (buf->modes & ADJ_SETOFFSET)
+		req.timex.time = buf->time;
+
 	make_request(REQ_ADJTIMEX, &req, sizeof (req), &rep, sizeof (rep));
 	*buf = rep.timex;
 	
