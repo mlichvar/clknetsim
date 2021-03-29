@@ -109,6 +109,7 @@ static int (*_shmget)(key_t key, size_t size, int shmflg);
 static void *(*_shmat)(int shmid, const void *shmaddr, int shmflg);
 
 static unsigned int node;
+static int initialized_symbols = 0;
 static int initialized = 0;
 static int clknetsim_fd;
 static int precision_hack = 1;
@@ -200,17 +201,8 @@ static int pps_fds = 0;
 
 static void make_request(int request_id, const void *request_data, int reqlen, void *reply, int replylen);
 
-__attribute__((constructor))
-static void init(void) {
-	struct Request_register req;
-	struct Reply_register rep;
-	struct sockaddr_un s = {AF_UNIX, "clknetsim.sock"};
-	const char *env;
-	unsigned int connect_retries = 100; /* 10 seconds */
-	char command[64];
-	FILE *f;
-
-	if (initialized)
+static void init_symbols(void) {
+	if (initialized_symbols)
 		return;
 
 	_fopen = (FILE *(*)(const char *path, const char *mode))dlsym(RTLD_NEXT, "fopen");
@@ -230,6 +222,24 @@ static void init(void) {
 	_srandom = (void (*)(unsigned int seed))dlsym(RTLD_NEXT, "srandom");
 	_shmget = (int (*)(key_t key, size_t size, int shmflg))dlsym(RTLD_NEXT, "shmget");
 	_shmat = (void *(*)(int shmid, const void *shmaddr, int shmflg))dlsym(RTLD_NEXT, "shmat");
+
+	initialized_symbols = 1;
+}
+
+__attribute__((constructor))
+static void init(void) {
+	unsigned int connect_retries = 100; /* 10 seconds */
+	struct sockaddr_un s = {AF_UNIX, "clknetsim.sock"};
+	struct Request_register req;
+	struct Reply_register rep;
+	const char *env;
+	char command[64];
+	FILE *f;
+
+	if (initialized)
+		return;
+
+	init_symbols();
 
 	env = getenv("CLKNETSIM_START_DATE");
 	if (env)
@@ -684,8 +694,15 @@ int gettimeofday(struct timeval *tv,
 int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 	double time;
 
-	/* Allow reading the clock from other constructors */
-	init();
+	/* try to allow reading of the clock from other constructors, but
+	   prevent a recursive call (e.g. due to a special memory allocator) */
+	if (!initialized) {
+		if (initialized_symbols) {
+			errno = EINVAL;
+			return -1;
+		}
+		init();
+	}
 
 	switch (which_clock) {
 		case CLOCK_REALTIME:
@@ -1136,7 +1153,7 @@ FILE *fopen(const char *path, const char *mode) {
 
 	/* make sure _fopen is initialized in case it is called from another
 	   constructor (e.g. OpenSSL's libcrypto) */
-	init();
+	init_symbols();
 
 	return _fopen(path, mode);
 }
