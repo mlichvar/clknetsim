@@ -2500,7 +2500,8 @@ int getaddrinfo(const char *node, const char *service, const struct addrinfo *hi
 		*res = get_addrinfo(INADDR_ANY, port, type, NULL);
 	} else if (inet_aton(node, &addr)) {
 		*res = get_addrinfo(ntohl(addr.s_addr), port, type, NULL);
-	} else if (strlen(node) > 4 && strcmp(node + strlen(node) - 4, ".clk") == 0) {
+	} else if ((strlen(node) > 4 && strcmp(node + strlen(node) - 4, ".clk") == 0) ||
+		   (strlen(node) > 5 && strcmp(node + strlen(node) - 5, ".clk.") == 0)) {
 		const char *s = strstr(node, ".net");
 		int subnet;
 
