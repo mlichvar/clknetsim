@@ -1220,6 +1220,8 @@ int open(const char *pathname, int flags, ...) {
 	else if (!strcmp(pathname, "/dev/urandom"))
 		return URANDOM_FD;
 
+	init_symbols();
+
 	if (mode_arg)
 		r = _open(pathname, flags, mode);
 	else
