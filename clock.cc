@@ -403,5 +403,5 @@ void Refclock::get_offsets(double *offsets, int size) {
 	int i;
 
 	for (i = 0; i < size; i++)
-		offsets[i] = offset_generator->generate(NULL);
+		offsets[i] = offset_generator ? offset_generator->generate(NULL) : 0.0;
 }
