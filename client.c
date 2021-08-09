@@ -97,6 +97,7 @@ static int (*_fileno)(FILE *stream);
 static int (*_fclose)(FILE *fp);
 static int (*_fcntl)(int fd, int cmd, ...);
 static int (*_fstat)(int fd, struct stat *statbuf);
+static int (*_fxstat)(int ver, int fd, struct stat *statbuf);
 static int (*_open)(const char *pathname, int flags, ...);
 static ssize_t (*_read)(int fd, void *buf, size_t count);
 static int (*_close)(int fd);
@@ -213,6 +214,7 @@ static void init_symbols(void) {
 	_fclose = (int (*)(FILE *fp))dlsym(RTLD_NEXT, "fclose");
 	_fcntl = (int (*)(int fd, int cmd, ...))dlsym(RTLD_NEXT, "fcntl");
 	_fstat = (int (*)(int fd, struct stat *statbuf))dlsym(RTLD_NEXT, "fstat");
+	_fxstat = (int (*)(int ver, int fd, struct stat *statbuf))dlsym(RTLD_NEXT, "__fxstat");
 	_open = (int (*)(const char *pathname, int flags, ...))dlsym(RTLD_NEXT, "open");
 	_read = (ssize_t (*)(int fd, void *buf, size_t count))dlsym(RTLD_NEXT, "read");
 	_close = (int (*)(int fd))dlsym(RTLD_NEXT, "close");
@@ -1538,11 +1540,16 @@ int fstat(int fd, struct stat *statbuf) {
 	if (fd == URANDOM_FD)
 		return stat("/dev/urandom", statbuf);
 
+#ifdef _STAT_VER
+	if (_fxstat)
+		return _fxstat(_STAT_VER, fd, statbuf);
+#endif
+	assert(_fstat);
 	return _fstat(fd, statbuf);
 }
 
 int __fxstat(int ver, int fd, struct stat *stat_buf) {
-	return fstat(fd, stat_buf);
+	return _fxstat(ver, fd, stat_buf);
 }
 
 int ioctl(int fd, unsigned long request, ...) {
