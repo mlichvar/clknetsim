@@ -16,9 +16,18 @@
  */
 
 #define _GNU_SOURCE
+
+/* avoid redirection in glibc headers */
+#define adjtimex adjtimex_off
+#include <sys/timex.h>
+#undef adjtimex
+
+#define fopen fopen_off
+#include <stdio.h>
+#undef fopen
+
 #include <sys/utsname.h>
 #include <sys/time.h>
-#include <sys/timex.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -29,7 +38,6 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <time.h>
-#include <stdio.h>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <sys/un.h>
