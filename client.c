@@ -1557,7 +1557,7 @@ int fstat(int fd, struct stat *statbuf) {
 }
 
 int __fxstat(int ver, int fd, struct stat *stat_buf) {
-	return _fxstat(ver, fd, stat_buf);
+	return fstat(fd, stat_buf);
 }
 
 int ioctl(int fd, unsigned long request, ...) {
