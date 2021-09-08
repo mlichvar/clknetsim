@@ -110,8 +110,10 @@ static int (*_fclose)(FILE *fp);
 static int (*_fcntl)(int fd, int cmd, ...);
 #ifdef HAVE_STAT
 static int (*_fstat)(int fd, struct stat *statbuf);
+static int (*_stat)(const char *pathname, struct stat *statbuf);
 #else
 static int (*_fxstat)(int ver, int fd, struct stat *statbuf);
+static int (*_xstat)(int ver, const char *pathname, struct stat *statbuf);
 #endif
 static int (*_open)(const char *pathname, int flags, ...);
 static ssize_t (*_read)(int fd, void *buf, size_t count);
@@ -135,7 +137,7 @@ static int recv_multiply = 1;
 static int timestamping = 1;
 
 enum {
-	IFACE_NONE = 0,
+	IFACE_UNIX,
 	IFACE_LO,
 	IFACE_ALL,
 	IFACE_ETH0,
@@ -151,6 +153,7 @@ struct message {
 
 struct socket {
 	int used;
+	int domain;
 	int type;
 	int port;
 	int iface;
@@ -167,6 +170,7 @@ struct socket {
 
 static struct socket sockets[MAX_SOCKETS];
 static int subnets;
+static int unix_subnet = -1;
 
 static double real_time = 0.0;
 static double monotonic_time = 0.0;
@@ -230,8 +234,10 @@ static void init_symbols(void) {
 	_fcntl = (int (*)(int fd, int cmd, ...))dlsym(RTLD_NEXT, "fcntl");
 #ifdef HAVE_STAT
 	_fstat = (int (*)(int fd, struct stat *statbuf))dlsym(RTLD_NEXT, "fstat");
+	_stat = (int (*)(const char *pathname, struct stat *statbuf))dlsym(RTLD_NEXT, "stat");
 #else
 	_fxstat = (int (*)(int ver, int fd, struct stat *statbuf))dlsym(RTLD_NEXT, "__fxstat");
+	_xstat = (int (*)(int ver, const char *pathname, struct stat *statbuf))dlsym(RTLD_NEXT, "__xstat");
 #endif
 	_open = (int (*)(const char *pathname, int flags, ...))dlsym(RTLD_NEXT, "open");
 	_read = (ssize_t (*)(int fd, void *buf, size_t count))dlsym(RTLD_NEXT, "read");
@@ -295,7 +301,8 @@ static void init(void) {
 
 	if (fuzz_init()) {
 		node = 0;
-		subnets = 1;
+		subnets = 2;
+		unix_subnet = 1;
 		initialized = 1;
 		return;
 	}
@@ -306,6 +313,10 @@ static void init(void) {
 		exit(1);
 	}
 	node = atoi(env) - 1;
+
+	env = getenv("CLKNETSIM_UNIX_SUBNET");
+	if (env)
+		unix_subnet = atoi(env) - 1;
 
 	env = getenv("CLKNETSIM_SOCKET");
 	if (env)
@@ -478,11 +489,13 @@ static int socket_in_subnet(int socket, int subnet) {
 	switch (sockets[socket].iface) {
 		case IFACE_LO:
 			return 0;
-		case IFACE_NONE:
+		case IFACE_UNIX:
+			return subnet == unix_subnet;
 		case IFACE_ALL:
-			return 1;
+			return subnet != unix_subnet;
 		default:
-			return sockets[socket].iface - IFACE_ETH0 == subnet;
+			return sockets[socket].iface - IFACE_ETH0 == subnet &&
+				subnet != unix_subnet;
 	}
 }
 
@@ -582,6 +595,7 @@ static int find_recv_socket(struct Reply_select *rep) {
 static void send_msg_to_peer(int s, int type) {
 	struct Request_send req;
 
+	assert(sockets[s].domain == AF_INET);
 	assert(sockets[s].type == SOCK_STREAM);
 
 	if (sockets[s].remote_node == -1)
@@ -1297,7 +1311,8 @@ int close(int fd) {
 int socket(int domain, int type, int protocol) {
 	int s;
 
-	if (domain != AF_INET || (type != SOCK_DGRAM && type != SOCK_STREAM)) {
+	if ((domain != AF_INET && (domain != AF_UNIX || unix_subnet < 0)) ||
+	    (type != SOCK_DGRAM && type != SOCK_STREAM)) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -1311,8 +1326,10 @@ int socket(int domain, int type, int protocol) {
 
 	memset(sockets + s, 0, sizeof (struct socket));
 	sockets[s].used = 1;
+	sockets[s].domain = domain;
 	sockets[s].type = type;
 	sockets[s].port = BASE_SOCKET_DEFAULT_PORT + s;
+	sockets[s].iface = domain == AF_UNIX ? IFACE_UNIX : IFACE_ALL;
 	sockets[s].remote_node = -1;
 
 	return get_socket_fd(s);
@@ -1321,7 +1338,7 @@ int socket(int domain, int type, int protocol) {
 int listen(int sockfd, int backlog) {
 	int s = get_socket_from_fd(sockfd);
 
-	if (s < 0 || sockets[s].type != SOCK_STREAM) {
+	if (s < 0 || sockets[s].domain != AF_INET || sockets[s].type != SOCK_STREAM) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -1336,7 +1353,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
 	struct sockaddr_in *in;
 	struct Reply_recv rep;
 
-	if (s < 0 || sockets[s].type != SOCK_STREAM) {
+	if (s < 0 || sockets[s].domain != AF_INET || sockets[s].type != SOCK_STREAM) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -1375,6 +1392,7 @@ int shutdown(int sockfd, int how) {
 		return -1;
 	}
 
+	assert(sockets[s].domain == AF_INET);
 	assert(sockets[s].type == SOCK_STREAM);
 
 	if (sockets[s].connected) {
@@ -1388,23 +1406,42 @@ int shutdown(int sockfd, int how) {
 int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 	/* ntpd uses connect() and getsockname() to find the interface
 	   which will be used to send packets to an address */
-	int s = get_socket_from_fd(sockfd), port;
+	int s = get_socket_from_fd(sockfd);
 	unsigned int node, subnet;
-	uint32_t a;
+	struct sockaddr_in *sin;
+	struct sockaddr_un *sun;
 
-	if (s < 0 || addr->sa_family != AF_INET) {
+	if (s < 0) {
 		errno = EINVAL;
 		return -1;
 	}
 
-	port = ntohs(((const struct sockaddr_in *)addr)->sin_port);
-	a = ntohl(((const struct sockaddr_in *)addr)->sin_addr.s_addr);
+	switch (addr->sa_family) {
+		case AF_INET:
+			sin = (struct sockaddr_in *)addr;
+			assert(addrlen >= sizeof (*sin));
+			get_target(s, ntohl(sin->sin_addr.s_addr), &subnet, &node);
 
-	get_target(s, a, &subnet, &node);
+			sockets[s].iface = IFACE_ETH0 + subnet;
+			sockets[s].remote_node = node;
+			sockets[s].remote_port = ntohs(sin->sin_port);
+			break;
+		case AF_UNIX:
+			sun = (struct sockaddr_un *)addr;
+			assert(addrlen >= sizeof (*sun));
 
-	sockets[s].iface = IFACE_ETH0 + subnet;
-	sockets[s].remote_node = node;
-	sockets[s].remote_port = port;
+			assert(sockets[s].iface == IFACE_UNIX);
+			if (sscanf(sun->sun_path, "/clknetsim/unix/%d:%d",
+				   &sockets[s].remote_node, &sockets[s].remote_port) != 2) {
+				errno = EINVAL;
+				return -1;
+			}
+			sockets[s].remote_node--;
+			break;
+		default:
+			errno = EINVAL;
+			return -1;
+	}
 
 	if (sockets[s].type == SOCK_STREAM)
 		send_msg_to_peer(s, MSG_TYPE_TCP_CONNECT);
@@ -1414,33 +1451,54 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 	int s = get_socket_from_fd(sockfd), port;
+	struct sockaddr_in *sin;
+	struct sockaddr_un *sun;
 	uint32_t a;
+	static int unix_sockets = 0;
 
-	if (s < 0 || addr->sa_family != AF_INET) {
+	if (s < 0) {
 		errno = EINVAL;
 		return -1;
 	}
 
-	port = ntohs(((struct sockaddr_in *)addr)->sin_port);
-	a = ntohl(((struct sockaddr_in *)addr)->sin_addr.s_addr);
+	switch (addr->sa_family) {
+		case AF_INET:
+			assert(addrlen >= sizeof (*sin));
+			sin = (struct sockaddr_in *)addr;
 
-	if (port)
-		sockets[s].port = port;
+			port = ntohs(sin->sin_port);
+			if (port)
+				sockets[s].port = port;
 
-	if (a == INADDR_ANY)
-		sockets[s].iface = IFACE_ALL;
-	else if (a == INADDR_LOOPBACK)
-		sockets[s].iface = IFACE_LO;
-	else {
-		int subnet = SUBNET_FROM_ADDR(a);
-		assert(subnet >= 0 && subnet < subnets);
-		if (a == NODE_ADDR(subnet, node))
-			sockets[s].iface = IFACE_ETH0 + subnet;
-		else if (a == BROADCAST_ADDR(subnet)) {
-			sockets[s].iface = IFACE_ETH0 + subnet;
-			sockets[s].broadcast = 1;
-		} else
-			assert(0);
+			a = ntohl(sin->sin_addr.s_addr);
+
+			if (a == INADDR_ANY) {
+				sockets[s].iface = IFACE_ALL;
+			} else if (a == INADDR_LOOPBACK) {
+				sockets[s].iface = IFACE_LO;
+			} else {
+				int subnet = SUBNET_FROM_ADDR(a);
+				assert(subnet >= 0 && subnet < subnets);
+				if (a == NODE_ADDR(subnet, node)) {
+					sockets[s].iface = IFACE_ETH0 + subnet;
+				} else if (a == BROADCAST_ADDR(subnet)) {
+					sockets[s].iface = IFACE_ETH0 + subnet;
+					sockets[s].broadcast = 1;
+				} else {
+					assert(0);
+				}
+			}
+			break;
+		case AF_UNIX:
+			assert(addrlen >= sizeof (*sun));
+			sun = (struct sockaddr_un *)addr;
+
+			assert(sockets[s].iface == IFACE_UNIX);
+			sockets[s].port = ++unix_sockets;
+			break;
+		default:
+			errno = EINVAL;
+			return -1;
 	}
 
 	return 0;
@@ -1450,7 +1508,7 @@ int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
 	int s = get_socket_from_fd(sockfd);
 	uint32_t a;
 
-	if (s < 0) {
+	if (s < 0 || sockets[s].domain != AF_INET) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -1463,10 +1521,11 @@ int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
 	in->sin_port = htons(sockets[s].port);
 
 	switch (sockets[s].iface) {
-		case IFACE_NONE:
 		case IFACE_ALL:
 			a = INADDR_ANY;
 			break;
+		case IFACE_UNIX:
+			assert(0);
 		case IFACE_LO:
 			a = INADDR_LOOPBACK;
 			break;
@@ -1485,7 +1544,7 @@ int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
 int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen) {
 	int subnet, s = get_socket_from_fd(sockfd);
 
-	if (s < 0) {
+	if (s < 0 || sockets[s].domain != AF_INET) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -1519,7 +1578,7 @@ int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t
 int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen) {
 	int s = get_socket_from_fd(sockfd);
 
-	if (s < 0) {
+	if (s < 0 || sockets[s].domain != AF_INET) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -1571,26 +1630,56 @@ int __fxstat(int ver, int fd, struct stat *stat_buf) {
 	return fstat(fd, stat_buf);
 }
 
+int stat(const char *pathname, struct stat *statbuf) {
+	if (strcmp(pathname, "/clknetsim") == 0 ||
+	    strcmp(pathname, "/clknetsim/unix") == 0) {
+		memset(statbuf, 0, sizeof (*statbuf));
+		statbuf->st_mode = S_IFDIR | 0750;
+		return 0;
+	}
+
+#ifdef HAVE_STAT
+	assert(_stat);
+	return _stat(pathname, statbuf);
+#else
+	assert(_xstat);
+	return _xstat(_STAT_VER, pathname, statbuf);
+#endif
+}
+
+int __xstat(int ver, const char *pathname, struct stat *statbuf) {
+	return stat(pathname, statbuf);
+}
+
+int chmod(const char *pathname, mode_t mode) {
+	return 0;
+}
+
 int ioctl(int fd, unsigned long request, ...) {
+	int i, j, n, subnet, ret = 0, s = get_socket_from_fd(fd);
 	va_list ap;
 	struct ifconf *conf;
 	struct ifreq *req;
-	int i, subnet, ret = 0, s = get_socket_from_fd(fd);
 
 	va_start(ap, request);
 
 	if (request == SIOCGIFCONF) {
 		conf = va_arg(ap, struct ifconf *);
-		assert(conf->ifc_len >= sizeof (struct ifreq) * (1 + subnets));
-		conf->ifc_len = sizeof (struct ifreq) * (1 + subnets);
+		n = 1 + subnets - (unix_subnet >= 0 ? 1 : 0);
+		assert(conf->ifc_len >= sizeof (struct ifreq) * n);
+		conf->ifc_len = sizeof (struct ifreq) * n;
 		sprintf(conf->ifc_req[0].ifr_name, "lo");
 		((struct sockaddr_in*)&conf->ifc_req[0].ifr_addr)->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 		conf->ifc_req[0].ifr_addr.sa_family = AF_INET;
 
-		for (i = 0; i < subnets; i++) {
-			sprintf(conf->ifc_req[i + 1].ifr_name, "eth%d", i);
-			((struct sockaddr_in*)&conf->ifc_req[i + 1].ifr_addr)->sin_addr.s_addr = htonl(NODE_ADDR(i, node));
-			conf->ifc_req[i + 1].ifr_addr.sa_family = AF_INET;
+		for (i = 0, j = 1; i < subnets && j < n; i++) {
+			if (i == unix_subnet)
+				continue;
+			sprintf(conf->ifc_req[j].ifr_name, "eth%d", i);
+			((struct sockaddr_in *)&conf->ifc_req[j].ifr_addr)->sin_addr.s_addr =
+				htonl(NODE_ADDR(i, node));
+			conf->ifc_req[j].ifr_addr.sa_family = AF_INET;
+			j++;
 		}
 	} else if (request == SIOCGIFINDEX) {
 		req = va_arg(ap, struct ifreq *);
@@ -1757,9 +1846,9 @@ int getifaddrs(struct ifaddrs **ifap) {
 	struct iface {
 		struct ifaddrs ifaddrs;
 		struct sockaddr_in addr, netmask, broadaddr;
-		char name[11];
+		char name[16];
 	} *ifaces;
-	int i;
+	int i, j;
        
 	ifaces = malloc(sizeof (struct iface) * (1 + subnets));
 
@@ -1775,22 +1864,25 @@ int getifaddrs(struct ifaddrs **ifap) {
 	ifaces[0].netmask.sin_addr.s_addr = htonl(0xff000000);
 	ifaces[0].broadaddr.sin_addr.s_addr = 0;
 
-	for (i = 0; i < subnets; i++) {
-		ifaces[i + 1].ifaddrs = (struct ifaddrs){
-			.ifa_next = &ifaces[i + 2].ifaddrs,
+	for (i = 0, j = 1; i < subnets && j < 1 + subnets; i++) {
+		if (i == unix_subnet)
+			continue;
+		ifaces[j].ifaddrs = (struct ifaddrs){
+			.ifa_next = &ifaces[j + 1].ifaddrs,
 			.ifa_flags = IFF_UP | IFF_BROADCAST | IFF_RUNNING,
-			.ifa_addr = (struct sockaddr *)&ifaces[i + 1].addr,
-			.ifa_netmask = (struct sockaddr *)&ifaces[i + 1].netmask,
-			.ifa_broadaddr = (struct sockaddr *)&ifaces[i + 1].broadaddr
+			.ifa_addr = (struct sockaddr *)&ifaces[j].addr,
+			.ifa_netmask = (struct sockaddr *)&ifaces[j].netmask,
+			.ifa_broadaddr = (struct sockaddr *)&ifaces[j].broadaddr
 		};
-		ifaces[i + 1].ifaddrs.ifa_name = ifaces[i + 1].name;
-		snprintf(ifaces[i + 1].name, sizeof (ifaces[i + 1].name), "eth%d", i);
-		ifaces[i + 1].addr.sin_addr.s_addr = htonl(NODE_ADDR(i, node));
-		ifaces[i + 1].netmask.sin_addr.s_addr = htonl(NETMASK);
-		ifaces[i + 1].broadaddr.sin_addr.s_addr = htonl(BROADCAST_ADDR(i));
+		ifaces[j].ifaddrs.ifa_name = ifaces[j].name;
+		snprintf(ifaces[j].name, sizeof (ifaces[j].name), "eth%d", i);
+		ifaces[j].addr.sin_addr.s_addr = htonl(NODE_ADDR(i, node));
+		ifaces[j].netmask.sin_addr.s_addr = htonl(NETMASK);
+		ifaces[j].broadaddr.sin_addr.s_addr = htonl(BROADCAST_ADDR(i));
+		j++;
 	}
 
-	ifaces[i].ifaddrs.ifa_next = NULL;
+	ifaces[j - 1].ifaddrs.ifa_next = NULL;
 
 	for (i = 0; i < 1 + subnets; i++) {
 		ifaces[i].addr.sin_family = AF_INET;
@@ -1808,7 +1900,8 @@ void freeifaddrs(struct ifaddrs *ifa) {
 
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 	struct Request_send req;
-	struct sockaddr_in connected_sa, *sa;
+	struct sockaddr_in *sin;
+	struct sockaddr_un *sun;
 	struct cmsghdr *cmsg;
 	int i, s = get_socket_from_fd(sockfd), timestamping;
 
@@ -1823,15 +1916,33 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 			errno = EISCONN;
 			return -1;
 		}
-		sa = &connected_sa;
-		sa->sin_family = AF_INET;
-		sa->sin_port = htons(sockets[s].remote_port);
-		sa->sin_addr.s_addr = htonl(NODE_ADDR(sockets[s].iface - IFACE_ETH0,
-					sockets[s].remote_node));
+		req.subnet = sockets[s].iface >= IFACE_ETH0 ? sockets[s].iface - IFACE_ETH0 : unix_subnet;
+		req.to = sockets[s].remote_node;
+		req.dst_port = sockets[s].remote_port;
 	} else {
-		sa = msg->msg_name;
-		assert(sa && msg->msg_namelen >= sizeof (struct sockaddr_in));
-		assert(sa->sin_family == AF_INET);
+		switch (sockets[s].domain) {
+			case AF_INET:
+				sin = msg->msg_name;
+				assert(sin && msg->msg_namelen >= sizeof (*sin));
+				assert(sin->sin_family == AF_INET);
+				get_target(s, ntohl(sin->sin_addr.s_addr), &req.subnet, &req.to);
+				req.dst_port = ntohs(sin->sin_port);
+				break;
+			case AF_UNIX:
+				sun = msg->msg_name;
+				assert(sun && msg->msg_namelen >= sizeof (*sun));
+				assert(sun->sun_family == AF_UNIX);
+				req.subnet = unix_subnet;
+				if (sscanf(sun->sun_path, "/clknetsim/unix/%u:%u",
+					   &req.to, &req.dst_port) != 2) {
+					errno = EINVAL;
+					return -1;
+				}
+				req.to--;
+				break;
+			default:
+				assert(0);
+		}
 	}
 
 	switch (sockets[s].type) {
@@ -1846,9 +1957,9 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 			assert(0);
 	}
 
-	get_target(s, ntohl(sa->sin_addr.s_addr), &req.subnet, &req.to);
 	req.src_port = sockets[s].port;
-	req.dst_port = ntohs(sa->sin_port);
+
+	assert(socket_in_subnet(s, req.subnet));
 	assert(req.src_port && req.dst_port);
 
 	for (req.len = 0, i = 0; i < msg->msg_iovlen; i++) {
@@ -1944,7 +2055,8 @@ int recvmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen, int flags,
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	struct message *last_ts_msg = NULL;
 	struct Reply_recv rep;
-	struct sockaddr_in *sa;
+	struct sockaddr_in *sin;
+	struct sockaddr_un *sun;
 	struct cmsghdr *cmsg;
 	int msglen, cmsglen, s = get_socket_from_fd(sockfd);
 
@@ -2034,13 +2146,25 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	assert(!sockets[s].remote_port || sockets[s].remote_port == rep.src_port);
 
 	if (msg->msg_name) {
-		assert(msg->msg_namelen >= sizeof (struct sockaddr_in));
-
-		sa = msg->msg_name;
-		sa->sin_family = AF_INET;
-		sa->sin_port = htons(rep.src_port);
-		sa->sin_addr.s_addr = htonl(NODE_ADDR(rep.subnet, rep.from));
-		msg->msg_namelen = sizeof (struct sockaddr_in);
+		switch (sockets[s].domain) {
+			case AF_INET:
+				assert(msg->msg_namelen >= sizeof (*sin));
+				sin = msg->msg_name;
+				sin->sin_family = AF_INET;
+				sin->sin_port = htons(rep.src_port);
+				sin->sin_addr.s_addr = htonl(NODE_ADDR(rep.subnet, rep.from));
+				msg->msg_namelen = sizeof (struct sockaddr_in);
+				break;
+			case AF_UNIX:
+				assert(msg->msg_namelen >= sizeof (*sun));
+				sun = msg->msg_name;
+				sun->sun_family = AF_UNIX;
+				snprintf(sun->sun_path, sizeof (sun->sun_path),
+					 "/clknetsim/unix/%d:%d", rep.from + 1, rep.src_port);
+				break;
+			default:
+				assert(0);
+		}
 	}
 
 	assert(msg->msg_iovlen == 1);
@@ -2160,7 +2284,10 @@ ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *
 }
 
 ssize_t recv(int sockfd, void *buf, size_t len, int flags) {
-	struct sockaddr_in sa;
+	union {
+		struct sockaddr_in sin;
+		struct sockaddr_un sun;
+	} sa;
 	socklen_t addrlen = sizeof (sa);
 
 	return recvfrom(sockfd, buf, len, flags, (struct sockaddr *)&sa, &addrlen);

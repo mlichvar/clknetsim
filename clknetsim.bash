@@ -38,6 +38,7 @@ start_client() {
 		allow
 		cmdallow
 		bindcmdaddress 0.0.0.0
+		bindcmdaddress /clknetsim/unix/chronyd.sock
 		$config
 		EOF
 	    args=(-d -f $CLKNETSIM_TMPDIR/conf.$node $opts)

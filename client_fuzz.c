@@ -37,6 +37,7 @@ static int fuzz_mode;
 static int fuzz_msg_type;
 static int fuzz_ports[MAX_FUZZ_PORTS];
 static int fuzz_port_index, fuzz_ports_n;
+static int fuzz_subnet;
 static int fuzz_timeout;
 static double fuzz_start;
 
@@ -81,6 +82,9 @@ static int fuzz_init(void) {
 		exit(1);
 	}
 	fuzz_port_index = 0;
+
+	env = getenv("CLKNETSIM_FUZZ_SUBNET");
+	fuzz_subnet = env ? atoi(env) - 1 : 0;
 
 	env = getenv("CLKNETSIM_FUZZ_START");
 	fuzz_start = env ? atof(env) : 0.1;
@@ -149,7 +153,7 @@ static void get_recv_data(int valid_packet, int received, int last_tx_src_port,
 		*from = -1;
 	}
 
-	*subnet = 0;
+	*subnet = fuzz_subnet;
 	*src_port = fuzz_get_fuzz_port();
 	*dst_port = last_tx_src_port ? last_tx_src_port : fuzz_get_fuzz_port();
 }
