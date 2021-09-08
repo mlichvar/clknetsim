@@ -98,14 +98,21 @@
 
 #define URANDOM_FILE (void *)0xD1230123
 
+#if !defined(__GLIBC_PREREQ) || __GLIBC_PREREQ(2, 33)
+#define HAVE_STAT
+#endif
+
 static FILE *(*_fopen)(const char *path, const char *mode);
 static FILE *(*_fdopen)(int fd, const char *mode);
 static size_t (*_fread)(void *ptr, size_t size, size_t nmemb, FILE *stream);
 static int (*_fileno)(FILE *stream);
 static int (*_fclose)(FILE *fp);
 static int (*_fcntl)(int fd, int cmd, ...);
+#ifdef HAVE_STAT
 static int (*_fstat)(int fd, struct stat *statbuf);
+#else
 static int (*_fxstat)(int ver, int fd, struct stat *statbuf);
+#endif
 static int (*_open)(const char *pathname, int flags, ...);
 static ssize_t (*_read)(int fd, void *buf, size_t count);
 static int (*_close)(int fd);
@@ -221,8 +228,11 @@ static void init_symbols(void) {
 	_fileno = (int (*)(FILE *stream))dlsym(RTLD_NEXT, "fileno");
 	_fclose = (int (*)(FILE *fp))dlsym(RTLD_NEXT, "fclose");
 	_fcntl = (int (*)(int fd, int cmd, ...))dlsym(RTLD_NEXT, "fcntl");
+#ifdef HAVE_STAT
 	_fstat = (int (*)(int fd, struct stat *statbuf))dlsym(RTLD_NEXT, "fstat");
+#else
 	_fxstat = (int (*)(int ver, int fd, struct stat *statbuf))dlsym(RTLD_NEXT, "__fxstat");
+#endif
 	_open = (int (*)(const char *pathname, int flags, ...))dlsym(RTLD_NEXT, "open");
 	_read = (ssize_t (*)(int fd, void *buf, size_t count))dlsym(RTLD_NEXT, "read");
 	_close = (int (*)(int fd))dlsym(RTLD_NEXT, "close");
@@ -1548,12 +1558,13 @@ int fstat(int fd, struct stat *statbuf) {
 	if (fd == URANDOM_FD)
 		return stat("/dev/urandom", statbuf);
 
-#ifdef _STAT_VER
-	if (_fxstat)
-		return _fxstat(_STAT_VER, fd, statbuf);
-#endif
+#ifdef HAVE_STAT
 	assert(_fstat);
 	return _fstat(fd, statbuf);
+#else
+	assert(_fxstat);
+	return _fxstat(_STAT_VER, fd, statbuf);
+#endif
 }
 
 int __fxstat(int ver, int fd, struct stat *stat_buf) {
