@@ -760,7 +760,7 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 	time += 0.5e-9;
 	time_to_timespec(time, tp);
 	
-	if (which_clock == CLOCK_REALTIME || which_clock == REFCLK_ID)
+	if (which_clock != CLOCK_MONOTONIC && which_clock != CLOCK_MONOTONIC_COARSE)
 		tp->tv_sec += system_time_offset;
 
 	/* ntpd clock precision routine hack */
