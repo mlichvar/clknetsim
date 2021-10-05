@@ -720,7 +720,7 @@ int gettimeofday(struct timeval *tv,
 	time_to_timeval(time, tv);
 	tv->tv_sec += system_time_offset;
 
-	/* chrony clock precision routine hack */
+	/* old chrony clock precision routine hack */
 	if (precision_hack)
 		tv->tv_usec += random() % 2;
 
@@ -763,7 +763,7 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 	if (which_clock != CLOCK_MONOTONIC && which_clock != CLOCK_MONOTONIC_COARSE)
 		tp->tv_sec += system_time_offset;
 
-	/* ntpd clock precision routine hack */
+	/* chrony and ntpd clock precision routine hack */
 	if (precision_hack) {
 		static int x = 0;
 		tp->tv_nsec += x++ * 101;
