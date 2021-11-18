@@ -125,6 +125,8 @@ Variables:
   the initial time error of the system clock in seconds, the default is 0
 - nodeX_start = float
   the time in seconds when will be the node started, the default is 0
+- nodeX_stop = float
+  the time in seconds when will be the node stopped, the default is 0 meaning never
 - nodeX_refclock = expr
   the reference clock time error in seconds, the clock can be accessed by the
   client via shared memory (NTP SHM protocol) or as a PTP hardware clock (PHC)

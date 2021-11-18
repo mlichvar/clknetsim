@@ -26,6 +26,7 @@ Node::Node(int index, Network *network) {
 	fd = -1;
 	pending_request = REQ_REGISTER;
 	start_time = 0.0;
+	stop_time = 0.0;
 	terminate = false;
 }
 
@@ -56,6 +57,14 @@ int Node::get_fd() const {
 
 void Node::set_start_time(double time) {
 	start_time = time;
+}
+
+void Node::set_stop_time(double time) {
+	stop_time = time;
+}
+
+bool Node::terminating() {
+	return terminate || (stop_time != 0.0 && stop_time - network->get_time() <= 0.0);
 }
 
 bool Node::process_fd() {
@@ -176,7 +185,7 @@ void Node::process_adjtime(Request_adjtime *req) {
 void Node::try_select() {
 	Reply_select rep = {-1, 0, 0};
 
-	if (terminate) {
+	if (terminating()) {
 		rep.ret = REPLY_SELECT_TERMINATE;
 #ifdef DEBUG
 		printf("select returned on termination in %d at %f\n",
@@ -225,7 +234,7 @@ void Node::process_select(Request_select *req) {
 void Node::process_send(Request_send *req) {
 	struct Packet *packet;
 
-	if (!terminate) {
+	if (!terminating()) {
 		packet = new struct Packet;
 		packet->type = req->type;
 		packet->broadcast = req->to == (unsigned int)-1;
@@ -314,7 +323,7 @@ void Node::resume() {
 			try_select();
 			break;
 		case REQ_REGISTER:
-			if (start_time - network->get_time() <= 0.0 || terminate) {
+			if (start_time - network->get_time() <= 0.0 || terminating()) {
 				Reply_register rep;
 				rep.subnets = network->get_subnets();
 				reply(&rep, sizeof (rep), REQ_REGISTER);

@@ -62,6 +62,8 @@ bool load_config(const char *file, Network *network, unsigned int nodes) {
 			network->get_node(node)->get_clock()->set_time(atof(arg));
 		else if (strncmp(var, "start", 5) == 0)
 			network->get_node(node)->set_start_time(atof(arg));
+		else if (strncmp(var, "stop", 4) == 0)
+			network->get_node(node)->set_stop_time(atof(arg));
 		else if (strncmp(var, "freq", 4) == 0) {
 			if (arg[0] == '(')
 				network->get_node(node)->get_clock()->set_freq_generator(generator.generate(arg));

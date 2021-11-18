@@ -35,6 +35,7 @@ class Node {
 	int fd;
 	int pending_request;
 	double start_time;
+	double stop_time;
 	double select_timeout;
 	bool select_read;
 	bool terminate;
@@ -47,6 +48,8 @@ class Node {
 	void set_fd(int fd);
 	int get_fd() const;
 	void set_start_time(double time);
+	void set_stop_time(double time);
+	bool terminating();
 	bool process_fd();
 	void reply(void *data, int len, int request);
 	void process_gettime();
