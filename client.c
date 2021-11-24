@@ -80,10 +80,10 @@
 #define LINK_SPEED 100000
 
 #define REFCLK_FD 1000
-#define REFCLK_ID ((~(clockid_t)REFCLK_FD << 3) | 3)
+#define REFCLK_ID ((clockid_t)(((unsigned int)~REFCLK_FD << 3) | 3))
 #define REFCLK_PHC_INDEX 0
 #define SYSCLK_FD 1001
-#define SYSCLK_CLOCKID ((~(clockid_t)SYSCLK_FD << 3) | 3)
+#define SYSCLK_CLOCKID ((clockid_t)(((unsigned int)~SYSCLK_FD << 3) | 3))
 #define SYSCLK_PHC_INDEX 1
 #define PPS_FD 1002
 #define URANDOM_FD 1010
