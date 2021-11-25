@@ -98,7 +98,7 @@ start_client() {
 	    wrapper_options="--log-file=$CLKNETSIM_TMPDIR/valgrind.$node"
     fi
 
-    LD_PRELOAD=$CLKNETSIM_PATH/clknetsim.so \
+    LD_PRELOAD=${CLKNETSIM_PRELOAD:+$CLKNETSIM_PRELOAD:}$CLKNETSIM_PATH/clknetsim.so \
 	CLKNETSIM_NODE=$node CLKNETSIM_SOCKET=$CLKNETSIM_TMPDIR/sock \
 	$CLKNETSIM_CLIENT_WRAPPER $wrapper_options \
 	$client$suffix "${args[@]}" &> $CLKNETSIM_TMPDIR/log.$node &
