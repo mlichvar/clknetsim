@@ -292,7 +292,8 @@ static void init(void) {
 			;
 		fclose(f);
 
-		if (strncmp(command, "valgrind", 8) == 0) {
+		if (strncmp(command, "valgrind", 8) == 0 ||
+		    strncmp(command, "strace", 6) == 0) {
 			/* don't connect to the server */
 			initialized = 1;
 			return;
