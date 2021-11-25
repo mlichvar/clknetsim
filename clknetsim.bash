@@ -95,6 +95,7 @@ start_client() {
     esac
 
     if [[ $CLKNETSIM_CLIENT_WRAPPER == *valgrind* ]]; then
+	    unset DEBUGINFOD_URLS
 	    wrapper_options="--log-file=$CLKNETSIM_TMPDIR/valgrind.$node"
     fi
 
