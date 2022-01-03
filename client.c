@@ -1639,6 +1639,8 @@ int stat(const char *pathname, struct stat *statbuf) {
 		return 0;
 	}
 
+	init_symbols();
+
 #ifdef HAVE_STAT
 	assert(_stat);
 	return _stat(pathname, statbuf);
