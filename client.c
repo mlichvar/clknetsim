@@ -1563,7 +1563,7 @@ int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t
 	else if (level == IPPROTO_IP && optname == IP_PKTINFO && optlen == sizeof (int))
 		sockets[s].pkt_info = !!(int *)optval;
 #ifdef SO_TIMESTAMPING
-	else if (level == SOL_SOCKET && optname == SO_TIMESTAMPING && optlen == sizeof (int)) {
+	else if (level == SOL_SOCKET && optname == SO_TIMESTAMPING && optlen >= sizeof (int)) {
 		if (!timestamping) {
 			errno = EINVAL;
 			return -1;
