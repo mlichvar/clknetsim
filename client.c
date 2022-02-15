@@ -115,6 +115,7 @@ static int (*_stat)(const char *pathname, struct stat *statbuf);
 static int (*_fxstat)(int ver, int fd, struct stat *statbuf);
 static int (*_xstat)(int ver, const char *pathname, struct stat *statbuf);
 #endif
+static char *(*_realpath)(const char *path, char *resolved_path);
 static int (*_open)(const char *pathname, int flags, ...);
 static ssize_t (*_read)(int fd, void *buf, size_t count);
 static int (*_close)(int fd);
@@ -239,6 +240,7 @@ static void init_symbols(void) {
 	_fxstat = (int (*)(int ver, int fd, struct stat *statbuf))dlsym(RTLD_NEXT, "__fxstat");
 	_xstat = (int (*)(int ver, const char *pathname, struct stat *statbuf))dlsym(RTLD_NEXT, "__xstat");
 #endif
+	_realpath = (char *(*)(const char *path, char *resolved_path))dlsym(RTLD_NEXT, "realpath");
 	_open = (int (*)(const char *pathname, int flags, ...))dlsym(RTLD_NEXT, "open");
 	_read = (ssize_t (*)(int fd, void *buf, size_t count))dlsym(RTLD_NEXT, "read");
 	_close = (int (*)(int fd))dlsym(RTLD_NEXT, "close");
@@ -1232,6 +1234,15 @@ int fclose(FILE *fp) {
 	if (fp == URANDOM_FILE)
 		return 0;
 	return _fclose(fp);
+}
+
+char *realpath(const char *path, char *resolved_path) {
+	if (!strncmp(path, "/dev/ptp", 8)) {
+		snprintf(resolved_path, PATH_MAX, "%s", path);
+		return resolved_path;
+	}
+
+	return _realpath(path, resolved_path);
 }
 
 int open(const char *pathname, int flags, ...) {
