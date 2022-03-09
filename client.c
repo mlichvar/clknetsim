@@ -55,6 +55,7 @@
 #include <ifaddrs.h>
 #include <linux/types.h>
 #include <linux/ethtool.h>
+#include <linux/limits.h>
 #include <linux/pps.h>
 #include <linux/sockios.h>
 #ifdef SO_TIMESTAMPING
