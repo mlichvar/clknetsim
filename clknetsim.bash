@@ -82,7 +82,7 @@ start_client() {
 	    args+=($opts)
 	    ;;
 	phc2sys)
-	    args=(-s /dev/ptp0 -O 0 $opts $config)
+	    args=($opts $config)
 	    ;;
 	nsm)
 	    args=($opts)
