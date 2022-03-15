@@ -220,7 +220,7 @@ static struct shmTime {
 static int shm_refclocks = 0;
 static double shm_refclock_time = 0.0;
 static struct Reply_getrefoffsets refclock_offsets;
-static int refclock_offsets_used = REPLY_GETREFOFFSETS_SIZE;
+static int refclock_offsets_used = 0;
 static int pps_fds = 0;
 
 static void make_request(int request_id, const void *request_data, int reqlen, void *reply, int replylen);
@@ -404,6 +404,13 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 			assert(offsetof(struct Reply_recv, data) +
 				((struct Reply_recv *)reply)->len <= received);
 			break;
+		case REQ_GETREFOFFSETS:
+			/* reply with variable length */
+			assert(received >= offsetof(struct Reply_getrefoffsets, offsets));
+			assert(offsetof(struct Reply_getrefoffsets, offsets) +
+				(sizeof ((struct Reply_getrefoffsets *)reply)->offsets[0]) *
+				((struct Reply_getrefoffsets *)reply)->size == received);
+			break;
 		default:
 			assert(received == replylen);
 	}
@@ -432,8 +439,9 @@ static double get_monotonic_time(void) {
 }
 
 static double get_refclock_offset(void) {
-	if (refclock_offsets_used >= REPLY_GETREFOFFSETS_SIZE) {
+	if (refclock_offsets_used >= refclock_offsets.size) {
 		make_request(REQ_GETREFOFFSETS, NULL, 0, &refclock_offsets, sizeof (refclock_offsets));
+		assert(refclock_offsets.size > 0);
 		refclock_offsets_used = 0;
 	}
 	return refclock_offsets.offsets[refclock_offsets_used++];

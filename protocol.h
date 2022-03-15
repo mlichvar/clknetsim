@@ -129,10 +129,12 @@ struct Reply_getrefsample {
 	int _pad;
 };
 
-#define REPLY_GETREFOFFSETS_SIZE 1024
+#define MAX_GETREFOFFSETS_SIZE 1024
 
 struct Reply_getrefoffsets {
-	double offsets[REPLY_GETREFOFFSETS_SIZE];
+	unsigned int size;
+	int _pad;
+	double offsets[MAX_GETREFOFFSETS_SIZE];
 };
 
 union Request_data {

@@ -30,6 +30,7 @@ class Network;
 class Node {
 	Clock clock;
 	Refclock refclock;
+	Clock *refclock_base;
 	Network *network;
 	int index;
 	int fd;
@@ -68,6 +69,7 @@ class Node {
 	double get_timeout() const;
 	Clock *get_clock();
 	Refclock *get_refclock();
+	void set_refclock_base(Clock *clock);
 };
 
 #endif

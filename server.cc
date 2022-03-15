@@ -81,6 +81,13 @@ bool load_config(const char *file, Network *network, unsigned int nodes) {
 			if (node2 >= nodes)
 				continue;
 			network->set_link_delay_generator(node, node2, generator.generate(arg));
+		} else if (strncmp(var, "refclock_base", 13) == 0) {
+			if (strncmp(arg, "node", 4) != 0)
+				return false;
+			node2 = atoi(arg + 4) - 1;
+			if (node2 >= nodes)
+				return false;
+			network->get_node(node)->set_refclock_base(network->get_node(node2)->get_clock());
 		} else if (strncmp(var, "refclock", 8) == 0)
 			network->get_node(node)->get_refclock()->set_offset_generator(generator.generate(arg));
 		else

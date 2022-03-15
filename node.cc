@@ -21,6 +21,7 @@
 #include "sysheaders.h"
 
 Node::Node(int index, Network *network) {
+	this->refclock_base = NULL;
 	this->network = network;
 	this->index = index;
 	fd = -1;
@@ -297,6 +298,7 @@ void Node::process_getrefsample() {
 
 	refclock.set_generation(true);
 	r.valid = refclock.get_sample(&r.time, &r.offset);
+	assert(!refclock_base);
 	r._pad = 0;
 	reply(&r, sizeof (r), REQ_GETREFSAMPLE);
 }
@@ -304,8 +306,17 @@ void Node::process_getrefsample() {
 void Node::process_getrefoffsets() {
 	Reply_getrefoffsets r;
 
-	refclock.get_offsets(r.offsets, REPLY_GETREFOFFSETS_SIZE);
-	reply(&r, sizeof (r), REQ_GETREFOFFSETS);
+	if (refclock_base) {
+		r.size = 1;
+		refclock.get_offsets(r.offsets, r.size);
+		r.offsets[0] += network->get_time() - refclock_base->get_real_time();
+	} else {
+		r.size = MAX_GETREFOFFSETS_SIZE;
+		refclock.get_offsets(r.offsets, r.size);
+	}
+	r._pad = 0;
+	reply(&r, offsetof(Reply_getrefoffsets, offsets) +
+		  sizeof (r.offsets[0]) * r.size, REQ_GETREFOFFSETS);
 }
 
 void Node::resume() {
@@ -360,4 +371,8 @@ Clock *Node::get_clock() {
 
 Refclock *Node::get_refclock() {
 	return &refclock;
+}
+
+void Node::set_refclock_base(Clock *clock) {
+	refclock_base = clock;
 }

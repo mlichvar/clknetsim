@@ -1,0 +1,22 @@
+#!/bin/bash
+
+CLKNETSIM_PATH=..
+. ../clknetsim.bash
+
+export CLKNETSIM_UNIX_SUBNET=2
+
+generate_config4 "1" "1 2 | 2 3" 0.01 "(sum (* 1e-9 (normal)))" "(* 1e-8 (exponential))"
+
+start_client 1 ptp4l "clockClass 6" "" "-i eth0"
+start_client 2 ptp4l "
+first_step_threshold 0.0
+max_frequency 10000" "" "-i eth0"
+CLKNETSIM_PHC_SWAP=1 \
+start_client 3 phc2sys "-a -r -z /clknetsim/unix/2:1"
+
+echo "node3_refclock = (+ -37 (* 1e-6 (normal)))" >> tmp/conf
+echo "node3_refclock_base = node2" >> tmp/conf
+
+start_server 3 -v 2 -n 2 -o log.offset -f log.freq -g log.rawfreq -p log.packets -r 1000 -l 4000
+
+cat tmp/stats
