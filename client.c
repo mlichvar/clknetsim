@@ -137,6 +137,7 @@ static int precision_hack = 1;
 static unsigned int random_seed = 0;
 static int recv_multiply = 1;
 static int timestamping = 1;
+static int phc_swap = 0;
 
 enum {
 	IFACE_UNIX,
@@ -287,6 +288,10 @@ static void init(void) {
 	env = getenv("CLKNETSIM_TIMESTAMPING");
 	if (env)
 		timestamping = atoi(env);
+
+	env = getenv("CLKNETSIM_PHC_SWAP");
+	if (env)
+		phc_swap = atoi(env);
 
 	f = _fopen("/proc/self/comm", "r");
 	if (f) {
@@ -1261,9 +1266,9 @@ int open(const char *pathname, int flags, ...) {
 
 	assert(REFCLK_PHC_INDEX == 0 && SYSCLK_PHC_INDEX == 1);
 	if (!strcmp(pathname, "/dev/ptp0"))
-		return REFCLK_FD;
+		return phc_swap ? SYSCLK_FD : REFCLK_FD;
 	else if (!strcmp(pathname, "/dev/ptp1"))
-		return SYSCLK_FD;
+		return phc_swap ? REFCLK_FD : SYSCLK_FD;
 	else if (!strcmp(pathname, "/dev/pps0"))
 		return pps_fds++, PPS_FD;
 	else if (!strcmp(pathname, "/dev/urandom"))
