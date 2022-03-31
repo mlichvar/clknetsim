@@ -179,7 +179,11 @@ static void fuzz_process_request(int request_id, const union Request_data *reque
 			break;
 		case REQ_SELECT:
 			if (fuzz_mode == FUZZ_MODE_NONE) {
+				network_time += request->select.timeout;
 				reply->select.ret = REPLY_SELECT_TIMEOUT;
+				reply->select.time.real_time = network_time;
+				reply->select.time.monotonic_time = network_time;
+				reply->select.time.network_time = network_time;
 				return;
 			}
 
