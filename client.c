@@ -523,6 +523,9 @@ static void get_target(int socket, uint32_t addr, unsigned int *subnet, unsigned
 		*node = -1; /* multicast as broadcast */
 	} else {
 		*subnet = SUBNET_FROM_ADDR(addr);
+		if (fuzz_mode && (*subnet >= subnets || *subnet == unix_subnet))
+			*subnet = 0;
+
 		assert(*subnet >= 0 && *subnet < subnets);
 		assert(socket_in_subnet(socket, *subnet));
 
