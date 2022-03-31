@@ -2333,6 +2333,10 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags) {
 	return recvfrom(sockfd, buf, len, flags, (struct sockaddr *)&sa, &addrlen);
 }
 
+ssize_t __recv_chk(int fd, void *buf, size_t len, size_t buflen, int flags) {
+	return recv(fd, buf, len, flags);
+}
+
 int timer_create(clockid_t which_clock, struct sigevent *timer_event_spec, timer_t *created_timer_id) {
 	int t;
 
