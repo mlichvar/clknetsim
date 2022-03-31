@@ -803,13 +803,22 @@ time_t time(time_t *t) {
 }
 
 int settimeofday(const struct timeval *tv, const struct timezone *tz) {
+	struct timespec ts;
+
 	assert(tv);
-	settime(timeval_to_time(tv, -system_time_offset));
-	return 0;
+	ts.tv_sec = tv->tv_sec;
+	ts.tv_nsec = 1000 * tv->tv_usec;
+	return clock_settime(CLOCK_REALTIME, &ts);
 }
 
 int clock_settime(clockid_t which_clock, const struct timespec *tp) {
 	assert(tp && which_clock == CLOCK_REALTIME);
+
+	if (tp->tv_sec < 0 || tp->tv_sec > ((1LLU << 63) / 1000000000)) {
+		errno = EINVAL;
+		return -1;
+	}
+
 	settime(timespec_to_time(tp, -system_time_offset));
 	return 0;
 }
