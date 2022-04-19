@@ -1459,6 +1459,10 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 			sin = (struct sockaddr_in *)addr;
 			assert(addrlen >= sizeof (*sin));
 			get_target(s, ntohl(sin->sin_addr.s_addr), &subnet, &node);
+			if (node == -1) {
+				errno = EINVAL;
+				return -1;
+			}
 
 			sockets[s].iface = IFACE_ETH0 + subnet;
 			sockets[s].remote_node = node;
