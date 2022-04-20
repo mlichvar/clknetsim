@@ -1357,7 +1357,6 @@ int socket(int domain, int type, int protocol) {
 
 	s = get_free_socket();
 	if (s < 0) {
-		assert(0);
 		errno = ENOMEM;
 		return -1;
 	}
