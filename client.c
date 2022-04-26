@@ -2543,6 +2543,15 @@ void __syslog_chk(int priority, int flag, const char *format, ...) {
 	fprintf(stderr, "\n");
 }
 
+void __syslog_chkieee128(int priority, int flag, const char *format, ...) {
+	va_list ap;
+
+	va_start(ap, format);
+	vfprintf(stderr, format, ap);
+	va_end(ap);
+	fprintf(stderr, "\n");
+}
+
 void syslog(int priority, const char *format, ...) {
 	va_list ap;
 
