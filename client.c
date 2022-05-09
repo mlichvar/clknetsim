@@ -2770,29 +2770,43 @@ int getnameinfo(const struct sockaddr *addr, socklen_t addrlen,
 		return EAI_NONAME;
 
 	assert(!(flags & NI_NOFQDN));
-	assert(!(flags & NI_NUMERICHOST));
-	assert(!(flags & NI_NUMERICSERV));
 
 	if (host && hostlen > 0) {
-		node = NODE_FROM_ADDR(ntohl(sin->sin_addr.s_addr));
-		subnet = SUBNET_FROM_ADDR(ntohl(sin->sin_addr.s_addr));
-		if (subnet < 0 || subnet > 100) {
-			assert(flags & NI_NAMEREQD);
-			return EAI_NONAME;
+		if (flags & NI_NUMERICHOST) {
+			assert(addr->sa_family == AF_INET);
+			if (!inet_ntop(AF_INET, &((struct sockaddr_in *)addr)->sin_addr,
+				       host, hostlen))
+				return EAI_OVERFLOW;
+		} else {
+			node = NODE_FROM_ADDR(ntohl(sin->sin_addr.s_addr));
+			subnet = SUBNET_FROM_ADDR(ntohl(sin->sin_addr.s_addr));
+			if (subnet < 0 || subnet > 100) {
+				assert(flags & NI_NAMEREQD);
+				return EAI_NONAME;
+			}
+			if (snprintf(host, hostlen, "node%d.net%d.clk",
+				     node + 1, subnet + 1) >= hostlen)
+				return EAI_OVERFLOW;
 		}
-		if (snprintf(host, hostlen, "node%d.net%d.clk", node + 1, subnet + 1) >= hostlen)
-			return EAI_OVERFLOW;
 	}
 
 	if (serv && servlen > 0) {
-		switch (ntohs(sin->sin_port)) {
-			case 123:
-				if (snprintf(serv, servlen, "ntp") >= servlen)
-					return EAI_OVERFLOW;
-				break;
-			default:
-				if (snprintf(serv, servlen, "%u", ntohs(sin->sin_port)) >= servlen)
-					return EAI_OVERFLOW;
+		if (flags & NI_NUMERICSERV) {
+			assert(addr->sa_family == AF_INET);
+			if (snprintf(serv, servlen, "%d",
+				     ntohs(((struct sockaddr_in *)addr)->sin_port)) >= servlen)
+				return EAI_OVERFLOW;
+		} else {
+			switch (ntohs(sin->sin_port)) {
+				case 123:
+					if (snprintf(serv, servlen, "ntp") >= servlen)
+						return EAI_OVERFLOW;
+					break;
+				default:
+					if (snprintf(serv, servlen, "%u",
+						     ntohs(sin->sin_port)) >= servlen)
+						return EAI_OVERFLOW;
+			}
 		}
 	}
 
