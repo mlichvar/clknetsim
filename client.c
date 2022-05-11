@@ -1859,6 +1859,7 @@ int ioctl(int fd, unsigned long request, ...) {
 		if (params->mode != (PPS_CAPTUREASSERT | PPS_TSFMT_TSPEC))
 			ret = -1, errno = EINVAL;
 	} else if (request == PPS_FETCH && fd == PPS_FD) {
+		static double last_refclock_time = 0.0;
 		static unsigned long seq = 0;
 		struct pps_fdata *data = va_arg(ap, struct pps_fdata *);
 		memset(&data->info, 0, sizeof (data->info));
@@ -1871,7 +1872,10 @@ int ioctl(int fd, unsigned long request, ...) {
 			}
 		}
 		if (shm_refclock_time > 0.0) {
-			data->info.assert_sequence = ++seq;
+			if (shm_refclock_time != last_refclock_time)
+				seq++;
+			last_refclock_time = shm_refclock_time;
+			data->info.assert_sequence = seq;
 			data->info.assert_tu.sec = shm_refclock_time;
 			data->info.assert_tu.nsec = (shm_refclock_time - data->info.assert_tu.sec) * 1e9;
 			data->info.assert_tu.sec += system_time_offset;
