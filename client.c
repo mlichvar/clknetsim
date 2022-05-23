@@ -577,8 +577,8 @@ static int find_recv_socket(struct Reply_select *rep) {
 
 		if (!socket_in_subnet(i, rep->subnet) ||
 		    (rep->dst_port && sockets[i].port != rep->dst_port) ||
-		    (sockets[i].remote_node != -1 && sockets[i].remote_node != rep->from) ||
-		    (sockets[i].remote_port && sockets[i].remote_port != rep->src_port))
+		    (sockets[i].remote_node >= 0 && sockets[i].remote_node != rep->from) ||
+		    (sockets[i].remote_port >= 0 && sockets[i].remote_port != rep->src_port))
 			continue;
 
 		switch (rep->type) {
@@ -1368,6 +1368,7 @@ int socket(int domain, int type, int protocol) {
 	sockets[s].port = BASE_SOCKET_DEFAULT_PORT + s;
 	sockets[s].iface = domain == AF_UNIX ? IFACE_UNIX : IFACE_ALL;
 	sockets[s].remote_node = -1;
+	sockets[s].remote_port = -1;
 
 	return get_socket_fd(s);
 }
@@ -1965,6 +1966,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 		}
 		req.subnet = sockets[s].iface >= IFACE_ETH0 ? sockets[s].iface - IFACE_ETH0 : unix_subnet;
 		req.to = sockets[s].remote_node;
+		assert(sockets[s].remote_port >= 0);
 		req.dst_port = sockets[s].remote_port;
 	} else {
 		switch (sockets[s].domain) {
@@ -2004,10 +2006,10 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 			assert(0);
 	}
 
+	assert(req.src_port >= 0);
 	req.src_port = sockets[s].port;
 
 	assert(socket_in_subnet(s, req.subnet));
-	assert(req.src_port && req.dst_port);
 
 	for (req.len = 0, i = 0; i < msg->msg_iovlen; i++) {
 		assert(req.len + msg->msg_iov[i].iov_len <= sizeof (req.data));
@@ -2172,7 +2174,8 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 			case MSG_TYPE_TCP_DATA:
 			case MSG_TYPE_TCP_DISCONNECT:
 				assert(sockets[s].type == SOCK_STREAM);
-				assert(sockets[s].remote_port && sockets[s].remote_node != -1);
+				assert(sockets[s].remote_node >= 0);
+				assert(sockets[s].remote_port >= 0);
 
 				if (!sockets[s].connected) {
 					errno = ENOTCONN;
@@ -2190,7 +2193,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 
 	assert(socket_in_subnet(s, rep.subnet));
 	assert(sockets[s].port == rep.dst_port);
-	assert(!sockets[s].remote_port || sockets[s].remote_port == rep.src_port);
+	assert(sockets[s].remote_port == -1 || sockets[s].remote_port == rep.src_port);
 
 	if (msg->msg_name) {
 		switch (sockets[s].domain) {
