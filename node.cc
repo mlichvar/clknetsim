@@ -149,6 +149,7 @@ void Node::process_gettime() {
 	r.real_time = clock.get_real_time();
 	r.monotonic_time = clock.get_monotonic_time();
 	r.network_time = network->get_time();
+	r.freq_error = clock.get_total_freq() - 1.0;
 	reply(&r, sizeof (r), REQ_GETTIME);
 }
 
@@ -207,6 +208,7 @@ void Node::try_select() {
 		rep.time.real_time = clock.get_real_time();
 		rep.time.monotonic_time = clock.get_monotonic_time();
 		rep.time.network_time = network->get_time();
+		rep.time.freq_error = clock.get_total_freq() - 1.0;
 		reply(&rep, sizeof (rep), REQ_SELECT);
 	}
 }

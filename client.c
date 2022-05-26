@@ -178,6 +178,7 @@ static int unix_subnet = -1;
 static double real_time = 0.0;
 static double monotonic_time = 0.0;
 static double network_time = 0.0;
+static double freq_error = 0.0;
 static int local_time_valid = 0;
 
 static time_t system_time_offset = 1262304000; /* 2010-01-01 0:00 UTC */
@@ -424,6 +425,7 @@ static void fetch_time(void) {
 		real_time = r.real_time;
 		monotonic_time = r.monotonic_time;
 		network_time = r.network_time;
+		freq_error = r.freq_error;
 		local_time_valid = 1;
 	}
 }
@@ -1011,6 +1013,7 @@ try_again:
 		real_time = rep.time.real_time;
 		monotonic_time = rep.time.monotonic_time;
 		network_time = rep.time.network_time;
+		freq_error = rep.time.freq_error;
 		local_time_valid = 1;
 
 		fill_refclock_sample();

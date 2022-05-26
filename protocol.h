@@ -49,6 +49,7 @@ struct Reply_gettime {
 	double real_time;
 	double monotonic_time;
 	double network_time;
+	double freq_error;
 };
 
 struct Request_settime {
