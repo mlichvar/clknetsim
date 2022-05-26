@@ -137,6 +137,10 @@ static int precision_hack = 1;
 static unsigned int random_seed = 0;
 static int recv_multiply = 1;
 static int timestamping = 1;
+
+static double phc_delay = 0.0;
+static double phc_jitter = 0.0;
+static double phc_jitter_asym = 0.0;
 static int phc_swap = 0;
 
 enum {
@@ -289,6 +293,18 @@ static void init(void) {
 	env = getenv("CLKNETSIM_TIMESTAMPING");
 	if (env)
 		timestamping = atoi(env);
+
+	env = getenv("CLKNETSIM_PHC_DELAY");
+	if (env)
+		phc_delay = atof(env);
+
+	env = getenv("CLKNETSIM_PHC_JITTER");
+	if (env)
+		phc_jitter = atof(env);
+
+	env = getenv("CLKNETSIM_PHC_JITTER_ASYM");
+	if (env)
+		phc_jitter_asym = atof(env);
 
 	env = getenv("CLKNETSIM_PHC_SWAP");
 	if (env)
@@ -726,6 +742,25 @@ static void add_to_timespec(struct timespec *tp, double offset) {
 	tp->tv_sec += floor(offset);
 	tp->tv_nsec += (offset - floor(offset)) * 1e9;
 	normalize_timespec(tp);
+}
+
+static double get_random_double(void) {
+	return (double)random() / ((1U << 31) - 1);
+}
+
+static double get_phc_delay(int dir) {
+	double L, p, delay = 0.0;
+	int k, lambda = 5;
+
+	/* Poisson with uniform steps */
+	if (phc_jitter > 0.0) {
+		for (L = exp(-lambda), p = 1.0, k = 0; k < 100 && p > L; k++)
+			p *= get_random_double();
+		delay += (k + get_random_double()) / (lambda + 0.5) *
+			phc_jitter * (0.5 + dir * phc_jitter_asym);
+	}
+
+	return (delay + phc_delay / 2.0) * (freq_error + 1.0);
 }
 
 int gettimeofday(struct timeval *tv,
@@ -1806,45 +1841,54 @@ int ioctl(int fd, unsigned long request, ...) {
 #ifdef PTP_SYS_OFFSET
 	} else if (request == PTP_SYS_OFFSET && fd == REFCLK_FD) {
 		struct ptp_sys_offset *sys_off = va_arg(ap, struct ptp_sys_offset *);
-		struct timespec ts;
+		struct timespec ts, ts1, ts2;
+		double delay;
 		int i;
 
 		if (sys_off->n_samples > PTP_MAX_SAMPLES)
 			sys_off->n_samples = PTP_MAX_SAMPLES;
 
-		clock_gettime(REFCLK_ID, &ts);
-		for (i = 0; i < sys_off->n_samples; i++) {
-			sys_off->ts[2 * i + 1].sec = ts.tv_sec;
-			sys_off->ts[2 * i + 1].nsec = ts.tv_nsec;
-		}
-
 		clock_gettime(CLOCK_REALTIME, &ts);
-		for (i = 0; i < sys_off->n_samples + 1; i++) {
-			sys_off->ts[2 * i].sec = ts.tv_sec;
-			sys_off->ts[2 * i].nsec = ts.tv_nsec;
+		sys_off->ts[sys_off->n_samples * 2].sec = ts.tv_sec;
+		sys_off->ts[sys_off->n_samples * 2].nsec = ts.tv_nsec;
+
+		for (delay = 0.0, i = sys_off->n_samples - 1; i >= 0; i--) {
+			delay += get_phc_delay(1);
+			clock_gettime(REFCLK_ID, &ts1);
+			add_to_timespec(&ts1, -delay);
+			ts2 = ts;
+			delay += get_phc_delay(-1);
+			add_to_timespec(&ts2, -delay);
+			sys_off->ts[2 * i + 1].sec = ts1.tv_sec;
+			sys_off->ts[2 * i + 1].nsec = ts1.tv_nsec;
+			sys_off->ts[2 * i + 0].sec = ts2.tv_sec;
+			sys_off->ts[2 * i + 0].nsec = ts2.tv_nsec;
 		}
 #endif
 #ifdef PTP_SYS_OFFSET_EXTENDED
 	} else if (request == PTP_SYS_OFFSET_EXTENDED && fd == REFCLK_FD) {
 		struct ptp_sys_offset_extended *sys_off = va_arg(ap, struct ptp_sys_offset_extended *);
-		struct timespec ts;
+		struct timespec ts, ts1, ts2;
 		int i;
 
 		if (sys_off->n_samples > PTP_MAX_SAMPLES)
 			sys_off->n_samples = PTP_MAX_SAMPLES;
 
-		clock_gettime(REFCLK_ID, &ts);
 		for (i = 0; i < sys_off->n_samples; i++) {
+			clock_gettime(REFCLK_ID, &ts);
 			sys_off->ts[i][1].sec = ts.tv_sec;
 			sys_off->ts[i][1].nsec = ts.tv_nsec;
 		}
 
 		clock_gettime(CLOCK_REALTIME, &ts);
 		for (i = 0; i < sys_off->n_samples; i++) {
-			sys_off->ts[i][0].sec = ts.tv_sec;
-			sys_off->ts[i][0].nsec = ts.tv_nsec;
-			sys_off->ts[i][2].sec = ts.tv_sec;
-			sys_off->ts[i][2].nsec = ts.tv_nsec;
+			ts1 = ts, ts2 = ts;
+			add_to_timespec(&ts1, -get_phc_delay(-1));
+			add_to_timespec(&ts2, get_phc_delay(1));
+			sys_off->ts[i][0].sec = ts1.tv_sec;
+			sys_off->ts[i][0].nsec = ts1.tv_nsec;
+			sys_off->ts[i][2].sec = ts2.tv_sec;
+			sys_off->ts[i][2].nsec = ts2.tv_nsec;
 		}
 #endif
 #ifdef PTP_SYS_OFFSET_PRECISE
