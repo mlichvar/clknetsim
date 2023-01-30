@@ -130,6 +130,7 @@ static int (*_shmget)(key_t key, size_t size, int shmflg);
 static void *(*_shmat)(int shmid, const void *shmaddr, int shmflg);
 
 static unsigned int node;
+static int initializing = 0;
 static int initialized_symbols = 0;
 static int initialized = 0;
 static int clknetsim_fd;
@@ -273,8 +274,10 @@ static void init(void) {
 	char command[64];
 	FILE *f;
 
-	if (initialized)
+	if (initializing || initialized)
 		return;
+
+	initializing = 1;
 
 	init_symbols();
 
@@ -367,6 +370,7 @@ static void init(void) {
 	/* this requires the node variable to be already set */
 	srandom(0);
 
+	initializing = 0;
 	initialized = 1;
 
 	req.node = node;
@@ -789,12 +793,10 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 
 	/* try to allow reading of the clock from other constructors, but
 	   prevent a recursive call (e.g. due to a special memory allocator) */
+	init();
 	if (!initialized) {
-		if (initialized_symbols) {
-			errno = EINVAL;
-			return -1;
-		}
-		init();
+		errno = EINVAL;
+		return -1;
 	}
 
 	switch (which_clock) {
