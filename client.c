@@ -35,6 +35,7 @@
 #include <sys/timerfd.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <sys/sysmacros.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <time.h>
@@ -1698,6 +1699,13 @@ int fcntl(int fd, int cmd, ...) {
 int fstat(int fd, struct stat *statbuf) {
 	if (fd == URANDOM_FD)
 		return stat("/dev/urandom", statbuf);
+
+	if (fd == REFCLK_FD || fd == SYSCLK_FD) {
+		memset(statbuf, 0, sizeof (*statbuf));
+		statbuf->st_mode = S_IFCHR | 0660;
+		statbuf->st_rdev = makedev(247, fd == REFCLK_FD ? 0 : 1);
+		return 0;
+	}
 
 #ifdef HAVE_STAT
 	assert(_fstat);
