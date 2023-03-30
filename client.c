@@ -196,6 +196,8 @@ struct timer {
 	int used;
 	int armed;
 	int type;
+	int fd_flags;
+	uint64_t expired;
 	clockid_t clock_id;
 	double timeout;
 	double interval;
@@ -725,6 +727,7 @@ static void rearm_timer(int timer)
 		timers[timer].timeout += timers[timer].interval;
 	else
 		timers[timer].armed = 0;
+	timers[timer].expired++;
 }
 
 static void time_to_timeval(double d, struct timeval *tv) {
@@ -1442,6 +1445,8 @@ int open(const char *pathname, int flags, ...) {
 }
 
 ssize_t read(int fd, void *buf, size_t count) {
+	int t;
+
 	if (fd == URANDOM_FD) {
 		size_t i;
 		long r;
@@ -1456,6 +1461,16 @@ ssize_t read(int fd, void *buf, size_t count) {
 		}
 
 		return count;
+	} else if ((t = get_timer_from_fd(fd)) >= 0) {
+		if (count < sizeof (timers[t].expired)) {
+			errno = EINVAL;
+			return -1;
+		}
+
+		assert(timers[t].expired > 0);
+		memcpy(buf, &timers[t].expired, sizeof (timers[t].expired));
+		timers[t].expired = 0;
+		return sizeof (timers[t].expired);
 	}
 
 	return _read(fd, buf, count);
@@ -2531,6 +2546,8 @@ int timer_create(clockid_t which_clock, struct sigevent *timer_event_spec, timer
 	timers[t].used = 1;
 	timers[t].armed = 0;
 	timers[t].type = TIMER_TYPE_SIGNAL;
+	timers[t].fd_flags = 0;
+	timers[t].expired = 0;
 	timers[t].clock_id = which_clock;
 	*created_timer_id = get_timerid(t);
 
@@ -2563,6 +2580,7 @@ int timer_settime(timer_t timerid, int flags, const struct itimerspec *value, st
 
 	if (value->it_value.tv_sec || value->it_value.tv_nsec) {
 		timers[t].armed = 1;
+		timers[t].expired = 0;
 		timers[t].timeout = timespec_to_time(&value->it_value, 0);
 		if (!(flags & TIMER_ABSTIME))
 			timers[t].timeout += get_monotonic_time();
@@ -2644,6 +2662,8 @@ int timerfd_create(int clockid, int flags) {
 	timers[t].used = 1;
 	timers[t].armed = 0;
 	timers[t].type = TIMER_TYPE_FD;
+	timers[t].fd_flags = flags;
+	timers[t].expired = 0;
 	timers[t].clock_id = clockid;
 
 	return get_timerfd(t);
