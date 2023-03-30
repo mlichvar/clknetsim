@@ -2632,7 +2632,7 @@ int getitimer(__itimer_which_t which, struct itimerval *curr_value) {
 int timerfd_create(int clockid, int flags) {
 	int t;
 
-	assert((clockid == CLOCK_REALTIME || clockid == CLOCK_MONOTONIC) && !flags);
+	assert((clockid == CLOCK_REALTIME || clockid == CLOCK_MONOTONIC) && !(flags & ~TFD_NONBLOCK));
 
 	t = get_free_timer();
 	if (t < 0) {
