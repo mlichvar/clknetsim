@@ -768,6 +768,49 @@ static double get_phc_delay(int dir) {
 	return (delay + phc_delay / 2.0) * (freq_error + 1.0);
 }
 
+static int generate_eth_frame(unsigned int type, unsigned int subnet, unsigned int from,
+			      unsigned int to, unsigned int src_port, unsigned int dst_port,
+			      char *data, unsigned int data_len, char *frame, unsigned int buf_len) {
+	uint16_t port1, port2, ip_len, udp_len;
+	uint32_t addr1, addr2;
+
+	assert(type == SOCK_DGRAM || type == SOCK_STREAM);
+
+	if ((type == SOCK_DGRAM && data_len + 42 > buf_len) ||
+	    (type == SOCK_STREAM && data_len + 54 > buf_len))
+		return 0;
+
+	addr1 = htonl(NODE_ADDR(subnet, from));
+	addr2 = htonl(NODE_ADDR(subnet, to));
+	port1 = htons(src_port);
+	port2 = htons(dst_port);
+
+	memset(frame, 0, buf_len);
+	frame[12] = 0x08;
+	frame[14] = 0x45;
+	memcpy(frame + 26, &addr1, sizeof (addr1));
+	memcpy(frame + 30, &addr2, sizeof (addr2));
+	memcpy(frame + 34, &port1, sizeof (port1));
+	memcpy(frame + 36, &port2, sizeof (port2));
+
+	if (type == SOCK_DGRAM) {
+		ip_len = htons(data_len + 28);
+		udp_len = htons(data_len + 8);
+		memcpy(frame + 16, &ip_len, sizeof (ip_len));
+		frame[23] = 17;
+		memcpy(frame + 38, &udp_len, sizeof (udp_len));
+		memcpy(frame + 42, data, data_len);
+		return data_len + 42;
+	} else {
+		ip_len = htons(data_len + 40);
+		memcpy(frame + 16, &ip_len, sizeof (ip_len));
+		frame[23] = 6;
+		frame[46] = 5 << 4;
+		memcpy(frame + 54, data, data_len);
+		return data_len + 54;
+	}
+}
+
 int gettimeofday(struct timeval *tv,
 #if !defined(__GLIBC_PREREQ) || __GLIBC_PREREQ(2, 31) || defined(GETTIMEOFDAY_VOID)
 		 void *tz
@@ -2195,9 +2238,6 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	assert(s >= 0);
 
 	if (sockets[s].last_ts_msg.len && flags & MSG_ERRQUEUE) {
-		uint32_t addr;
-		uint16_t port;
-
 		/* last message looped back to the error queue */
 
 		last_ts_msg = &sockets[s].last_ts_msg;
@@ -2211,20 +2251,12 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		rep.src_port = last_ts_msg->port;
 		rep.dst_port = sockets[s].port;
 
-		addr = htonl(NODE_ADDR(rep.subnet, rep.from));
-		port = htons(rep.src_port);
-
 		/* put the message in an Ethernet frame */
-		memset(rep.data, 0, 42);
-		rep.data[12] = 0x08;
-		rep.data[14] = 0x45;
-		rep.data[23] = 17;
-		memcpy(rep.data + 30, &addr, sizeof (addr));
-		memcpy(rep.data + 36, &port, sizeof (port));
-
-		assert(last_ts_msg->len + 42 <= sizeof (rep.data));
-		memcpy(rep.data + 42, last_ts_msg->data, last_ts_msg->len);
-
+		rep.len = generate_eth_frame(sockets[s].type, last_ts_msg->subnet,
+					     node, last_ts_msg->to,
+					     sockets[s].port, last_ts_msg->port,
+					     last_ts_msg->data, last_ts_msg->len,
+					     rep.data, sizeof (rep.data));
 		rep.len = 42 + last_ts_msg->len;
 
 		last_ts_msg->len = 0;
