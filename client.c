@@ -230,6 +230,10 @@ static struct Reply_getrefoffsets refclock_offsets;
 static int refclock_offsets_used = 0;
 static int pps_fds = 0;
 
+static FILE *pcap = NULL;
+
+static void write_pcap_header(void);
+
 static void make_request(int request_id, const void *request_data, int reqlen, void *reply, int replylen);
 
 static void init_symbols(void) {
@@ -329,6 +333,12 @@ static void init(void) {
 		}
 	}
 
+	env = getenv("CLKNETSIM_PCAP_DUMP");
+	if (env) {
+		pcap = _fopen(env, "w");
+		write_pcap_header();
+	}
+
 	if (fuzz_init()) {
 		node = 0;
 		subnets = 2;
@@ -384,6 +394,9 @@ __attribute__((destructor))
 static void fini(void) {
 	if (initialized)
 		make_request(REQ_DEREGISTER, NULL, 0, NULL, 0);
+
+	if (pcap)
+		fclose(pcap);
 }
 
 static void make_request(int request_id, const void *request_data, int reqlen, void *reply, int replylen) {
@@ -809,6 +822,44 @@ static int generate_eth_frame(unsigned int type, unsigned int subnet, unsigned i
 		memcpy(frame + 54, data, data_len);
 		return data_len + 54;
 	}
+}
+
+static void write_pcap_header(void) {
+	/* Big-endian nanosecond pcap with DLT_EN10MB */
+	const char header[] = "\xa1\xb2\x3c\x4d\x00\x02\x00\x04\x00\x00\x00\x00"
+			      "\x00\x00\x00\x00\x00\x00\xff\xff\x00\x00\x00\x01";
+	if (!pcap)
+		return;
+	if (fwrite(header, sizeof (header) - 1, 1, pcap) != 1)
+		return;
+}
+
+static void write_pcap_packet(unsigned int type, unsigned int subnet, unsigned int from, unsigned int to,
+			      unsigned int src_port, unsigned int dst_port, char *data, unsigned int len) {
+	char frame[64 + MAX_PACKET_SIZE];
+	unsigned int frame_len;
+	struct timespec ts;
+	uint32_t v;
+
+	if (!pcap)
+		return;
+
+	clock_gettime(CLOCK_REALTIME, &ts);
+	frame_len = generate_eth_frame(type, subnet, from, to, src_port, dst_port,
+				       data, len, frame, sizeof (frame));
+
+	v = htonl(ts.tv_sec);
+	if (fwrite(&v, sizeof (v), 1, pcap) != 1)
+		return;
+	v = htonl(ts.tv_nsec);
+	if (fwrite(&v, sizeof (v), 1, pcap) != 1)
+		return;
+	v = htonl(frame_len);
+	if (fwrite(&v, sizeof (v), 1, pcap) != 1 || fwrite(&v, sizeof (v), 1, pcap) != 1)
+		return;
+	if (fwrite(frame, frame_len, 1, pcap) != 1)
+		return;
+
 }
 
 int gettimeofday(struct timeval *tv,
@@ -2142,6 +2193,9 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 
 	make_request(REQ_SEND, &req, offsetof(struct Request_send, data) + req.len, NULL, 0);
 
+	write_pcap_packet(sockets[s].type, req.subnet, node, req.to,
+			  req.src_port, req.dst_port, req.data, req.len);
+
 	timestamping = sockets[s].time_stamping;
 	for (cmsg = CMSG_FIRSTHDR(msg); cmsg; cmsg = CMSG_NXTHDR((struct msghdr *)msg, cmsg)) {
 		if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_TIMESTAMPING)
@@ -2301,6 +2355,9 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 			default:
 				assert(0);
 		}
+
+		write_pcap_packet(sockets[s].type, rep.subnet, rep.from, node,
+				  rep.src_port, rep.dst_port, rep.data, rep.len);
 	}
 
 	assert(socket_in_subnet(s, rep.subnet));
