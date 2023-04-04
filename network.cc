@@ -357,8 +357,15 @@ void Network::send(struct Packet *packet) {
 		return;
 	}
 
-	assert(packet->to < nodes.size() && packet->from < nodes.size() &&
-			packet->subnet < subnets);
+	if (packet->to >= nodes.size() || packet->from >= nodes.size() || packet->subnet >= subnets) {
+#ifdef DEBUG
+		printf("dropping packet of type %d from %d to %d:%d:%d at %f\n",
+				packet->type, packet->from, packet->subnet, packet->to,
+				packet->dst_port, time);
+#endif
+		delete packet;
+		return;
+	}
 
 	i = packet->from * nodes.size() + packet->to;
 
