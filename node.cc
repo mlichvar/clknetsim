@@ -75,7 +75,7 @@ bool Node::process_fd() {
 	pending_request = request.header.request;
 
 #ifdef DEBUG
-	printf("received request %ld in node %d at %f\n",
+	printf("received request %d in node %d at %f\n",
 			pending_request, index, clock.get_real_time());
 #endif
 
