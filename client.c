@@ -58,6 +58,7 @@
 #include <linux/ethtool.h>
 #include <linux/limits.h>
 #include <linux/pps.h>
+#include <linux/rtc.h>
 #include <linux/sockios.h>
 #ifdef SO_TIMESTAMPING
 #include <linux/ptp_clock.h>
@@ -88,6 +89,7 @@
 #define SYSCLK_CLOCKID ((clockid_t)(((unsigned int)~SYSCLK_FD << 3) | 3))
 #define SYSCLK_PHC_INDEX 1
 #define PPS_FD 1002
+#define RTC_FD 1003
 #define URANDOM_FD 1010
 
 #define MAX_SOCKETS 20
@@ -144,6 +146,9 @@ static double phc_delay = 0.0;
 static double phc_jitter = 0.0;
 static double phc_jitter_asym = 0.0;
 static int phc_swap = 0;
+
+static double rtc_offset = 0.0;
+static int rtc_timerfd = 0;
 
 enum {
 	IFACE_UNIX,
@@ -320,6 +325,10 @@ static void init(void) {
 	if (env)
 		phc_swap = atoi(env);
 
+	env = getenv("CLKNETSIM_RTC_OFFSET");
+	if (env)
+		rtc_offset = atof(env);
+
 	f = _fopen("/proc/self/comm", "r");
 	if (f) {
 		command[0] = '\0';
@@ -488,6 +497,10 @@ static double get_refclock_offset(void) {
 static double get_refclock_time(void) {
 	fetch_time();
 	return network_time - get_refclock_offset();
+}
+
+static double get_rtc_time(void) {
+	return get_monotonic_time() + rtc_offset;
 }
 
 static void settime(double time) {
@@ -1109,6 +1122,13 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 		for (i = 0; i < nfds; i++) {
 			if (!FD_ISSET(i, readfds))
 				continue;
+
+			if (i == RTC_FD) {
+				if (rtc_timerfd > 0)
+					FD_SET(rtc_timerfd, readfds);
+				continue;
+			}
+
 			s = get_socket_from_fd(i);
 			if ((s < 0 && get_timer_from_fd(i) < 0) ||
 			    (s >= 0 && sockets[s].buffer.len > 0)) {
@@ -1227,8 +1247,11 @@ try_again:
 
 	if (readfds) {
 		FD_ZERO(readfds);
-		if (recv_fd)
+		if (recv_fd) {
+			if (recv_fd == rtc_timerfd)
+				recv_fd = RTC_FD;
 			FD_SET(recv_fd, readfds);
+		}
 	}
 
 	if (timeout) {
@@ -1429,6 +1452,8 @@ int open(const char *pathname, int flags, ...) {
 		return phc_swap ? REFCLK_FD : SYSCLK_FD;
 	else if (!strcmp(pathname, "/dev/pps0"))
 		return pps_fds++, PPS_FD;
+	else if (!strcmp(pathname, "/dev/rtc"))
+		return RTC_FD;
 	else if (!strcmp(pathname, "/dev/urandom"))
 		return URANDOM_FD;
 
@@ -1461,6 +1486,14 @@ ssize_t read(int fd, void *buf, size_t count) {
 		}
 
 		return count;
+	} else if (fd == RTC_FD) {
+		unsigned long d = RTC_UF | 1 << 8;
+		if (count < sizeof (d)) {
+			errno = EINVAL;
+			return -1;
+		}
+		memcpy(buf, &d, sizeof (d));
+		return sizeof (d);
 	} else if ((t = get_timer_from_fd(fd)) >= 0) {
 		if (count < sizeof (timers[t].expired)) {
 			errno = EINVAL;
@@ -1479,7 +1512,7 @@ ssize_t read(int fd, void *buf, size_t count) {
 int close(int fd) {
 	int t, s;
 
-	if (fd == REFCLK_FD || fd == SYSCLK_FD || fd == URANDOM_FD) {
+	if (fd == REFCLK_FD || fd == SYSCLK_FD || fd == RTC_FD || fd == URANDOM_FD) {
 		return 0;
 	} else if (fd == PPS_FD) {
 		pps_fds--;
@@ -1789,6 +1822,9 @@ int fcntl(int fd, int cmd, ...) {
 	int i, s = get_socket_from_fd(fd);
 	va_list ap;
 
+	if (fd == RTC_FD)
+		return 0;
+
 	if (s < 0) {
 		switch (cmd) {
 			/* including fcntl.h breaks open() declaration */
@@ -2070,6 +2106,48 @@ int ioctl(int fd, unsigned long request, ...) {
 			data->info.assert_tu.nsec = (shm_refclock_time - data->info.assert_tu.sec) * 1e9;
 			data->info.assert_tu.sec += system_time_offset;
 		}
+	} else if (request == RTC_UIE_ON && fd == RTC_FD) {
+		struct itimerspec it;
+
+		if (rtc_timerfd)
+			close(rtc_timerfd);
+		rtc_timerfd = timerfd_create(CLOCK_MONOTONIC, 0);
+
+		it.it_interval.tv_sec = 1;
+		it.it_interval.tv_nsec = 0;
+		it.it_value.tv_sec = 0;
+		it.it_value.tv_nsec = (ceil(get_rtc_time()) - get_rtc_time() + 1e-6) * 1e9;
+		normalize_timespec(&it.it_value);
+		timerfd_settime(rtc_timerfd, 0, &it, NULL);
+	} else if (request == RTC_UIE_OFF && fd == RTC_FD) {
+		close(rtc_timerfd);
+		rtc_timerfd = 0;
+	} else if (request == RTC_RD_TIME && fd == RTC_FD) {
+		struct rtc_time *rtc = va_arg(ap, struct rtc_time *);
+		time_t t = (time_t)get_rtc_time() + system_time_offset;
+		struct tm *tm = gmtime(&t);
+
+		rtc->tm_sec = tm->tm_sec;
+		rtc->tm_min = tm->tm_min;
+		rtc->tm_hour = tm->tm_hour;
+		rtc->tm_mday = tm->tm_mday;
+		rtc->tm_mon = tm->tm_mon;
+		rtc->tm_year = tm->tm_year;
+		rtc->tm_wday = tm->tm_wday;
+		rtc->tm_yday = tm->tm_yday;
+		rtc->tm_isdst = tm->tm_isdst;
+	} else if (request == RTC_SET_TIME && fd == RTC_FD) {
+		struct rtc_time *rtc = va_arg(ap, struct rtc_time *);
+		struct tm tm;
+
+		tm.tm_sec = rtc->tm_sec;
+		tm.tm_min = rtc->tm_min;
+		tm.tm_hour = rtc->tm_hour;
+		tm.tm_mday = rtc->tm_mday;
+		tm.tm_mon = rtc->tm_mon;
+		tm.tm_year = rtc->tm_year;
+		tm.tm_isdst = 0;
+		rtc_offset -= get_rtc_time() + system_time_offset - (timegm(&tm) + 0.5);
 	} else {
 		ret = -1;
 		errno = EINVAL;
