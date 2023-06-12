@@ -1432,6 +1432,10 @@ char *realpath(const char *path, char *resolved_path) {
 	return _realpath(path, resolved_path);
 }
 
+char *__realpath_chk(const char *name, char *resolved_path, size_t buflen) {
+	return realpath(name, resolved_path);
+}
+
 int open(const char *pathname, int flags, ...) {
 	int r, mode_arg = 0;
 	mode_t mode = 0;
