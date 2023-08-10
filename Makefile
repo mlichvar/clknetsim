@@ -4,7 +4,8 @@ CPPFLAGS += $(apiflags)
 
 all: clknetsim.so clknetsim
 
-apiflags := $(shell grep -q __timezone_ptr_t /usr/include/sys/time.h || echo -DGETTIMEOFDAY_VOID)
+apiflags := $(shell echo '#include <sys/time.h>' | $(CC) -x c -E - | \
+	    grep __timezone_ptr_t > /dev/null || echo -DGETTIMEOFDAY_VOID)
 
 clientobjs = client.o
 serverobjs = $(patsubst %.cc,%.o,$(wildcard *.cc))
