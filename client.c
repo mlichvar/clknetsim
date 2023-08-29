@@ -161,7 +161,7 @@ struct message {
 	char data[MAX_PACKET_SIZE];
 	unsigned int len;
 	unsigned int subnet;
-	unsigned int to;
+	unsigned int to_from;
 	unsigned int port;
 };
 
@@ -1227,11 +1227,21 @@ try_again:
 				struct Reply_recv recv_rep;
 
 				make_request(REQ_RECV, NULL, 0, &recv_rep, sizeof (recv_rep));
-				if (rep.ret != REPLY_SELECT_BROADCAST)
-					fprintf(stderr, "clknetsim: dropped packet of type %d from "
-							"node %d on port %d in subnet %d\n",
-							recv_rep.type, recv_rep.from + 1,
-							recv_rep.dst_port, recv_rep.subnet + 1);
+				if (rep.ret != REPLY_SELECT_BROADCAST) {
+					if (s >= 0 && sockets[s].buffer.len == 0) {
+						sockets[s].buffer.len = recv_rep.len;
+						assert(sockets[s].buffer.len <= sizeof (sockets[s].buffer.data));
+						memcpy(sockets[s].buffer.data, recv_rep.data, sockets[s].buffer.len);
+						sockets[s].buffer.subnet = recv_rep.subnet;
+						sockets[s].buffer.to_from = recv_rep.from;
+						sockets[s].buffer.port = recv_rep.src_port;
+					} else {
+						fprintf(stderr, "clknetsim: dropped packet of type %d from "
+								"node %d on port %d in subnet %d\n",
+								recv_rep.type, recv_rep.from + 1,
+								recv_rep.dst_port, recv_rep.subnet + 1);
+					}
+				}
 
 				goto try_again;
 			}
@@ -2306,7 +2316,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 		memcpy(last_ts_msg->data, req.data, req.len);
 		last_ts_msg->len = req.len;
 		last_ts_msg->subnet = req.subnet;
-		last_ts_msg->to = req.to;
+		last_ts_msg->to_from = req.to;
 		last_ts_msg->port = req.dst_port;
 	}
 
@@ -2398,13 +2408,13 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		assert(sockets[s].type == SOCK_DGRAM);
 		rep.type = MSG_TYPE_UDP_DATA;
 		rep.subnet = last_ts_msg->subnet;
-		rep.from = last_ts_msg->to;
+		rep.from = last_ts_msg->to_from;
 		rep.src_port = last_ts_msg->port;
 		rep.dst_port = sockets[s].port;
 
 		/* put the message in an Ethernet frame */
 		rep.len = generate_eth_frame(sockets[s].type, last_ts_msg->subnet,
-					     node, last_ts_msg->to,
+					     node, last_ts_msg->to_from,
 					     sockets[s].port, last_ts_msg->port,
 					     last_ts_msg->data, last_ts_msg->len,
 					     rep.data, sizeof (rep.data));
@@ -2412,14 +2422,24 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 
 		last_ts_msg->len = 0;
 	} else if (sockets[s].buffer.len > 0) {
-		assert(sockets[s].type == SOCK_STREAM && sockets[s].remote_node != -1);
+		switch (sockets[s].type) {
+			case SOCK_STREAM:
+				assert(sockets[s].remote_node != -1);
+				rep.type = MSG_TYPE_TCP_DATA;
+				break;
+			case SOCK_DGRAM:
+				rep.type = MSG_TYPE_UDP_DATA;
+				break;
+			default:
+				assert(0);
+		}
+
 		assert(sockets[s].buffer.len <= sizeof (rep.data));
 
 		memcpy(rep.data, sockets[s].buffer.data, sockets[s].buffer.len);
-		rep.type = MSG_TYPE_TCP_DATA;
-		rep.subnet = sockets[s].iface - IFACE_ETH0;
-		rep.from = sockets[s].remote_node;
-		rep.src_port = sockets[s].remote_port;
+		rep.subnet = sockets[s].buffer.subnet;
+		rep.from = sockets[s].buffer.to_from;
+		rep.src_port = sockets[s].buffer.port;
 		rep.dst_port = sockets[s].port;
 		rep.len = sockets[s].buffer.len;
 
@@ -2488,13 +2508,16 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	memcpy(msg->msg_iov[0].iov_base, rep.data, msglen);
 
 	if (sockets[s].type == SOCK_STREAM) {
-	       if (msglen < rep.len) {
-		       sockets[s].buffer.len = rep.len - msglen;
-		       assert(sockets[s].buffer.len <= sizeof (sockets[s].buffer.data));
-		       memcpy(sockets[s].buffer.data, rep.data + msglen, rep.len - msglen);
-	       } else {
-		       sockets[s].buffer.len = 0;
-	       }
+		if (msglen < rep.len) {
+			sockets[s].buffer.len = rep.len - msglen;
+			assert(sockets[s].buffer.len <= sizeof (sockets[s].buffer.data));
+			memcpy(sockets[s].buffer.data, rep.data + msglen, rep.len - msglen);
+			sockets[s].buffer.subnet = rep.subnet;
+			sockets[s].buffer.to_from = rep.from;
+			sockets[s].buffer.port = rep.src_port;
+		} else {
+			sockets[s].buffer.len = 0;
+		}
 	}
 
 	cmsglen = 0;
