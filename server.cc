@@ -75,7 +75,13 @@ bool load_config(const char *file, Network *network, unsigned int nodes) {
 			network->get_node(node)->get_clock()->set_ntp_flag(atoi(arg), CLOCK_NTP_FLL_MODE2);
 		else if (strncmp(var, "pll_clamp", 9) == 0)
 			network->get_node(node)->get_clock()->set_ntp_flag(atoi(arg), CLOCK_NTP_PLL_CLAMP);
-		else if (strncmp(var, "delay", 5) == 0) {
+		else if (strncmp(var, "delay_correction", 16) == 0) {
+			var += 16;
+			node2 = atoi(var) - 1;
+			if (node2 >= nodes)
+				continue;
+			network->set_link_correction_generator(node, node2, generator.generate(arg));
+		} else if (strncmp(var, "delay", 5) == 0) {
 			var += 5;
 			node2 = atoi(var) - 1;
 			if (node2 >= nodes)

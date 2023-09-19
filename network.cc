@@ -74,6 +74,7 @@ Network::Network(const char *socket, unsigned int n, unsigned int subnets, unsig
 
 	stats.resize(n);
 	link_delays.resize(n * n);
+	link_corrections.resize(n * n);
 }
 
 Network::~Network() {
@@ -85,6 +86,11 @@ Network::~Network() {
 	while (!link_delays.empty()) {
 		delete link_delays.back();
 		link_delays.pop_back();
+	}
+
+	while (!link_corrections.empty()) {
+		delete link_corrections.back();
+		link_corrections.pop_back();
 	}
 
 	unlink(socket_name);
@@ -177,6 +183,17 @@ void Network::set_link_delay_generator(unsigned int from, unsigned int to, Gener
 	if (link_delays[i])
 		delete link_delays[i];
 	link_delays[i] = generator;
+}
+
+void Network::set_link_correction_generator(unsigned int from, unsigned int to, Generator *generator) {
+	unsigned int i;
+
+	assert(from < nodes.size() && to < nodes.size());
+
+	i = from * nodes.size() + to;
+	if (link_corrections[i])
+		delete link_corrections[i];
+	link_corrections[i] = generator;
 }
 
 bool Network::run(double time_limit) {
@@ -289,6 +306,22 @@ void Network::update_clock_stats() {
 				nodes[i]->get_clock()->get_raw_freq() - 1.0);
 }
 
+void Network::write_correction(struct Packet *packet, double correction) {
+	uint64_t c;
+
+	/* one-step transparent edge-to-edge PTP clock */
+
+	if (packet->src_port != 319 || packet->dst_port != 319 || packet->len < 34 ||
+	    (packet->data[0] != 0 && packet->data[0] != 1) || (packet->data[1] & 0xf) != 2)
+		return;
+
+	c = ((uint64_t)ntohl(*(uint32_t *)(packet->data + 8)) << 32) |
+		ntohl(*(uint32_t *)(packet->data + 12));
+	c += (uint64_t)(correction * ((1 << 16) * 1.0e9));
+	*(uint32_t *)(packet->data + 8) = htonl(c >> 32);
+	*(uint32_t *)(packet->data + 12) = htonl(c);
+}
+
 void Network::open_offset_log(const char *log) {
 	offset_log = fopen(log, "w");
 }
@@ -381,6 +414,12 @@ void Network::send(struct Packet *packet) {
 		link_delay_variables["length"] = packet->len;
 
 		delay = link_delays[i]->generate(&link_delay_variables);
+	}
+
+	if (delay > 0.0 && link_corrections[i]) {
+		link_correction_variables["delay"] = delay;
+		link_correction_variables["length"] = packet->len;
+		write_correction(packet, link_corrections[i]->generate(&link_correction_variables));
 	}
 
 	stats[packet->from].update_packet_stats(false, time, delay);

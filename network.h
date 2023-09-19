@@ -59,9 +59,11 @@ class Network {
 	const char *socket_name;
 	vector<Node *> nodes;
 	vector<Generator *> link_delays;
+	vector<Generator *> link_corrections;
 	vector<Stats> stats;
 	
 	Generator_variables link_delay_variables;
+	Generator_variables link_correction_variables;
 
 	Packet_queue packet_queue;
 
@@ -72,6 +74,7 @@ class Network {
 
 	void update();
 	void update_clock_stats();
+	void write_correction(struct Packet *packet, double correction);
 
 	public:
 	Network(const char *socket, unsigned int n, unsigned int s, unsigned int rate);
@@ -79,6 +82,7 @@ class Network {
 	bool prepare_clients();
 	Node *get_node(unsigned int node);
 	void set_link_delay_generator(unsigned int from, unsigned int to, Generator *generator);
+	void set_link_correction_generator(unsigned int from, unsigned int to, Generator *generator);
 	bool run(double time_limit);
 	void open_offset_log(const char *log);
 	void open_freq_log(const char *log);

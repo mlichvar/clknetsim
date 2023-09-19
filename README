@@ -121,6 +121,9 @@ Variables:
   the network delay for packets sent from node X to node Y in seconds, the
   expression is evaluated for each sent packet, a negative value means the
   packet will be dropped, there is no default (packets are dropped)
+- nodeX_delay_correctionY = expr
+  the correction written to PTP packets (as a one-step E2E transparent clock)
+  sent from node X to node Y in seconds, no correction is written by default
 - nodeX_offset = float
   the initial time error of the system clock in seconds, the default is 0
 - nodeX_start = float
@@ -176,6 +179,10 @@ Variables available in network delay expressions:
   length                 - length of the packet
   subnet                 - number of the Ethernet network in which
                            the packet was sent
+
+Variables available in delay correction expressions:
+  delay                  - delay of the packet
+  length                 - length of the packet (layer 4)
 
 An example:
 
