@@ -80,8 +80,6 @@
 #define PTP_PRIMARY_MCAST_ADDR 0xe0000181 /* 224.0.1.129 */
 #define PTP_PDELAY_MCAST_ADDR 0xe000006b /* 224.0.0.107 */
 
-#define LINK_SPEED 100000
-
 #define REFCLK_FD 1000
 #define REFCLK_ID ((clockid_t)(((unsigned int)~REFCLK_FD << 3) | 3))
 #define REFCLK_PHC_INDEX 0
@@ -146,6 +144,9 @@ static double phc_delay = 0.0;
 static double phc_jitter = 0.0;
 static double phc_jitter_asym = 0.0;
 static int phc_swap = 0;
+
+/* Ethernet speed in Mb/s */
+static int link_speed = 100000;
 
 static double rtc_offset = 0.0;
 static int rtc_timerfd = 0;
@@ -308,6 +309,10 @@ static void init(void) {
 	env = getenv("CLKNETSIM_TIMESTAMPING");
 	if (env)
 		timestamping = atoi(env);
+
+	env = getenv("CLKNETSIM_LINK_SPEED");
+	if (env)
+		link_speed = atoi(env);
 
 	env = getenv("CLKNETSIM_PHC_DELAY");
 	if (env)
@@ -1981,7 +1986,7 @@ int ioctl(int fd, unsigned long request, ...) {
 
 		if (cmd->cmd == ETHTOOL_GSET) {
 			memset(cmd, 0, sizeof (*cmd));
-			ethtool_cmd_speed_set(cmd, LINK_SPEED);
+			ethtool_cmd_speed_set(cmd, link_speed);
 #ifdef ETHTOOL_GET_TS_INFO
 		} else if (cmd->cmd == ETHTOOL_GET_TS_INFO) {
 			struct ethtool_ts_info *info;
@@ -2565,7 +2570,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		if (sockets[s].time_stamping & SOF_TIMESTAMPING_RAW_HARDWARE) {
 			clock_gettime(timestamping > 1 ? REFCLK_ID : CLOCK_REALTIME, &ts);
 			if (!(flags & MSG_ERRQUEUE))
-				add_to_timespec(&ts, -(8 * (msglen + 42 + 4) / (1e6 * LINK_SPEED)));
+				add_to_timespec(&ts, -(8 * (msglen + 42 + 4) / (1e6 * link_speed)));
 
 			memcpy((struct timespec *)CMSG_DATA(cmsg) + 2, &ts, sizeof (ts));
 
