@@ -262,9 +262,11 @@ static void fuzz_process_request(int request_id, const union Request_data *reque
 		case REQ_SETTIME:
 			network_time = request->settime.time;
 			break;
+		case REQ_GETREFOFFSETS:
+			reply->getrefoffsets.size = MAX_GETREFOFFSETS_SIZE;
+			break;
 		case REQ_ADJTIME:
 		case REQ_GETREFSAMPLE:
-		case REQ_GETREFOFFSETS:
 		case REQ_DEREGISTER:
 			break;
 		case REQ_ADJTIMEX:
