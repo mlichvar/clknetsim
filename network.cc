@@ -309,10 +309,11 @@ void Network::update_clock_stats() {
 void Network::write_correction(struct Packet *packet, double correction) {
 	uint64_t c;
 
-	/* one-step transparent edge-to-edge PTP clock */
+	/* one-step transparent end-to-end PTP clock */
 
 	if (packet->src_port != 319 || packet->dst_port != 319 || packet->len < 34 ||
-	    (packet->data[0] != 0 && packet->data[0] != 1) || (packet->data[1] & 0xf) != 2)
+	    ((packet->data[0] & 0xf) != 0 && (packet->data[0] & 0xf) != 1) ||
+	    (packet->data[1] & 0xf) != 2)
 		return;
 
 	c = ((uint64_t)ntohl(*(uint32_t *)(packet->data + 8)) << 32) |
