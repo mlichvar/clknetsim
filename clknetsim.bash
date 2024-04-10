@@ -135,6 +135,7 @@ start_server() {
 		echo " valgrind error" 1>&2
 		ret=1
 	fi
+	sed -i '/^ERROR: ld.so: object.*from LD_PRELOAD cannot/d' tmp/log.[0-9]*
     fi
 
     return $ret
