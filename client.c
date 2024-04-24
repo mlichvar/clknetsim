@@ -301,7 +301,7 @@ static void init(void) {
 
 	env = getenv("CLKNETSIM_START_DATE");
 	if (env)
-		system_time_offset = atol(env);
+		system_time_offset = atoll(env);
 
 	env = getenv("CLKNETSIM_RANDOM_SEED");
 	if (env)
