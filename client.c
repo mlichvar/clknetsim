@@ -255,7 +255,7 @@ static void init_symbols(void) {
 	_fclose = (int (*)(FILE *fp))dlsym(RTLD_NEXT, "fclose");
 	_fcntl = (int (*)(int fd, int cmd, ...))dlsym(RTLD_NEXT, "fcntl");
 #ifdef HAVE_STAT
-#if defined(__USE_TIME_BITS64) && __USE_TIME_BITS64
+#if defined(__USE_TIME_BITS64) && __USE_TIME_BITS64 && __TIMESIZE == 32
 	_fstat = (int (*)(int fd, struct stat *statbuf))dlsym(RTLD_NEXT, "__fstat64_time64");
 	_stat = (int (*)(const char *pathname, struct stat *statbuf))dlsym(RTLD_NEXT, "__stat64_time64");
 #else
