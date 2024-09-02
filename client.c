@@ -1412,6 +1412,8 @@ FILE *fdopen(int fd, const char *mode) {
 	if (fd == URANDOM_FD)
 		return URANDOM_FILE;
 
+	init_symbols();
+
 	return _fdopen(fd, mode);
 }
 
