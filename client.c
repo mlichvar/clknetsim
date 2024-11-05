@@ -143,6 +143,8 @@ static int timestamping = 1;
 static double phc_delay = 0.0;
 static double phc_jitter = 0.0;
 static double phc_jitter_asym = 0.0;
+static int phc_jitter_off = 0;
+static int phc_jitter_on = 1;
 static int phc_swap = 0;
 
 /* Ethernet speed in Mb/s */
@@ -330,6 +332,14 @@ static void init(void) {
 	env = getenv("CLKNETSIM_PHC_JITTER_ASYM");
 	if (env)
 		phc_jitter_asym = atof(env);
+
+	env = getenv("CLKNETSIM_PHC_JITTER_OFF");
+	if (env)
+		phc_jitter_off = atoi(env);
+
+	env = getenv("CLKNETSIM_PHC_JITTER_ON");
+	if (env)
+		phc_jitter_on = atoi(env);
 
 	env = getenv("CLKNETSIM_PHC_SWAP");
 	if (env)
@@ -793,16 +803,21 @@ static double get_random_double(void) {
 }
 
 static double get_phc_delay(int dir) {
+	static unsigned int count = 0;
 	double L, p, delay = 0.0;
 	int k, lambda = 5;
 
 	/* Poisson with uniform steps */
-	if (phc_jitter > 0.0) {
+	if (phc_jitter > 0.0 && count >= phc_jitter_off) {
 		for (L = exp(-lambda), p = 1.0, k = 0; k < 100 && p > L; k++)
 			p *= get_random_double();
 		delay += (k + get_random_double()) / (lambda + 0.5) *
 			phc_jitter * (0.5 + dir * phc_jitter_asym);
 	}
+
+	count++;
+	if (count >= phc_jitter_on + phc_jitter_off)
+		count = 0;
 
 	return (delay + phc_delay / 2.0) * (freq_error + 1.0);
 }
