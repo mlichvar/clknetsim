@@ -2065,24 +2065,24 @@ int ioctl(int fd, unsigned long request, ...) {
 	} else if (request == PTP_SYS_OFFSET_EXTENDED && fd == REFCLK_FD) {
 		struct ptp_sys_offset_extended *sys_off = va_arg(ap, struct ptp_sys_offset_extended *);
 		struct timespec ts, ts1, ts2;
+		double delay;
 		int i;
 
 		if (sys_off->n_samples > PTP_MAX_SAMPLES)
 			sys_off->n_samples = PTP_MAX_SAMPLES;
 
 		for (i = 0; i < sys_off->n_samples; i++) {
+			clock_gettime(CLOCK_REALTIME, &ts2);
 			clock_gettime(REFCLK_ID, &ts);
-			sys_off->ts[i][1].sec = ts.tv_sec;
-			sys_off->ts[i][1].nsec = ts.tv_nsec;
-		}
-
-		clock_gettime(CLOCK_REALTIME, &ts);
-		for (i = 0; i < sys_off->n_samples; i++) {
-			ts1 = ts, ts2 = ts;
-			add_to_timespec(&ts1, -get_phc_delay(-1));
-			add_to_timespec(&ts2, get_phc_delay(1));
+			delay = get_phc_delay(1);
+			add_to_timespec(&ts, -delay);
+			delay += get_phc_delay(-1);
+			ts1 = ts2;
+			add_to_timespec(&ts1, -delay);
 			sys_off->ts[i][0].sec = ts1.tv_sec;
 			sys_off->ts[i][0].nsec = ts1.tv_nsec;
+			sys_off->ts[i][1].sec = ts.tv_sec;
+			sys_off->ts[i][1].nsec = ts.tv_nsec;
 			sys_off->ts[i][2].sec = ts2.tv_sec;
 			sys_off->ts[i][2].nsec = ts2.tv_nsec;
 		}
