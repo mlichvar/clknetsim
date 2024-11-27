@@ -794,7 +794,7 @@ static void normalize_timespec(struct timespec *tp) {
 
 static void add_to_timespec(struct timespec *tp, double offset) {
 	tp->tv_sec += floor(offset);
-	tp->tv_nsec += (offset - floor(offset)) * 1e9;
+	tp->tv_nsec += round((offset - floor(offset)) * 1e9);
 	normalize_timespec(tp);
 }
 
