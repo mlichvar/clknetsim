@@ -111,7 +111,7 @@ start_client() {
 }
 
 start_server() {
-    local nodes=$1 ret=0 wrapper_options=""
+    local nodes=$1 ret=0 wrapper_options="" i j
     shift
 
     if [[ $CLKNETSIM_SERVER_WRAPPER == *valgrind* ]]; then
@@ -128,6 +128,22 @@ start_server() {
     fi
 
     kill $client_pids &> /dev/null
+
+    i=0
+    for pid in $client_pids; do
+	i=$[i + 1]
+	j=0
+	while kill -0 $pid &> /dev/null; do
+	    j=$[j + 1]
+	    if [ $j -gt 30 ]; then
+		echo " node $i did not terminate" 1>&2
+		ret=1
+		break
+	    fi
+	    sleep 0.1
+	done
+    done
+
     client_pids=" "
 
     if ls tmp/valgrind.* &> /dev/null; then
