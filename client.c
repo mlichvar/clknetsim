@@ -134,7 +134,7 @@ static unsigned int node;
 static int initializing = 0;
 static int initialized_symbols = 0;
 static int initialized = 0;
-static int clknetsim_fd;
+static int clknetsim_fd = -1;
 static int precision_hack = 1;
 static unsigned int random_seed = 0;
 static int recv_multiply = 1;
@@ -428,6 +428,9 @@ static void fini(void) {
 
 	if (pcap)
 		fclose(pcap);
+
+	if (clknetsim_fd >= 0)
+		close(clknetsim_fd);
 }
 
 static void make_request(int request_id, const void *request_data, int reqlen, void *reply, int replylen) {
