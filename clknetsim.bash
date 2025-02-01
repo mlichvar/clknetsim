@@ -146,12 +146,12 @@ start_server() {
 
     client_pids=" "
 
-    if ls tmp/valgrind.* &> /dev/null; then
-	if grep -q 'ERROR SUMMARY: [^0]' tmp/valgrind.*; then
+    if ls $CLKNETSIM_TMPDIR/valgrind.* &> /dev/null; then
+	if grep -q 'ERROR SUMMARY: [^0]' $CLKNETSIM_TMPDIR/valgrind.*; then
 		echo " valgrind error" 1>&2
 		ret=1
 	fi
-	sed -i '/^ERROR: ld.so: object.*from LD_PRELOAD cannot/d' tmp/log.[0-9]*
+	sed -i '/^ERROR: ld.so: object.*from LD_PRELOAD cannot/d' $CLKNETSIM_TMPDIR/log.[0-9]*
     fi
 
     return $ret
