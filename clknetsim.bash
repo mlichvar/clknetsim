@@ -95,8 +95,7 @@ start_client() {
     esac
 
     if [[ $CLKNETSIM_CLIENT_WRAPPER == *valgrind* ]]; then
-	    unset DEBUGINFOD_URLS
-	    wrapper_options="--log-file=$CLKNETSIM_TMPDIR/valgrind.$node"
+	    wrapper_options="--log-file=$CLKNETSIM_TMPDIR/valgrind.$node --enable-debuginfod=no"
     fi
 
     LD_PRELOAD=${CLKNETSIM_PRELOAD:+$CLKNETSIM_PRELOAD:}$CLKNETSIM_PATH/clknetsim.so \
@@ -115,7 +114,7 @@ start_server() {
     shift
 
     if [[ $CLKNETSIM_SERVER_WRAPPER == *valgrind* ]]; then
-	    wrapper_options="--log-file=$CLKNETSIM_TMPDIR/valgrind.0"
+	    wrapper_options="--log-file=$CLKNETSIM_TMPDIR/valgrind.0 --enable-debuginfod=no"
     fi
 
     $CLKNETSIM_SERVER_WRAPPER $wrapper_options \
