@@ -60,6 +60,7 @@
 #include <linux/pps.h>
 #include <linux/rtc.h>
 #include <linux/sockios.h>
+#include <linux/futex.h>
 #ifdef SO_TIMESTAMPING
 #include <linux/ptp_clock.h>
 #include <linux/net_tstamp.h>
@@ -140,6 +141,7 @@ static int (*_usleep)(useconds_t usec);
 static void (*_srandom)(unsigned int seed);
 static int (*_shmget)(key_t key, size_t size, int shmflg);
 static void *(*_shmat)(int shmid, const void *shmaddr, int shmflg);
+static long (*_syscall)(long number, ...);
 
 static unsigned int node;
 static int initializing = 0;
@@ -295,6 +297,7 @@ static void init_symbols(void) {
 	_srandom = (void (*)(unsigned int seed))dlsym(RTLD_NEXT, "srandom");
 	_shmget = (int (*)(key_t key, size_t size, int shmflg))dlsym(RTLD_NEXT, "shmget");
 	_shmat = (void *(*)(int shmid, const void *shmaddr, int shmflg))dlsym(RTLD_NEXT, "shmat");
+	 _syscall = (long (*)(long number, ...))dlsym(RTLD_NEXT, "syscall");
 
 	initialized_symbols = 1;
 }
@@ -3119,6 +3122,24 @@ long syscall(long number, ...) {
 				size_t length = va_arg(ap, size_t);
 				r = read(URANDOM_FD, buf, length);
 			}
+			break;
+#endif
+#ifdef __NR_futex
+		case __NR_futex:
+			{
+				uint32_t *uaddr = va_arg(ap, uint32_t *);
+				int futex_op = va_arg(ap, int);
+				uint32_t val = va_arg(ap, uint32_t);
+				struct timespec *timeout = va_arg(ap, struct timespec *);
+				uint32_t *uaddr2 = va_arg(ap, uint32_t *);
+				uint32_t val3 = va_arg(ap, uint32_t);
+				r = _syscall(__NR_futex, uaddr, futex_op, val, timeout, uaddr2, val3);
+			}
+			break;
+#endif
+#ifdef __NR_gettid
+		case __NR_gettid:
+			r = _syscall(__NR_gettid);
 			break;
 #endif
 		default:
