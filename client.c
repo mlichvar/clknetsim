@@ -1697,7 +1697,7 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 			break;
 		case AF_UNIX:
 			sun = (struct sockaddr_un *)addr;
-			assert(addrlen >= sizeof (*sun));
+			assert(addrlen > offsetof(struct sockaddr_un, sun_path) + 1);
 
 			assert(sockets[s].iface == IFACE_UNIX);
 			if (sscanf(sun->sun_path, "/clknetsim/unix/%d:%d",
@@ -1721,7 +1721,6 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 	int s = get_socket_from_fd(sockfd), port;
 	struct sockaddr_in *sin;
-	struct sockaddr_un *sun;
 	uint32_t a;
 	static int unix_sockets = 0;
 
@@ -1759,8 +1758,7 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 			}
 			break;
 		case AF_UNIX:
-			assert(addrlen >= sizeof (*sun));
-			sun = (struct sockaddr_un *)addr;
+			assert(addrlen > offsetof(struct sockaddr_un, sun_path) + 1);
 
 			assert(sockets[s].iface == IFACE_UNIX);
 			sockets[s].port = ++unix_sockets;
@@ -2290,7 +2288,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 				break;
 			case AF_UNIX:
 				sun = msg->msg_name;
-				assert(sun && msg->msg_namelen >= sizeof (*sun));
+				assert(sun && msg->msg_namelen > offsetof(struct sockaddr_un, sun_path) + 1);
 				assert(sun->sun_family == AF_UNIX);
 				req.subnet = unix_subnet;
 				if (sscanf(sun->sun_path, "/clknetsim/unix/%u:%u",
