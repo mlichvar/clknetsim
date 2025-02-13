@@ -94,6 +94,8 @@ start_client() {
 	    ;;
     esac
 
+    unset LISTEN_FDS NOTIFY_SOCKET
+
     if [[ $CLKNETSIM_CLIENT_WRAPPER == *valgrind* ]]; then
 	    wrapper_options="--log-file=$CLKNETSIM_TMPDIR/valgrind.$node --enable-debuginfod=no"
     fi
