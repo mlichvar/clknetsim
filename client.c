@@ -2446,7 +2446,6 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 					     sockets[s].port, last_ts_msg->port,
 					     last_ts_msg->data, last_ts_msg->len,
 					     rep.data, sizeof (rep.data));
-		rep.len = 42 + last_ts_msg->len;
 
 		last_ts_msg->len = 0;
 	} else if (sockets[s].buffer.len > 0) {
