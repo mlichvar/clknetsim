@@ -77,8 +77,16 @@
 #define NODE_FROM_ADDR(addr) (((addr) & ~NETMASK) - 1)
 #define SUBNET_FROM_ADDR(addr) ((((addr) & NETMASK) - BASE_ADDR) / 0x100)
 
+#define IP6_NET "\xfc\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x23\x00\x00"
+#define IS_SIN6_KNOWN(sin6) (memcmp(IP6_NET, &(sin6)->sin6_addr.s6_addr, 14) == 0)
+#define NODE_FROM_SIN6(sin6) ((sin6)->sin6_addr.s6_addr[15])
+#define SUBNET_FROM_SIN6(sin6) ((sin6)->sin6_addr.s6_addr[14])
+#define ADDR_FROM_SIN6(sin6) (BASE_ADDR + (SUBNET_FROM_SIN6(sin6) << 8) + NODE_FROM_SIN6(sin6))
+
 #define PTP_PRIMARY_MCAST_ADDR 0xe0000181 /* 224.0.1.129 */
 #define PTP_PDELAY_MCAST_ADDR 0xe000006b /* 224.0.0.107 */
+#define PTP_PRIMARY_MCAST_ADDR6 "\xff\x0e\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x81"
+#define PTP_PDELAY_MCAST_ADDR6 "\xff\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x6b"
 
 #define REFCLK_FD 1000
 #define REFCLK_ID ((clockid_t)(((unsigned int)~REFCLK_FD << 3) | 3))
@@ -137,6 +145,7 @@ static int initialized = 0;
 static int clknetsim_fd = -1;
 static int precision_hack = 1;
 static unsigned int random_seed = 0;
+static int ip_family = 4;
 static int recv_multiply = 1;
 static int timestamping = 1;
 
@@ -308,6 +317,10 @@ static void init(void) {
 	env = getenv("CLKNETSIM_RANDOM_SEED");
 	if (env)
 		random_seed = atoi(env);
+
+	env = getenv("CLKNETSIM_IP_FAMILY");
+	if (env)
+		ip_family = atoi(env);
 
 	env = getenv("CLKNETSIM_RECV_MULTIPLY");
 	if (env)
@@ -590,24 +603,103 @@ static int socket_in_subnet(int socket, int subnet) {
 	}
 }
 
-static void get_target(int socket, uint32_t addr, unsigned int *subnet, unsigned int *node) {
-	if (addr == PTP_PRIMARY_MCAST_ADDR || addr == PTP_PDELAY_MCAST_ADDR) {
-		assert(sockets[socket].iface >= IFACE_ETH0);
-		*subnet = sockets[socket].iface - IFACE_ETH0;
-		*node = -1; /* multicast as broadcast */
-	} else {
-		*subnet = SUBNET_FROM_ADDR(addr);
-		if (fuzz_mode && (*subnet >= subnets || *subnet == unix_subnet))
-			*subnet = 0;
+static int get_ip_target(int socket, const struct sockaddr *saddr, socklen_t saddrlen,
+			 unsigned int *subnet, unsigned int *node, unsigned int *port) {
+	const struct sockaddr_in6 *sin6;
+	const struct sockaddr_in *sin;
+	uint32_t addr;
 
-		assert(*subnet >= 0 && *subnet < subnets);
-		assert(socket_in_subnet(socket, *subnet));
+	switch (saddr->sa_family) {
+		case AF_INET:
+			sin = (const struct sockaddr_in *)saddr;
+			if (saddrlen < sizeof (*sin))
+				return 0;
+			addr = ntohl(sin->sin_addr.s_addr);
+			*port = ntohs(sin->sin_port);
 
-		if (addr == BROADCAST_ADDR(*subnet))
-			*node = -1; /* broadcast */
-		else
-			*node = NODE_FROM_ADDR(addr);
+			if (addr == PTP_PRIMARY_MCAST_ADDR || addr == PTP_PDELAY_MCAST_ADDR) {
+				assert(sockets[socket].iface >= IFACE_ETH0);
+				*subnet = sockets[socket].iface - IFACE_ETH0;
+				*node = -1; /* multicast as broadcast */
+				return 1;
+			}
+			break;
+		case AF_INET6:
+			sin6 = (const struct sockaddr_in6 *)saddr;
+			if (saddrlen < sizeof (*sin6))
+				return 0;
+			*port = ntohs(sin6->sin6_port);
+			if (memcmp(sin6->sin6_addr.s6_addr, PTP_PRIMARY_MCAST_ADDR6, 16) == 0 ||
+			    memcmp(sin6->sin6_addr.s6_addr, PTP_PDELAY_MCAST_ADDR6, 16) == 0) {
+				assert(sockets[socket].iface >= IFACE_ETH0);
+				*subnet = sockets[socket].iface - IFACE_ETH0;
+				*node = -1;
+				return 1;
+			}
+			if (!IS_SIN6_KNOWN(sin6))
+				return 0;
+			addr = ADDR_FROM_SIN6(sin6);
+			break;
+		default:
+			return 0;
 	}
+
+	*subnet = SUBNET_FROM_ADDR(addr);
+	if (fuzz_mode && (*subnet >= subnets || *subnet == unix_subnet))
+		*subnet = 0;
+
+	assert(*subnet >= 0 && *subnet < subnets);
+	assert(socket_in_subnet(socket, *subnet));
+
+	if (addr == BROADCAST_ADDR(*subnet))
+		*node = -1; /* broadcast */
+	else
+		*node = NODE_FROM_ADDR(addr);
+
+	return 1;
+}
+
+static int set_sockaddr(int domain, unsigned int subnet, unsigned int node, unsigned int port,
+			struct sockaddr *saddr, socklen_t *saddrlen) {
+	struct sockaddr_in6 *sin6;
+	struct sockaddr_in *sin;
+	struct sockaddr_un *sun;
+
+	switch (domain) {
+		case AF_INET:
+			assert(*saddrlen >= sizeof (*sin));
+			sin = (struct sockaddr_in *)saddr;
+			memset(sin, 0, sizeof (*sin));
+			sin->sin_family = AF_INET;
+			sin->sin_port = htons(port);
+			sin->sin_addr.s_addr = htonl(NODE_ADDR(subnet, node));
+			*saddrlen = sizeof (*sin);
+			break;
+		case AF_INET6:
+			assert(*saddrlen >= sizeof (*sin6));
+			sin6 = (struct sockaddr_in6 *)saddr;
+			memset(sin6, 0, sizeof (*sin6));
+			sin6->sin6_family = AF_INET6;
+			sin6->sin6_port = htons(port);
+			memcpy(sin6->sin6_addr.s6_addr, IP6_NET, 14);
+			sin6->sin6_addr.s6_addr[14] = subnet;
+			sin6->sin6_addr.s6_addr[15] = node + 1;
+			*saddrlen = sizeof (*sin6);
+			break;
+		case AF_UNIX:
+			assert(*saddrlen >= sizeof (*sun));
+			sun = (struct sockaddr_un *)saddr;
+			memset(sun, 0, sizeof (*sun));
+			sun->sun_family = AF_UNIX;
+			snprintf(sun->sun_path, sizeof (sun->sun_path),
+				 "/clknetsim/unix/%d:%d", node + 1, port);
+			*saddrlen = sizeof (*sun);
+			break;
+		default:
+			return 0;
+	}
+
+	return 1;
 }
 
 static int get_network_from_iface(const char *iface) {
@@ -689,7 +781,7 @@ static int find_recv_socket(struct Reply_select *rep) {
 static void send_msg_to_peer(int s, int type) {
 	struct Request_send req;
 
-	assert(sockets[s].domain == AF_INET);
+	assert(sockets[s].domain == AF_INET || sockets[s].domain == AF_INET6);
 	assert(sockets[s].type == SOCK_STREAM);
 
 	if (sockets[s].remote_node == -1)
@@ -828,43 +920,63 @@ static double get_phc_delay(int dir) {
 static int generate_eth_frame(unsigned int type, unsigned int subnet, unsigned int from,
 			      unsigned int to, unsigned int src_port, unsigned int dst_port,
 			      char *data, unsigned int data_len, char *frame, unsigned int buf_len) {
-	uint16_t port1, port2, ip_len, udp_len;
+	uint16_t port1, port2, ip_len, udp_len, len_offset, proto_offset, ip_header_len;
 	uint32_t addr1, addr2;
+
+	ip_header_len = ip_family == 6 ? 40 : 20;
 
 	assert(type == SOCK_DGRAM || type == SOCK_STREAM);
 
-	if ((type == SOCK_DGRAM && data_len + 42 > buf_len) ||
-	    (type == SOCK_STREAM && data_len + 54 > buf_len))
+	if ((type == SOCK_DGRAM && data_len + 14 + ip_header_len + 8 > buf_len) ||
+	    (type == SOCK_STREAM && data_len + 14 + ip_header_len + 20 > buf_len))
 		return 0;
 
-	addr1 = htonl(NODE_ADDR(subnet, from));
-	addr2 = htonl(NODE_ADDR(subnet, to));
+	memset(frame, 0, buf_len);
+	if (ip_family == 6) {
+		frame[12] = 0x86;
+		frame[13] = 0xDD;
+		frame[14] = 0x60;
+		len_offset = 14 + 4;
+		ip_len = 0;
+		proto_offset = 14 + 6;
+		memcpy(frame + 14 + 8, IP6_NET, 16);
+		frame[14 + 8 + 14] = subnet;
+		frame[14 + 8 + 15] = from + 1;
+		memcpy(frame + 14 + 24, IP6_NET, 16);
+		frame[14 + 24 + 14] = subnet;
+		frame[14 + 24 + 15] = to + 1;
+	} else {
+		frame[12] = 0x08;
+		frame[14] = 0x45;
+		len_offset = 14 + 2;
+		ip_len = ip_header_len;
+		proto_offset = 14 + 9;
+		addr1 = htonl(NODE_ADDR(subnet, from));
+		addr2 = htonl(NODE_ADDR(subnet, to));
+		memcpy(frame + 14 + 12, &addr1, sizeof (addr1));
+		memcpy(frame + 14 + 16, &addr2, sizeof (addr2));
+	}
+
 	port1 = htons(src_port);
 	port2 = htons(dst_port);
-
-	memset(frame, 0, buf_len);
-	frame[12] = 0x08;
-	frame[14] = 0x45;
-	memcpy(frame + 26, &addr1, sizeof (addr1));
-	memcpy(frame + 30, &addr2, sizeof (addr2));
-	memcpy(frame + 34, &port1, sizeof (port1));
-	memcpy(frame + 36, &port2, sizeof (port2));
+	memcpy(frame + 14 + ip_header_len + 0, &port1, sizeof (port1));
+	memcpy(frame + 14 + ip_header_len + 2, &port2, sizeof (port2));
 
 	if (type == SOCK_DGRAM) {
-		ip_len = htons(data_len + 28);
+		ip_len = htons(ip_len + 8 + data_len);
 		udp_len = htons(data_len + 8);
-		memcpy(frame + 16, &ip_len, sizeof (ip_len));
-		frame[23] = 17;
-		memcpy(frame + 38, &udp_len, sizeof (udp_len));
-		memcpy(frame + 42, data, data_len);
-		return data_len + 42;
+		memcpy(frame + len_offset, &ip_len, sizeof (ip_len));
+		frame[proto_offset] = 17;
+		memcpy(frame + 14 + ip_header_len + 4, &udp_len, sizeof (udp_len));
+		memcpy(frame + 14 + ip_header_len + 8, data, data_len);
+		return 14 + ip_header_len + 8 + data_len;
 	} else {
-		ip_len = htons(data_len + 40);
-		memcpy(frame + 16, &ip_len, sizeof (ip_len));
-		frame[23] = 6;
-		frame[46] = 5 << 4;
-		memcpy(frame + 54, data, data_len);
-		return data_len + 54;
+		ip_len = htons(ip_len + 8 + data_len);
+		memcpy(frame + len_offset, &ip_len, sizeof (ip_len));
+		frame[proto_offset] = 6;
+		frame[14 + ip_header_len + 12] = 5 << 4;
+		memcpy(frame + 14 + ip_header_len + 20, data, data_len);
+		return 14 + ip_header_len + 20 + data_len;
 	}
 }
 
@@ -1576,7 +1688,9 @@ int close(int fd) {
 int socket(int domain, int type, int protocol) {
 	int s;
 
-	if ((domain != AF_INET && (domain != AF_UNIX || unix_subnet < 0)) ||
+	if (((domain != AF_INET || ip_family == 6) &&
+	     (domain != AF_INET6 || ip_family == 4) &&
+	     (domain != AF_UNIX || unix_subnet < 0)) ||
 	    (type != SOCK_DGRAM && type != SOCK_STREAM)) {
 		errno = EINVAL;
 		return -1;
@@ -1603,7 +1717,8 @@ int socket(int domain, int type, int protocol) {
 int listen(int sockfd, int backlog) {
 	int s = get_socket_from_fd(sockfd);
 
-	if (s < 0 || sockets[s].domain != AF_INET || sockets[s].type != SOCK_STREAM) {
+	if (s < 0 || (sockets[s].domain != AF_INET && sockets[s].domain != AF_INET6) ||
+	    sockets[s].type != SOCK_STREAM) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -1615,10 +1730,10 @@ int listen(int sockfd, int backlog) {
 
 int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
 	int s = get_socket_from_fd(sockfd), r;
-	struct sockaddr_in *in;
 	struct Reply_recv rep;
 
-	if (s < 0 || sockets[s].domain != AF_INET || sockets[s].type != SOCK_STREAM) {
+	if (s < 0 || (sockets[s].domain != AF_INET && sockets[s].domain != AF_INET6) ||
+	    sockets[s].type != SOCK_STREAM) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -1626,7 +1741,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
 	make_request(REQ_RECV, NULL, 0, &rep, sizeof (rep));
 	assert(rep.type == MSG_TYPE_TCP_CONNECT);
 
-	r = socket(AF_INET, SOCK_STREAM, 0);
+	r = socket(sockets[s].domain, SOCK_STREAM, 0);
 	s = get_socket_from_fd(r);
 	assert(s >= 0);
 
@@ -1636,12 +1751,8 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
 	sockets[s].remote_port = rep.src_port;
 	sockets[s].connected = 1;
 
-	in = (struct sockaddr_in *)addr;
-	assert(*addrlen >= sizeof (*in));
-	*addrlen = sizeof (*in);
-	in->sin_family = AF_INET;
-	in->sin_port = htons(sockets[s].remote_port);
-	in->sin_addr.s_addr = htonl(NODE_ADDR(sockets[s].iface - IFACE_ETH0, node));
+	set_sockaddr(sockets[s].domain, sockets[s].iface - IFACE_ETH0, node,
+		     sockets[s].remote_port, addr, addrlen);
 
 	send_msg_to_peer(s, MSG_TYPE_TCP_CONNECT);
 
@@ -1657,7 +1768,7 @@ int shutdown(int sockfd, int how) {
 		return -1;
 	}
 
-	assert(sockets[s].domain == AF_INET);
+	assert(sockets[s].domain == AF_INET || sockets[s].domain == AF_INET6);
 	assert(sockets[s].type == SOCK_STREAM);
 
 	if (sockets[s].connected) {
@@ -1672,8 +1783,7 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 	/* ntpd uses connect() and getsockname() to find the interface
 	   which will be used to send packets to an address */
 	int s = get_socket_from_fd(sockfd);
-	unsigned int node, subnet;
-	struct sockaddr_in *sin;
+	unsigned int node, subnet, port;
 	struct sockaddr_un *sun;
 
 	if (s < 0) {
@@ -1683,17 +1793,16 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 
 	switch (addr->sa_family) {
 		case AF_INET:
-			sin = (struct sockaddr_in *)addr;
-			assert(addrlen >= sizeof (*sin));
-			get_target(s, ntohl(sin->sin_addr.s_addr), &subnet, &node);
-			if (node == -1) {
+		case AF_INET6:
+			if (!get_ip_target(s, addr, addrlen, &subnet, &node, &port) ||
+			    node == -1) {
 				errno = EINVAL;
 				return -1;
 			}
 
 			sockets[s].iface = IFACE_ETH0 + subnet;
 			sockets[s].remote_node = node;
-			sockets[s].remote_port = ntohs(sin->sin_port);
+			sockets[s].remote_port = port;
 			break;
 		case AF_UNIX:
 			sun = (struct sockaddr_un *)addr;
@@ -1720,6 +1829,7 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 	int s = get_socket_from_fd(sockfd), port;
+	struct sockaddr_in6 *sin6;
 	struct sockaddr_in *sin;
 	uint32_t a;
 	static int unix_sockets = 0;
@@ -1757,6 +1867,26 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 				}
 			}
 			break;
+		case AF_INET6:
+			assert(addrlen >= sizeof (*sin6));
+			sin6 = (struct sockaddr_in6 *)addr;
+
+			port = ntohs(sin6->sin6_port);
+			if (port)
+				sockets[s].port = port;
+
+			if (memcmp(sin6->sin6_addr.s6_addr, in6addr_any.s6_addr, 16) == 0) {
+				sockets[s].iface = IFACE_ALL;
+			} else if (memcmp(sin6->sin6_addr.s6_addr, in6addr_loopback.s6_addr, 16) == 0) {
+				sockets[s].iface = IFACE_LO;
+			} else {
+				int subnet = SUBNET_FROM_SIN6(sin6);
+				assert(IS_SIN6_KNOWN(sin6));
+				assert(subnet >= 0 && subnet < subnets);
+				assert(NODE_FROM_SIN6(sin6) == node);
+				sockets[s].iface = IFACE_ETH0 + subnet;
+			}
+			break;
 		case AF_UNIX:
 			assert(addrlen > offsetof(struct sockaddr_un, sun_path) + 1);
 
@@ -1775,9 +1905,14 @@ int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
 	int s = get_socket_from_fd(sockfd);
 	uint32_t a;
 
-	if (s < 0 || sockets[s].domain != AF_INET) {
+	if (s < 0 || (sockets[s].domain != AF_INET && sockets[s].domain != AF_INET6)) {
 		errno = EINVAL;
 		return -1;
+	}
+
+	if (sockets[s].domain == AF_INET6) {
+		return !set_sockaddr(sockets[s].domain, sockets[s].iface - IFACE_ETH0,
+				     node, sockets[s].port, addr, addrlen);
 	}
 
 	struct sockaddr_in *in;
@@ -1811,7 +1946,7 @@ int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
 int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen) {
 	int subnet, s = get_socket_from_fd(sockfd);
 
-	if (s < 0 || sockets[s].domain != AF_INET) {
+	if (s < 0 || (sockets[s].domain != AF_INET && sockets[s].domain != AF_INET6)) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -1826,7 +1961,8 @@ int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t
 			return -1;
 		}
 	}
-	else if (level == IPPROTO_IP && optname == IP_PKTINFO && optlen == sizeof (int))
+	else if (optlen == sizeof (int) && ((level == IPPROTO_IP && optname == IP_PKTINFO) ||
+					    (level == IPPROTO_IPV6 && optname == IPV6_RECVPKTINFO)))
 		sockets[s].pkt_info = !!(int *)optval;
 #ifdef SO_TIMESTAMPING
 	else if (level == SOL_SOCKET && optname == SO_TIMESTAMPING && optlen >= sizeof (int)) {
@@ -1845,7 +1981,7 @@ int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t
 int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen) {
 	int s = get_socket_from_fd(sockfd);
 
-	if (s < 0 || sockets[s].domain != AF_INET) {
+	if (s < 0 || (sockets[s].domain != AF_INET && sockets[s].domain != AF_INET6)) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -2257,7 +2393,6 @@ void freeifaddrs(struct ifaddrs *ifa) {
 
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 	struct Request_send req;
-	struct sockaddr_in *sin;
 	struct sockaddr_un *sun;
 	struct cmsghdr *cmsg;
 	int i, s = get_socket_from_fd(sockfd), timestamping;
@@ -2280,11 +2415,12 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 	} else {
 		switch (sockets[s].domain) {
 			case AF_INET:
-				sin = msg->msg_name;
-				assert(sin && msg->msg_namelen >= sizeof (*sin));
-				assert(sin->sin_family == AF_INET);
-				get_target(s, ntohl(sin->sin_addr.s_addr), &req.subnet, &req.to);
-				req.dst_port = ntohs(sin->sin_port);
+			case AF_INET6:
+				if (!get_ip_target(s, msg->msg_name, msg->msg_namelen, &req.subnet,
+						     &req.to, &req.dst_port)) {
+					errno = EINVAL;
+					return -1;
+				}
 				break;
 			case AF_UNIX:
 				sun = msg->msg_name;
@@ -2416,8 +2552,6 @@ int recvmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen, int flags,
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	struct message *last_ts_msg = NULL;
 	struct Reply_recv rep;
-	struct sockaddr_in *sin;
-	struct sockaddr_un *sun;
 	struct cmsghdr *cmsg;
 	int msglen, cmsglen, s = get_socket_from_fd(sockfd);
 
@@ -2509,25 +2643,8 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 	assert(sockets[s].remote_port == -1 || sockets[s].remote_port == rep.src_port);
 
 	if (msg->msg_name) {
-		switch (sockets[s].domain) {
-			case AF_INET:
-				assert(msg->msg_namelen >= sizeof (*sin));
-				sin = msg->msg_name;
-				sin->sin_family = AF_INET;
-				sin->sin_port = htons(rep.src_port);
-				sin->sin_addr.s_addr = htonl(NODE_ADDR(rep.subnet, rep.from));
-				msg->msg_namelen = sizeof (struct sockaddr_in);
-				break;
-			case AF_UNIX:
-				assert(msg->msg_namelen >= sizeof (*sun));
-				sun = msg->msg_name;
-				sun->sun_family = AF_UNIX;
-				snprintf(sun->sun_path, sizeof (sun->sun_path),
-					 "/clknetsim/unix/%d:%d", rep.from + 1, rep.src_port);
-				break;
-			default:
-				assert(0);
-		}
+		set_sockaddr(sockets[s].domain, rep.subnet, rep.from, rep.src_port,
+			     msg->msg_name, &msg->msg_namelen);
 	}
 
 	assert(msg->msg_iovlen == 1);
@@ -2549,7 +2666,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 
 	cmsglen = 0;
 
-	if (sockets[s].pkt_info) {
+	if (sockets[s].pkt_info && sockets[s].domain == AF_INET) {
 		struct in_pktinfo ipi;
 
 		cmsglen = CMSG_SPACE(sizeof (ipi));
@@ -2565,6 +2682,25 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		ipi.ipi_spec_dst.s_addr = htonl(NODE_ADDR(rep.subnet, node));
 		ipi.ipi_addr.s_addr = ipi.ipi_spec_dst.s_addr;
 		ipi.ipi_ifindex = rep.subnet + 1;
+
+		memcpy(CMSG_DATA(cmsg), &ipi, sizeof (ipi));
+	} else if (sockets[s].pkt_info && sockets[s].domain == AF_INET6) {
+		struct in6_pktinfo ipi;
+
+		cmsglen = CMSG_SPACE(sizeof (ipi));
+		assert(msg->msg_control && msg->msg_controllen >= cmsglen);
+
+		cmsg = CMSG_FIRSTHDR(msg);
+		memset(cmsg, 0, sizeof (*cmsg));
+		cmsg->cmsg_level = IPPROTO_IPV6;
+		cmsg->cmsg_type = IPV6_PKTINFO;
+		cmsg->cmsg_len = CMSG_LEN(sizeof (ipi));
+
+		memset(&ipi, 0, sizeof (ipi));
+		memcpy(ipi.ipi6_addr.s6_addr, IP6_NET, 14);
+		ipi.ipi6_addr.s6_addr[14] = rep.subnet;
+		ipi.ipi6_addr.s6_addr[15] = node + 1;
+		ipi.ipi6_ifindex = rep.subnet + 1;
 
 		memcpy(CMSG_DATA(cmsg), &ipi, sizeof (ipi));
 	}
@@ -3004,21 +3140,33 @@ int cap_set_proc() {
 }
 
 static struct addrinfo *get_addrinfo(uint32_t addr, int port, int type, struct addrinfo *next) {
+	struct sockaddr_in6 *sin6;
 	struct sockaddr_in *sin;
 	struct addrinfo *r;
-
-	sin = malloc(sizeof *sin);
-	sin->sin_family = AF_INET;
-	sin->sin_port = htons(port);
-	sin->sin_addr.s_addr = htonl(addr);
+	socklen_t len;
 
 	r = malloc(sizeof *r);
 	memset(r, 0, sizeof *r);
 
-	r->ai_family = AF_INET;
-	r->ai_socktype = type;
-	r->ai_addrlen = sizeof *sin;
-	r->ai_addr = (struct sockaddr *)sin;
+	if (ip_family == 6) {
+		sin6 = malloc(sizeof *sin6);
+		len = sizeof (*sin6);
+		set_sockaddr(AF_INET6, SUBNET_FROM_ADDR(addr), NODE_FROM_ADDR(addr), port,
+			     (struct sockaddr *)sin6, &len);
+		r->ai_family = AF_INET6;
+		r->ai_socktype = type;
+		r->ai_addrlen = sizeof *sin6;
+		r->ai_addr = (struct sockaddr *)sin6;
+	} else {
+		sin = malloc(sizeof *sin);
+		sin->sin_family = AF_INET;
+		sin->sin_port = htons(port);
+		sin->sin_addr.s_addr = htonl(addr);
+		r->ai_family = AF_INET;
+		r->ai_socktype = type;
+		r->ai_addrlen = sizeof *sin;
+		r->ai_addr = (struct sockaddr *)sin;
+	}
 
 	r->ai_next = next;
 
@@ -3031,7 +3179,8 @@ int getaddrinfo(const char *node, const char *service, const struct addrinfo *hi
 	struct in_addr addr;
 
 	if (hints) {
-		if ((hints->ai_family != AF_UNSPEC && hints->ai_family != AF_INET) ||
+		if ((hints->ai_family != AF_UNSPEC &&
+		     hints->ai_family != AF_INET && hints->ai_family != AF_INET6) ||
 		    (hints->ai_socktype != SOCK_STREAM && hints->ai_socktype != SOCK_DGRAM &&
 		     hints->ai_socktype != 0))
 			return EAI_NONAME;
@@ -3049,8 +3198,10 @@ int getaddrinfo(const char *node, const char *service, const struct addrinfo *hi
 	}
 
 	if (node == NULL) {
+		assert(ip_family != 6);
 		*res = get_addrinfo(INADDR_ANY, port, type, NULL);
 	} else if (inet_aton(node, &addr)) {
+		assert(ip_family != 6);
 		*res = get_addrinfo(ntohl(addr.s_addr), port, type, NULL);
 	} else if ((strlen(node) > 4 && strcmp(node + strlen(node) - 4, ".clk") == 0) ||
 		   (strlen(node) > 5 && strcmp(node + strlen(node) - 5, ".clk.") == 0)) {
