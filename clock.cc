@@ -336,6 +336,7 @@ int Clock::adjtimex(struct timex *buf) {
 	}
 
 	t = ntp_timex;
+	t.modes = buf->modes;
 
 	if ((buf->modes & ADJ_OFFSET_SINGLESHOT) == ADJ_OFFSET_SINGLESHOT) {
 		if ((buf->modes & ADJ_OFFSET_SS_READ) == ADJ_OFFSET_SINGLESHOT) {
