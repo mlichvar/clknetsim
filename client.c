@@ -3139,7 +3139,7 @@ int cap_set_proc() {
 	return 0;
 }
 
-static struct addrinfo *get_addrinfo(uint32_t addr, int port, int type, struct addrinfo *next) {
+static struct addrinfo *get_addrinfo(int family, uint32_t addr, int port, int type, struct addrinfo *next) {
 	struct sockaddr_in6 *sin6;
 	struct sockaddr_in *sin;
 	struct addrinfo *r;
@@ -3148,7 +3148,7 @@ static struct addrinfo *get_addrinfo(uint32_t addr, int port, int type, struct a
 	r = malloc(sizeof *r);
 	memset(r, 0, sizeof *r);
 
-	if (ip_family == 6) {
+	if (family == 6) {
 		sin6 = malloc(sizeof *sin6);
 		len = sizeof (*sin6);
 		set_sockaddr(AF_INET6, SUBNET_FROM_ADDR(addr), NODE_FROM_ADDR(addr), port,
@@ -3175,15 +3175,21 @@ static struct addrinfo *get_addrinfo(uint32_t addr, int port, int type, struct a
 
 int getaddrinfo(const char *node, const char *service, const struct addrinfo *hints,
 		struct addrinfo **res) {
-	int port = 0, type = SOCK_DGRAM;
+	int family = ip_family, port = 0, type = SOCK_DGRAM;
 	struct in_addr addr;
 
 	if (hints) {
-		if ((hints->ai_family != AF_UNSPEC &&
-		     hints->ai_family != AF_INET && hints->ai_family != AF_INET6) ||
-		    (hints->ai_socktype != SOCK_STREAM && hints->ai_socktype != SOCK_DGRAM &&
-		     hints->ai_socktype != 0))
+		if (hints->ai_family == AF_INET)
+		       family = 4;
+		else if (hints->ai_family == AF_INET6)
+		       family = 6;
+		else if (hints->ai_family != AF_UNSPEC)
 			return EAI_NONAME;
+
+		if (hints->ai_socktype != SOCK_STREAM && hints->ai_socktype != SOCK_DGRAM &&
+		    hints->ai_socktype != 0)
+			return EAI_NONAME;
+
 		if (hints->ai_socktype == SOCK_STREAM)
 			type = SOCK_STREAM;
 	}
@@ -3199,10 +3205,9 @@ int getaddrinfo(const char *node, const char *service, const struct addrinfo *hi
 
 	if (node == NULL) {
 		assert(ip_family != 6);
-		*res = get_addrinfo(INADDR_ANY, port, type, NULL);
+		*res = get_addrinfo(4, INADDR_ANY, port, type, NULL);
 	} else if (inet_aton(node, &addr)) {
-		assert(ip_family != 6);
-		*res = get_addrinfo(ntohl(addr.s_addr), port, type, NULL);
+		*res = get_addrinfo(4, ntohl(addr.s_addr), port, type, NULL);
 	} else if ((strlen(node) > 4 && strcmp(node + strlen(node) - 4, ".clk") == 0) ||
 		   (strlen(node) > 5 && strcmp(node + strlen(node) - 5, ".clk.") == 0)) {
 		const char *s = strstr(node, ".net");
@@ -3217,11 +3222,13 @@ int getaddrinfo(const char *node, const char *service, const struct addrinfo *hi
 			s = node + 5;
 			*res = NULL;
 			do {
-				*res = get_addrinfo(NODE_ADDR(subnet, atoi(s + 1) - 1), port, type, *res);
+				*res = get_addrinfo(family, NODE_ADDR(subnet, atoi(s + 1) - 1),
+						    port, type, *res);
 				s = strchr(s + 1, '-');
 			} while (s);
 		} else if (strncmp(node, "node", 4) == 0) {
-			*res = get_addrinfo(NODE_ADDR(subnet, atoi(node + 4) - 1), port, type, NULL);
+			*res = get_addrinfo(family, NODE_ADDR(subnet, atoi(node + 4) - 1),
+					    port, type, NULL);
 		} else {
 			return EAI_NONAME;
 		}
