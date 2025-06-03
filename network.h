@@ -57,6 +57,7 @@ class Network {
 	unsigned int update_count;
 
 	const char *socket_name;
+	const char *update_executable;
 	vector<Node *> nodes;
 	vector<Generator *> link_delays;
 	vector<Generator *> link_corrections;
@@ -77,7 +78,7 @@ class Network {
 	void write_correction(struct Packet *packet, double correction);
 
 	public:
-	Network(const char *socket, unsigned int n, unsigned int s, unsigned int rate);
+	Network(const char *socket, const char *executable, unsigned int n, unsigned int s, unsigned int rate);
 	~Network();
 	bool prepare_clients();
 	Node *get_node(unsigned int node);

@@ -17,6 +17,8 @@
 #include <math.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #ifdef __linux__
 #ifndef ADJ_SETOFFSET

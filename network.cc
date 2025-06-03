@@ -56,10 +56,12 @@ double Packet_queue::get_timeout(double time) const {
 	return 1e20;
 }
 
-Network::Network(const char *socket, unsigned int n, unsigned int subnets, unsigned int rate) {
+Network::Network(const char *socket, const char *executable,
+		 unsigned int n, unsigned int subnets, unsigned int rate) {
        	time = 0.0;
 	this->subnets = subnets;
 	socket_name = socket;
+	update_executable = executable;
 	update_rate = rate;
 	update_count = 0;
 	offset_log = NULL;
@@ -282,6 +284,19 @@ void Network::update() {
 	}
 
 	update_clock_stats();
+
+	if (update_executable) {
+		pid_t pid = fork();
+		char buf[16];
+
+		if (pid == 0) {
+			snprintf(buf, sizeof (buf), "%g", time);
+			execl(update_executable, update_executable, buf, (char *)NULL);
+			exit(1);
+		} else if (pid > 0) {
+			waitpid(pid, NULL, 0);
+		}
+	}
 }
 
 void Network::update_clock_stats() {
