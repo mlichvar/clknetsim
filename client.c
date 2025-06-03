@@ -1216,14 +1216,20 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	int i, timer, s, recv_fd = -1;
 	double elapsed = 0.0;
 
+	req.read = 0;
+	req._pad = 0;
+
 	if (writefds) {
 		for (i = 0; i < nfds; i++) {
 			if (!FD_ISSET(i, writefds))
 				continue;
 			s = get_socket_from_fd(i);
-			if (s < 0 ||
-			    (sockets[s].type == SOCK_STREAM && !sockets[s].connected))
+			if (s < 0)
 				continue;
+			if (sockets[s].type == SOCK_STREAM && !sockets[s].connected) {
+				req.read = 1;
+				continue;
+			}
 			FD_ZERO(writefds);
 			FD_SET(i, writefds);
 			if (exceptfds)
@@ -1251,9 +1257,6 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 
 		FD_ZERO(exceptfds);
 	}
-
-	req.read = 0;
-	req._pad = 0;
 
 	/* unknown reading fds are always ready (e.g. chronyd waiting
 	   for name resolving notification, or OpenSSL waiting for
