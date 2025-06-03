@@ -1282,8 +1282,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 
 	timer = get_first_timer(readfds);
 
-	assert((timeout && (timeout->tv_sec > 0 || timeout->tv_usec > 0)) ||
-	       timer >= 0 || find_recv_socket(NULL) >= 0);
+	assert(timeout || timer >= 0 || find_recv_socket(NULL) >= 0);
 
 	fetch_time();
 
