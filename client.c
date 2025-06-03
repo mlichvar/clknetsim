@@ -1426,6 +1426,8 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 	FD_ZERO(&wfds);
 	FD_ZERO(&efds);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 	for (i = 0; i < nfds; i++) {
 		if (fds[i].fd < 0)
 		       continue;
@@ -1439,6 +1441,7 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 		if (maxfd < fds[i].fd)
 			maxfd = fds[i].fd;
 	}
+#pragma GCC diagnostic pop
 
 	if (timeout >= 0) {
 		tv.tv_sec = timeout / 1000;
