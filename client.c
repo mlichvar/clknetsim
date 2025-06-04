@@ -251,6 +251,7 @@ static int pps_fds = 0;
 
 static FILE *pcap = NULL;
 
+static int timer_delete_(timer_t timerid);
 static void write_pcap_header(void);
 
 static void make_request(int request_id, const void *request_data, int reqlen, void *reply, int replylen);
@@ -1679,7 +1680,7 @@ int close(int fd) {
 		pps_fds--;
 		return 0;
 	} else if ((t = get_timer_from_fd(fd)) >= 0) {
-		return timer_delete(get_timerid(t));
+		return timer_delete_(get_timerid(t));
 	} else if ((s = get_socket_from_fd(fd)) >= 0) {
 		if (sockets[s].type == SOCK_STREAM)
 			shutdown(fd, SHUT_RDWR);
@@ -2804,7 +2805,7 @@ ssize_t __recv_chk(int fd, void *buf, size_t len, size_t buflen, int flags) {
 	return recv(fd, buf, len, flags);
 }
 
-int timer_create(clockid_t which_clock, struct sigevent *timer_event_spec, timer_t *created_timer_id) {
+static int timer_create_(clockid_t which_clock, struct sigevent *timer_event_spec, timer_t *created_timer_id) {
 	int t;
 
 	assert(which_clock == CLOCK_REALTIME && timer_event_spec == NULL);
@@ -2827,7 +2828,11 @@ int timer_create(clockid_t which_clock, struct sigevent *timer_event_spec, timer
 	return 0;
 }
 
-int timer_delete(timer_t timerid) {
+int timer_create(clockid_t which_clock, struct sigevent *timer_event_spec, timer_t *created_timer_id) {
+	return timer_create_(which_clock, timer_event_spec, created_timer_id);
+}
+
+static int timer_delete_(timer_t timerid) {
 	int t = get_timer_from_id(timerid);
 
 	if (t < 0) {
@@ -2840,7 +2845,11 @@ int timer_delete(timer_t timerid) {
 	return 0;
 }
 
-int timer_settime(timer_t timerid, int flags, const struct itimerspec *value, struct itimerspec *ovalue) {
+int timer_delete(timer_t timerid) {
+	return timer_delete_(timerid);
+}
+
+static int timer_settime_(timer_t timerid, int flags, const struct itimerspec *value, struct itimerspec *ovalue) {
 	int t = get_timer_from_id(timerid);
 
 	if (t < 0) {
@@ -2865,7 +2874,11 @@ int timer_settime(timer_t timerid, int flags, const struct itimerspec *value, st
 	return 0;
 }
 
-int timer_gettime(timer_t timerid, struct itimerspec *value) {
+int timer_settime(timer_t timerid, int flags, const struct itimerspec *value, struct itimerspec *ovalue) {
+	return timer_settime_(timerid, flags, value, ovalue);
+}
+
+int timer_gettime_(timer_t timerid, struct itimerspec *value) {
 	double timeout;
 	int t = get_timer_from_id(timerid);
 
@@ -2884,6 +2897,10 @@ int timer_gettime(timer_t timerid, struct itimerspec *value) {
 	time_to_timespec(timers[t].interval, &value->it_interval);
 
 	return 0;
+}
+
+int timer_gettime(timer_t timerid, struct itimerspec *value) {
+	return timer_gettime_(timerid, value);
 }
 
 #ifndef CLKNETSIM_DISABLE_ITIMER
@@ -2948,11 +2965,11 @@ int timerfd_settime(int fd, int flags, const struct itimerspec *new_value, struc
 	else
 		assert(!flags);
 
-	return timer_settime(get_timerid(get_timer_from_fd(fd)), flags, new_value, old_value);
+	return timer_settime_(get_timerid(get_timer_from_fd(fd)), flags, new_value, old_value);
 }
 
 int timerfd_gettime(int fd, struct itimerspec *curr_value) {
-	return timer_gettime(get_timerid(get_timer_from_fd(fd)), curr_value);
+	return timer_gettime_(get_timerid(get_timer_from_fd(fd)), curr_value);
 }
 
 int shmget(key_t key, size_t size, int shmflg) {
