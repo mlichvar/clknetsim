@@ -1631,6 +1631,10 @@ int open(const char *pathname, int flags, ...) {
 	return r;
 }
 
+int __open_2(const char *pathname, int oflag) {
+	return open(pathname, oflag);
+}
+
 ssize_t read(int fd, void *buf, size_t count) {
 	int t;
 
@@ -1669,6 +1673,10 @@ ssize_t read(int fd, void *buf, size_t count) {
 	}
 
 	return _read(fd, buf, count);
+}
+
+ssize_t __read_chk(int fd, void *buf, size_t count, size_t buflen) {
+	return read(fd, buf, count);
 }
 
 int close(int fd) {
