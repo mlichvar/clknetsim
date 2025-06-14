@@ -88,6 +88,15 @@ start_client() {
 	    args=($opts)
 	    while read line; do args+=("$line"); done <<< "$config"
 	    ;;
+	clkmgr_proxy)
+	    cat > $CLKNETSIM_TMPDIR/conf.$node <<-EOF
+		$config
+		EOF
+	    args=(-f $CLKNETSIM_TMPDIR/conf.$node $opts)
+	    ;;
+	clkmgr)
+	    args=($opts)
+	    ;;
 	*)
 	    echo "unknown client $client"
 	    exit 1
