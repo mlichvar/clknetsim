@@ -21,6 +21,7 @@
 #define MAXSEC 2048
 #define MAXTIMECONST 10
 #define MAXMAXERROR 16000000
+#define MAXERROR_RATE 500
 #define SHIFT_FLL 2
 #define SCALE_FREQ 65536.0e6
 #define MAXFREQ_SCALED 32768000
@@ -47,6 +48,9 @@ Clock::Clock() {
 	ntp_timex.tick = base_tick;
 	ntp_timex.tolerance = MAXFREQ_SCALED;
 	ntp_timex.precision = 1;
+	ntp_timex.maxerror = MAXMAXERROR;
+	ntp_timex.esterror = MAXMAXERROR;
+	ntp_timex.status = STA_UNSYNC;
 
 	ntp_state = TIME_OK;
 
@@ -194,6 +198,12 @@ void Clock::update(bool second) {
 	} else
 		ss_slew = 0;
 
+	ntp_timex.maxerror += MAXERROR_RATE;
+	if (ntp_timex.maxerror >= MAXMAXERROR) {
+		ntp_timex.maxerror = MAXMAXERROR;
+		ntp_timex.status |= STA_UNSYNC;
+	}
+
 	switch (ntp_state) {
 		case TIME_OK:
 			if (ntp_timex.status & STA_INS)
@@ -293,8 +303,20 @@ int Clock::adjtimex(struct timex *buf) {
 		else if (ntp_timex.freq < -MAXFREQ_SCALED)
 			ntp_timex.freq = -MAXFREQ_SCALED;
 	}
-	if (buf->modes & ADJ_MAXERROR)
+	if (buf->modes & ADJ_MAXERROR) {
 		ntp_timex.maxerror = buf->maxerror;
+		if (ntp_timex.maxerror > MAXMAXERROR)
+			ntp_timex.maxerror = MAXMAXERROR;
+		if (ntp_timex.maxerror < 0)
+			ntp_timex.maxerror = 0;
+	}
+	if (buf->modes & ADJ_ESTERROR) {
+		ntp_timex.esterror = buf->esterror;
+		if (ntp_timex.esterror > MAXMAXERROR)
+			ntp_timex.esterror = MAXMAXERROR;
+		if (ntp_timex.esterror < 0)
+			ntp_timex.esterror = 0;
+	}
 	if (buf->modes & ADJ_STATUS) {
 		if ((buf->status & STA_PLL) && !(ntp_timex.status & STA_PLL))
 			ntp_update_interval = 0;

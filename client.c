@@ -1127,6 +1127,8 @@ int adjtimex(struct timex *buf) {
 		req.timex.freq = buf->freq;
 	if (buf->modes & ADJ_MAXERROR)
 		req.timex.maxerror = buf->maxerror;
+	if (buf->modes & ADJ_ESTERROR)
+		req.timex.esterror = buf->esterror;
 	if (buf->modes & ADJ_STATUS)
 		req.timex.status = buf->status;
 	if ((buf->modes & ADJ_TIMECONST) || (buf->modes & ADJ_TAI))
