@@ -97,6 +97,7 @@
 #define PPS_FD 1002
 #define RTC_FD 1003
 #define URANDOM_FD 1010
+#define UNIX_DIR_FD 1011
 
 #define MAX_SOCKETS 20
 #define BASE_SOCKET_FD 100
@@ -126,6 +127,8 @@ static int (*_fxstat)(int ver, int fd, struct stat *statbuf);
 static int (*_xstat)(int ver, const char *pathname, struct stat *statbuf);
 #endif
 static char *(*_realpath)(const char *path, char *resolved_path);
+static int (*_mkdir)(const char *pathname, mode_t mode);
+static int (*_mkdirat)(int dirfd, const char *pathname, mode_t mode);
 static int (*_open)(const char *pathname, int flags, ...);
 static ssize_t (*_read)(int fd, void *buf, size_t count);
 static int (*_close)(int fd);
@@ -279,6 +282,8 @@ static void init_symbols(void) {
 	_xstat = (int (*)(int ver, const char *pathname, struct stat *statbuf))dlsym(RTLD_NEXT, "__xstat");
 #endif
 	_realpath = (char *(*)(const char *path, char *resolved_path))dlsym(RTLD_NEXT, "realpath");
+	_mkdir = (int (*)(const char *pathname, mode_t mode))dlsym(RTLD_NEXT, "mkdir");
+	_mkdirat = (int (*)(int dirfd, const char *pathname, mode_t mode))dlsym(RTLD_NEXT, "mkdirat");
 	_open = (int (*)(const char *pathname, int flags, ...))dlsym(RTLD_NEXT, "open");
 	_read = (ssize_t (*)(int fd, void *buf, size_t count))dlsym(RTLD_NEXT, "read");
 	_close = (int (*)(int fd))dlsym(RTLD_NEXT, "close");
@@ -1596,6 +1601,20 @@ char *__realpath_chk(const char *name, char *resolved_path, size_t buflen) {
 	return realpath(name, resolved_path);
 }
 
+int mkdir(const char *pathname, mode_t mode) {
+	if (!strncmp(pathname, "/clknetsim/unix/", 16))
+		return 0;
+
+	return _mkdir(pathname, mode);
+}
+
+int mkdirat(int dirfd, const char *pathname, mode_t mode) {
+	if (dirfd == UNIX_DIR_FD)
+		return 0;
+
+	return _mkdirat(dirfd, pathname, mode);
+}
+
 int open(const char *pathname, int flags, ...) {
 	int r, mode_arg = 0;
 	mode_t mode = 0;
@@ -1620,6 +1639,8 @@ int open(const char *pathname, int flags, ...) {
 		return RTC_FD;
 	else if (!strcmp(pathname, "/dev/urandom"))
 		return URANDOM_FD;
+	else if (!strncmp(pathname, "/clknetsim/unix/", 16))
+		return UNIX_DIR_FD;
 
 	init_symbols();
 
@@ -1684,7 +1705,8 @@ ssize_t __read_chk(int fd, void *buf, size_t count, size_t buflen) {
 int close(int fd) {
 	int t, s;
 
-	if (fd == REFCLK_FD || fd == SYSCLK_FD || fd == RTC_FD || fd == URANDOM_FD) {
+	if (fd == REFCLK_FD || fd == SYSCLK_FD || fd == RTC_FD || fd == URANDOM_FD ||
+	    fd == UNIX_DIR_FD) {
 		return 0;
 	} else if (fd == PPS_FD) {
 		pps_fds--;
@@ -2046,6 +2068,12 @@ int fstat(int fd, struct stat *statbuf) {
 		return 0;
 	}
 
+	if (fd == UNIX_DIR_FD) {
+		memset(statbuf, 0, sizeof (*statbuf));
+		statbuf->st_mode = S_IFDIR | 0711;
+		return 0;
+	}
+
 #ifdef HAVE_STAT
 	assert(_fstat);
 	return _fstat(fd, statbuf);
@@ -2083,6 +2111,10 @@ int __xstat(int ver, const char *pathname, struct stat *statbuf) {
 }
 
 int chmod(const char *pathname, mode_t mode) {
+	return 0;
+}
+
+int fchmod(int fd, mode_t mode) {
 	return 0;
 }
 
