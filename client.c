@@ -1658,6 +1658,10 @@ int __open_2(const char *pathname, int oflag) {
 	return open(pathname, oflag);
 }
 
+int __open64_2(const char *pathname, int oflag) {
+        return open(pathname, oflag);
+}
+
 ssize_t read(int fd, void *buf, size_t count) {
 	int t;
 
