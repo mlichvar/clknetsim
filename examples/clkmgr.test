@@ -1,0 +1,66 @@
+#!/bin/bash
+
+# Requirements:
+# A Clock Manager Proxy service 'clkmgr_proxy' and library 'libclkmgr.so' need
+# to be built and install into the system before running this test. Below shows
+# an example of how to build and install the Clock Manager components. Please
+# refer to https://github.com/erezgeva/libptpmgmt for details.
+# Example commands:
+# $ cd <working_directory>
+# $ git clone https://github.com/erezgeva/libptpmgmt
+# $ cd <working_directory>/libptpmgmt
+# $ autoreconf -i
+# $ ./configure
+# $ make
+# $ sudo make install
+#
+# A Clock Manager Client application that uses libclkmgr.so is needed for
+# testing. The name of the application should be in the format of
+# 'clkmgr<something>', e.g. 'clkmgr_test'. A sample client application is
+# available at:
+# https://github.com/erezgeva/libptpmgmt/blob/master/clkmgr/sample/clkmgr_test.cpp
+# To build the sample application, follow the instructions below.
+# Example commands:
+# $ cd <working_directory>
+# $ cd <working_directory>/libptpmgmt/clkmgr/sample
+# $ make
+
+# Replace the following line with the path to the folder that contains Clock
+# Manager Client application.
+PATH+=:<working_directory>/libptpmgmt/clkmgr/sample
+
+CLKNETSIM_PATH=..
+. ../clknetsim.bash
+
+export CLKNETSIM_UNIX_SUBNET=2
+
+generate_config4 '1 3 4' '1 2 | 2 3 | 3 4' 0.01 \
+  '(sum (* 1e-9 (normal)))' '(* 1e-8 (exponential))'
+
+# Start Clock Manager Proxy service, at 20th second
+echo 'node3_start = 20' >> $CLKNETSIM_TMPDIR/conf
+# Start Clock Manager Client application, at 30th second
+echo 'node4_start = 30' >> $CLKNETSIM_TMPDIR/conf
+
+start_client 1 ptp4l '' '' "-i eth0"
+start_client 2 ptp4l '' '' "-i eth0"
+start_client 3 clkmgr_proxy "
+      {
+        \"timeBases\": [{
+          \"timeBaseName\": \"Working Clock\",
+          \"ptp4l\": {
+            \"interfaceName\": \"eth0\",
+            \"udsAddr\": \"/clknetsim/unix/2:1\",
+            \"domainNumber\": 0,
+            \"transportSpecific\": 0
+          }
+        }]
+      }" '' ''
+
+# Replace the following line with the name of your Clock Manager Client
+# application.
+start_client 4 clkmgr '' '_test' '-t 1'
+
+start_server 4 -l 100 -n $CLKNETSIM_UNIX_SUBNET
+
+cat $CLKNETSIM_TMPDIR/log.4 | grep -v -E '^\s*$|Waiting|No event|sleep for'
