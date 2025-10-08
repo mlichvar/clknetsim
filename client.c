@@ -1072,6 +1072,9 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 		case REFCLK_ID:
 			time = get_refclock_time();
 			break;
+		case CLOCK_MONOTONIC_RAW:
+			errno = EINVAL;
+			return -1;
 		default:
 			assert(0);
 	}
