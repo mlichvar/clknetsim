@@ -67,13 +67,20 @@ double Generator_variable::generate(const Generator_variables *variables) {
 Generator_random_uniform::Generator_random_uniform(const vector<Generator *> *input):
 	Generator(NULL) {
 	syntax_assert(!input || input->size() == 0);
+
+	initstate(random(), random_state, sizeof (random_state));
 }
 
 double Generator_random_uniform::generate(const Generator_variables *variables) {
+	char *prev_state;
 	double x;
+
+	prev_state = setstate(random_state);
 
 	x = ((random() & 0x7fffffff) + 1) / 2147483649.0;
 	x = ((random() & 0x7fffffff) + x) / 2147483648.0;
+
+	setstate(prev_state);
 
 	return x;
 }

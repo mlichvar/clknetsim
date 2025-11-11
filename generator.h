@@ -56,6 +56,8 @@ class Generator_variable: public Generator {
 };
 
 class Generator_random_uniform: public Generator {
+	char random_state[16];
+
 	public:
 	Generator_random_uniform(const vector<Generator *> *input);
 	virtual double generate(const Generator_variables *variables);
