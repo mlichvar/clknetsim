@@ -66,9 +66,12 @@ double Generator_variable::generate(const Generator_variables *variables) {
 
 Generator_random_uniform::Generator_random_uniform(const vector<Generator *> *input):
 	Generator(NULL) {
+	char *prev_state;
+
 	syntax_assert(!input || input->size() == 0);
 
-	initstate(random(), random_state, sizeof (random_state));
+	prev_state = initstate(random(), random_state, sizeof (random_state));
+	setstate(prev_state);
 }
 
 double Generator_random_uniform::generate(const Generator_variables *variables) {
