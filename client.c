@@ -196,6 +196,7 @@ struct socket {
 	int broadcast;
 	int pkt_info;
 	int time_stamping;
+	uint32_t last_tx_id;
 	struct message last_ts_msg;
 	struct message buffer;
 };
@@ -2541,6 +2542,17 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 		last_ts_msg->subnet = req.subnet;
 		last_ts_msg->to_from = req.to;
 		last_ts_msg->port = req.dst_port;
+
+		if (timestamping & SOF_TIMESTAMPING_OPT_ID) {
+			sockets[s].last_tx_id++;
+#ifdef SCM_TS_OPT_ID
+			for (cmsg = CMSG_FIRSTHDR(msg); cmsg; cmsg = CMSG_NXTHDR((struct msghdr *)msg, cmsg)) {
+				if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_TS_OPT_ID)
+					memcpy(&sockets[s].last_tx_id, CMSG_DATA(cmsg),
+					       sizeof (sockets[s].last_tx_id));
+			}
+#endif
+		}
 	}
 
 	return req.len;
@@ -2838,6 +2850,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 			err.ee_errno = ENOMSG;
 			err.ee_info = SCM_TSTAMP_SND;
 			err.ee_origin = SO_EE_ORIGIN_TIMESTAMPING;
+			err.ee_data = sockets[s].last_tx_id;
 
 			memcpy(CMSG_DATA(cmsg), &err, sizeof (err));
 		}
