@@ -62,6 +62,7 @@
 #include <linux/rtc.h>
 #include <linux/sockios.h>
 #ifdef SO_TIMESTAMPING
+#include <linux/errqueue.h>
 #include <linux/ptp_clock.h>
 #include <linux/net_tstamp.h>
 #endif
@@ -2810,6 +2811,35 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 				memcpy(CMSG_DATA(cmsg), &tpi, sizeof (tpi));
 			}
 #endif
+		}
+
+		if (last_ts_msg) {
+			struct sock_extended_err err;
+
+			cmsg = (struct cmsghdr *)((char *)CMSG_FIRSTHDR(msg) + cmsglen);
+			cmsglen += CMSG_SPACE(sizeof (err));
+			assert(msg->msg_control && msg->msg_controllen >= cmsglen);
+			switch (ip_family) {
+				case 4:
+					cmsg->cmsg_level = SOL_IP;
+					cmsg->cmsg_type = IP_RECVERR;
+					break;
+				case 6:
+					cmsg->cmsg_level = SOL_IPV6;
+					cmsg->cmsg_type = IPV6_RECVERR;
+					break;
+				default:
+					assert(0);
+			}
+
+			cmsg->cmsg_len = CMSG_LEN(sizeof (err));
+
+			memset(&err, 0, sizeof (err));
+			err.ee_errno = ENOMSG;
+			err.ee_info = SCM_TSTAMP_SND;
+			err.ee_origin = SO_EE_ORIGIN_TIMESTAMPING;
+
+			memcpy(CMSG_DATA(cmsg), &err, sizeof (err));
 		}
 	}
 #endif
