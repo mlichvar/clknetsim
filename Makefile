@@ -1,11 +1,13 @@
 CFLAGS += -O2 -Wall -g -fPIC
 CXXFLAGS += $(CFLAGS)
-CPPFLAGS += $(apiflags)
+CPPFLAGS += $(sysflags)
 
 all: clknetsim.so clknetsim
 
-apiflags := $(shell echo -e '\x23include <sys/time.h>' | $(CC) -x c -E - | \
-	    grep __timezone_ptr_t > /dev/null || echo -DGETTIMEOFDAY_VOID)
+sysflags := $(shell echo -e '\x23include <sys/time.h>' | $(CC) -x c -E - | \
+	    grep -q __timezone_ptr_t || echo -DGETTIMEOFDAY_VOID)
+sysflags += $(shell echo -e '\x23include <linux/net_tstamp.h>' | $(CC) -x c -E - | \
+	    grep -q '[^_]SOF_TIMESTAMPING_OPT_ID ' && echo -DHAVE_SOF_TS_OPT_ID)
 
 clientobjs = client.o
 serverobjs = $(patsubst %.cc,%.o,$(wildcard *.cc))

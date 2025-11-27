@@ -2543,6 +2543,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 		last_ts_msg->to_from = req.to;
 		last_ts_msg->port = req.dst_port;
 
+#ifdef HAVE_SOF_TS_OPT_ID
 		if (timestamping & SOF_TIMESTAMPING_OPT_ID) {
 			sockets[s].last_tx_id++;
 #ifdef SCM_TS_OPT_ID
@@ -2553,6 +2554,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 			}
 #endif
 		}
+#endif
 	}
 
 	return req.len;
