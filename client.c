@@ -2834,16 +2834,15 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 			cmsglen += CMSG_SPACE(sizeof (err));
 			assert(msg->msg_control && msg->msg_controllen >= cmsglen);
 			switch (ip_family) {
-				case 4:
-					cmsg->cmsg_level = SOL_IP;
-					cmsg->cmsg_type = IP_RECVERR;
-					break;
 				case 6:
 					cmsg->cmsg_level = SOL_IPV6;
 					cmsg->cmsg_type = IPV6_RECVERR;
 					break;
+				case 4:
 				default:
-					assert(0);
+					cmsg->cmsg_level = SOL_IP;
+					cmsg->cmsg_type = IP_RECVERR;
+					break;
 			}
 
 			cmsg->cmsg_len = CMSG_LEN(sizeof (err));
