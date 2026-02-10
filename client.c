@@ -111,7 +111,9 @@
 
 #define URANDOM_FILE (void *)0xD1230123
 
-#if !defined(__GLIBC_PREREQ) || __GLIBC_PREREQ(2, 33)
+#if !defined(__GLIBC_PREREQ)
+#define HAVE_STAT
+#elif __GLIBC_PREREQ(2, 33)
 #define HAVE_STAT
 #endif
 
