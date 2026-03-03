@@ -215,6 +215,7 @@ static double freq_error = 0.0;
 static int local_time_valid = 0;
 
 static time_t system_time_offset = 1262304000; /* 2010-01-01 0:00 UTC */
+static time_t system_mono_offset; /* random */
 
 #define TIMER_TYPE_SIGNAL 1
 #define TIMER_TYPE_FD 2
@@ -438,6 +439,8 @@ static void init(void) {
 
 	/* this requires the node variable to be already set */
 	srandom(0);
+
+	system_mono_offset = random() % 100000000;
 
 	initializing = 0;
 	initialized = 1;
@@ -1081,9 +1084,11 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 		case CLOCK_MONOTONIC:
 		case CLOCK_MONOTONIC_COARSE:
 			time = get_monotonic_time();
+			offset = system_mono_offset;
 			break;
 		case CLOCK_MONOTONIC_RAW:
 			time = get_raw_time();
+			offset = system_mono_offset;
 			break;
 		case REFCLK_ID:
 			time = get_refclock_time();
