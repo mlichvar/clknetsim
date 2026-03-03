@@ -89,10 +89,7 @@ double Clock::get_total_freq() const {
 }
 
 double Clock::get_raw_freq() const {
-	double timex_freq;
-
-	timex_freq = (double)ntp_timex.tick / base_tick + ntp_timex.freq / SCALE_FREQ;
-	return freq * timex_freq;
+	return freq;
 }
 
 double Clock::get_true_interval(double local_interval) const {

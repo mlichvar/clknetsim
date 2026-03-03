@@ -178,7 +178,7 @@ int main(int argc, char **argv) {
 		printf("       -n subnets    set number of subnetworks (default 1)\n");
 		printf("       -o file       log time offsets to file\n");
 		printf("       -f file       log frequency offsets to file\n");
-		printf("       -g file       log raw (w/o slew) frequency offsets to file\n");
+		printf("       -g file       log raw (uncorrected) frequency offsets to file\n");
 		printf("       -p file       log packet delays to file\n");
 		printf("       -s socket     set server socket name (default clknetsim.sock)\n");
 		printf("       -v level      set verbosity level (default 2)\n");
