@@ -48,6 +48,7 @@ struct Reply_register {
 struct Reply_gettime {
 	double real_time;
 	double monotonic_time;
+	double raw_time;
 	double network_time;
 	double freq_error;
 };

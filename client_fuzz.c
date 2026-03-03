@@ -175,6 +175,7 @@ static void fuzz_process_request(int request_id, const union Request_data *reque
 		case REQ_GETTIME:
 			reply->gettime.real_time = network_time;
 			reply->gettime.monotonic_time = network_time;
+			reply->gettime.raw_time = network_time;
 			reply->gettime.network_time = network_time;
 			break;
 		case REQ_SELECT:
@@ -183,6 +184,7 @@ static void fuzz_process_request(int request_id, const union Request_data *reque
 				reply->select.ret = REPLY_SELECT_TIMEOUT;
 				reply->select.time.real_time = network_time;
 				reply->select.time.monotonic_time = network_time;
+				reply->select.time.raw_time = network_time;
 				reply->select.time.network_time = network_time;
 				return;
 			}
@@ -224,6 +226,7 @@ static void fuzz_process_request(int request_id, const union Request_data *reque
 				      &reply->select.src_port, &reply->select.dst_port);
 			reply->select.time.real_time = network_time;
 			reply->select.time.monotonic_time = network_time;
+			reply->select.time.raw_time = network_time;
 			reply->select.time.network_time = network_time;
 			break;
 		case REQ_SEND:

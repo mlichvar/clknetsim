@@ -209,6 +209,7 @@ static int unix_subnet = -1;
 
 static double real_time = 0.0;
 static double monotonic_time = 0.0;
+static double raw_time = 0.0;
 static double network_time = 0.0;
 static double freq_error = 0.0;
 static int local_time_valid = 0;
@@ -518,6 +519,7 @@ static void fetch_time(void) {
 		make_request(REQ_GETTIME, NULL, 0, &r, sizeof (r));
 		real_time = r.real_time;
 		monotonic_time = r.monotonic_time;
+		raw_time = r.raw_time;
 		network_time = r.network_time;
 		freq_error = r.freq_error;
 		local_time_valid = 1;
@@ -532,6 +534,11 @@ static double get_real_time(void) {
 static double get_monotonic_time(void) {
 	fetch_time();
 	return monotonic_time;
+}
+
+static double get_raw_time(void) {
+	fetch_time();
+	return raw_time;
 }
 
 static double get_refclock_offset(void) {
@@ -1053,6 +1060,7 @@ int gettimeofday(struct timeval *tv,
 }
 
 int clock_gettime(clockid_t which_clock, struct timespec *tp) {
+	time_t offset = 0;
 	double time;
 
 	/* try to allow reading of the clock from other constructors, but
@@ -1068,17 +1076,19 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 		case CLOCK_REALTIME_COARSE:
 		case SYSCLK_CLOCKID:
 			time = get_real_time();
+			offset = system_time_offset;
 			break;
 		case CLOCK_MONOTONIC:
 		case CLOCK_MONOTONIC_COARSE:
 			time = get_monotonic_time();
 			break;
+		case CLOCK_MONOTONIC_RAW:
+			time = get_raw_time();
+			break;
 		case REFCLK_ID:
 			time = get_refclock_time();
+			offset = system_time_offset;
 			break;
-		case CLOCK_MONOTONIC_RAW:
-			errno = EINVAL;
-			return -1;
 		default:
 			assert(0);
 	}
@@ -1086,8 +1096,7 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 	time += 0.5e-9;
 	time_to_timespec(time, tp);
 	
-	if (which_clock != CLOCK_MONOTONIC && which_clock != CLOCK_MONOTONIC_COARSE)
-		tp->tv_sec += system_time_offset;
+	tp->tv_sec += offset;
 
 	/* chrony and ntpd clock precision routine hack */
 	if (precision_hack) {
@@ -1329,6 +1338,7 @@ try_again:
 
 		real_time = rep.time.real_time;
 		monotonic_time = rep.time.monotonic_time;
+		raw_time = rep.time.raw_time;
 		network_time = rep.time.network_time;
 		freq_error = rep.time.freq_error;
 		local_time_valid = 1;

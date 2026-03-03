@@ -28,6 +28,7 @@
 class Clock {
 	double time;
 	double mono_time;
+	double raw_time;
 	double freq;
 
 	Generator *freq_generator;
@@ -51,10 +52,12 @@ public:
 	~Clock();
 	double get_real_time() const;
 	double get_monotonic_time() const;
+	double get_raw_time() const;
 	double get_total_freq() const;
 	double get_raw_freq() const;
 	double get_true_interval(double local_interval) const;
 	double get_local_interval(double true_interval) const;
+	double get_raw_interval(double true_interval) const;
 
 	void set_freq_generator(Generator *gen);
 	void set_step_generator(Generator *gen);

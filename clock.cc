@@ -35,6 +35,7 @@
 Clock::Clock() {
 	time = 0.0;
 	mono_time = 0.0;
+	raw_time = 0.0;
 	freq = 1.0;
 
 	freq_generator = NULL;
@@ -80,6 +81,10 @@ double Clock::get_monotonic_time() const {
 	return mono_time;
 }
 
+double Clock::get_raw_time() const {
+	return raw_time;
+}
+
 double Clock::get_total_freq() const {
 	double timex_freq, adjtime_freq;
 
@@ -98,6 +103,10 @@ double Clock::get_true_interval(double local_interval) const {
 
 double Clock::get_local_interval(double true_interval) const {
 	return true_interval * get_total_freq();
+}
+
+double Clock::get_raw_interval(double true_interval) const {
+	return true_interval * get_raw_freq();
 }
 
 void Clock::set_freq_generator(Generator *gen) {
@@ -143,6 +152,7 @@ void Clock::advance(double real_interval) {
 
 	time += local_interval;
 	mono_time += local_interval;
+	raw_time += get_raw_interval(real_interval);
 }
 
 void Clock::update(bool second) {
