@@ -310,7 +310,7 @@ static void init_symbols(void) {
 
 __attribute__((constructor))
 static void init(void) {
-	unsigned int connect_retries = 100; /* 10 seconds */
+	unsigned int i, connect_retries = 100 + 10; /* 10 seconds */
 	struct sockaddr_un s = {AF_UNIX, "clknetsim.sock"};
 	struct Request_register req;
 	struct Reply_register rep;
@@ -423,18 +423,20 @@ static void init(void) {
 
 	env = getenv("CLKNETSIM_CONNECT_TIMEOUT");
 	if (env)
-		connect_retries = 10 * atoi(env);
+		connect_retries = 10 * atoi(env) + 10;
 
 	clknetsim_fd = _socket(AF_UNIX, SOCK_SEQPACKET, 0);
 
 	assert(clknetsim_fd >= 0);
 
-	while (_connect(clknetsim_fd, (struct sockaddr *)&s, sizeof (s)) < 0) {
-		if (!--connect_retries) {
-			fprintf(stderr, "clknetsim: could not connect to server.\n");
-			exit(1);
-		}
-		_usleep(100000);
+	for (i = 0; i < connect_retries; i++) {
+		if (_connect(clknetsim_fd, (struct sockaddr *)&s, sizeof (s)) >= 0)
+			break;
+		_usleep(i > 10 ? 100000 : 10000);
+	}
+	if (i == connect_retries) {
+		fprintf(stderr, "clknetsim: could not connect to server.\n");
+		exit(1);
 	}
 
 	/* this requires the node variable to be already set */
