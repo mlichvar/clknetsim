@@ -1092,7 +1092,9 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 	/* chrony and ntpd clock precision routine hack */
 	if (precision_hack) {
 		static int x = 0;
-		tp->tv_nsec += x++ * 101;
+		tp->tv_nsec += x * 101;
+		x += 1 + random() % 4;
+		normalize_timespec(tp);
 	}
 
 	return 0;
@@ -2240,6 +2242,8 @@ int ioctl(int fd, unsigned long request, ...) {
 		double delay;
 		int i;
 
+		precision_hack = 0;
+
 		if (sys_off->n_samples > PTP_MAX_SAMPLES)
 			sys_off->n_samples = PTP_MAX_SAMPLES;
 
@@ -2267,6 +2271,8 @@ int ioctl(int fd, unsigned long request, ...) {
 		double delay;
 		int i;
 
+		precision_hack = 0;
+
 		if (sys_off->n_samples > PTP_MAX_SAMPLES)
 			sys_off->n_samples = PTP_MAX_SAMPLES;
 
@@ -2290,6 +2296,8 @@ int ioctl(int fd, unsigned long request, ...) {
 	} else if (request == PTP_SYS_OFFSET_PRECISE && fd == REFCLK_FD) {
 		struct ptp_sys_offset_precise *sys_off = va_arg(ap, struct ptp_sys_offset_precise *);
 		struct timespec ts;
+
+		precision_hack = 0;
 
 		clock_gettime(REFCLK_ID, &ts);
 		sys_off->device.sec = ts.tv_sec;
