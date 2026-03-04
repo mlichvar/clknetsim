@@ -145,12 +145,15 @@ start_server() {
 	j=0
 	while kill -0 $pid &> /dev/null; do
 	    j=$[j + 1]
-	    if [ $j -gt 30 ]; then
+	    if [ $j -le 10 ]; then
+		sleep 0.01
+	    elif [ $j -le 40 ]; then
+		sleep 0.1
+	    else
 		echo " node $i did not terminate" 1>&2
 		ret=1
 		break
 	    fi
-	    sleep 0.1
 	done
     done
 
