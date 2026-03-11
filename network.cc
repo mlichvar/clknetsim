@@ -385,7 +385,7 @@ void Network::print_stats(int verbosity) const {
 					printf("\n---------------- Node %d - clock %d ------------------\n\n",
 					       i + 1, j + 1);
 			}
-			stats[i][j].print(verbosity);
+			stats[i][j].print(verbosity, j > 0);
 		}
 	}
 	if (verbosity == 1)

@@ -111,7 +111,7 @@ void Stats::update_wakeup_stats() {
 	wakeups++;
 }
 
-void Stats::print(int verbosity) const {
+void Stats::print(int verbosity, bool clock_only) const {
 	if (verbosity <= 0)
 		return;
 	if (verbosity <= 1) {
@@ -131,6 +131,10 @@ void Stats::print(int verbosity) const {
 	printf("Maximum absolute raw frequency:        \t%e\n", rawfreq_abs_max);
 	printf("Mean absolute raw frequency:           \t%e\n", rawfreq_abs_sum / samples);
 	printf("Mean raw frequency:                    \t%e\n", rawfreq_sum / samples);
+
+	if (clock_only)
+		return;
+
 	if (packets_in) {
 		printf("RMS incoming packet delay:             \t%e\n", (double)sqrt(packets_in_sum2 / packets_in));
 	} else {

@@ -57,7 +57,7 @@ class Stats {
 	void update_clock_stats(double offset, double freq, double rawfreq);
 	void update_packet_stats(bool incoming, double time, double delay);
 	void update_wakeup_stats();
-	void print(int verbosity) const;
+	void print(int verbosity, bool clock_only) const;
 };
 
 #endif
