@@ -370,8 +370,8 @@ double Node::get_timeout() const {
 	}
 }
 
-Clock *Node::get_clock() {
-	return &clocks[0];
+Clock *Node::get_clock(int index) {
+	return &clocks[index];
 }
 
 Refclock *Node::get_refclock() {

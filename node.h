@@ -67,7 +67,7 @@ class Node {
 	bool finished() const;
 
 	double get_timeout() const;
-	Clock *get_clock();
+	Clock *get_clock(int index);
 	Refclock *get_refclock();
 	void set_refclock_base(Clock *clock);
 };

@@ -252,7 +252,7 @@ bool Network::run(double time_limit) {
 				time += min_timeout;
 
 			for (i = 0; i < n; i++)
-				nodes[i]->get_clock()->advance(min_timeout);
+				nodes[i]->get_clock(0)->advance(min_timeout);
 
 			if (pending_update)
 				update();
@@ -279,8 +279,8 @@ void Network::update() {
 	update_count %= update_rate;
 
 	for (i = 0; i < n; i++) {
-		nodes[i]->get_clock()->update(update_count == 0);
-		nodes[i]->get_refclock()->update(time, nodes[i]->get_clock());
+		nodes[i]->get_clock(0)->update(update_count == 0);
+		nodes[i]->get_refclock()->update(time, nodes[i]->get_clock(0));
 	}
 
 	update_clock_stats();
@@ -304,21 +304,24 @@ void Network::update_clock_stats() {
 
 	if (offset_log) {
 		for (i = 0; i < n; i++)
-			fprintf(offset_log, "%.9f%c", nodes[i]->get_clock()->get_real_time() - time, i + 1 < n ? '\t' : '\n');
+			fprintf(offset_log, "%.9f%c", nodes[i]->get_clock(0)->get_real_time() - time,
+				i + 1 < n ? '\t' : '\n');
 	}
 	if (freq_log) {
 		for (i = 0; i < n; i++)
-			fprintf(freq_log, "%e%c", nodes[i]->get_clock()->get_total_freq() - 1.0, i + 1 < n ? '\t' : '\n');
+			fprintf(freq_log, "%e%c", nodes[i]->get_clock(0)->get_total_freq() - 1.0,
+				i + 1 < n ? '\t' : '\n');
 	}
 	if (rawfreq_log) {
 		for (i = 0; i < n; i++)
-			fprintf(rawfreq_log, "%e%c", nodes[i]->get_clock()->get_raw_freq() - 1.0, i + 1 < n ? '\t' : '\n');
+			fprintf(rawfreq_log, "%e%c", nodes[i]->get_clock(0)->get_raw_freq() - 1.0,
+				i + 1 < n ? '\t' : '\n');
 	}
 
 	for (i = 0; i < n; i++)
-		stats[i].update_clock_stats(nodes[i]->get_clock()->get_real_time() - time,
-				nodes[i]->get_clock()->get_total_freq() - 1.0,
-				nodes[i]->get_clock()->get_raw_freq() - 1.0);
+		stats[i].update_clock_stats(nodes[i]->get_clock(0)->get_real_time() - time,
+				nodes[i]->get_clock(0)->get_total_freq() - 1.0,
+				nodes[i]->get_clock(0)->get_raw_freq() - 1.0);
 }
 
 void Network::write_correction(struct Packet *packet, double correction) {

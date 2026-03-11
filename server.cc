@@ -23,7 +23,7 @@ bool load_config(const char *file, Network *network, unsigned int nodes) {
 	FILE *f;
 	const char *ws = " \t\n\r";
 	char line[1000], *var, *arg, *end;
-	unsigned int node, node2;
+	unsigned int node, node2, clock;
 
 	f = fopen(file, "r");
 	if (!f)
@@ -58,23 +58,30 @@ bool load_config(const char *file, Network *network, unsigned int nodes) {
 		if (var >= end)
 			return false;
 
+		clock = 0;
+
 		if (strncmp(var, "offset", 6) == 0)
-			network->get_node(node)->get_clock()->set_time(atof(arg));
+			network->get_node(node)->get_clock(clock)->set_time(atof(arg));
 		else if (strncmp(var, "start", 5) == 0)
 			network->get_node(node)->set_start_time(atof(arg));
 		else if (strncmp(var, "freq", 4) == 0) {
 			if (arg[0] == '(')
-				network->get_node(node)->get_clock()->set_freq_generator(generator.generate(arg));
+				network->get_node(node)->get_clock(clock)->
+					set_freq_generator(generator.generate(arg));
 			else
-				network->get_node(node)->get_clock()->set_freq(atof(arg));
+				network->get_node(node)->get_clock(clock)->set_freq(atof(arg));
 		} else if (strncmp(var, "step", 4) == 0)
-			network->get_node(node)->get_clock()->set_step_generator(generator.generate(arg));
+			network->get_node(node)->get_clock(clock)->
+				set_step_generator(generator.generate(arg));
 		else if (strncmp(var, "shift_pll", 9) == 0)
-			network->get_node(node)->get_clock()->set_ntp_shift_pll(atoi(arg));
+			network->get_node(node)->get_clock(clock)->
+				set_ntp_shift_pll(atoi(arg));
 		else if (strncmp(var, "fll_mode2", 9) == 0)
-			network->get_node(node)->get_clock()->set_ntp_flag(atoi(arg), CLOCK_NTP_FLL_MODE2);
+			network->get_node(node)->get_clock(clock)->
+				set_ntp_flag(atoi(arg), CLOCK_NTP_FLL_MODE2);
 		else if (strncmp(var, "pll_clamp", 9) == 0)
-			network->get_node(node)->get_clock()->set_ntp_flag(atoi(arg), CLOCK_NTP_PLL_CLAMP);
+			network->get_node(node)->get_clock(clock)->
+				set_ntp_flag(atoi(arg), CLOCK_NTP_PLL_CLAMP);
 		else if (strncmp(var, "delay_correction", 16) == 0) {
 			var += 16;
 			node2 = atoi(var) - 1;
@@ -93,7 +100,7 @@ bool load_config(const char *file, Network *network, unsigned int nodes) {
 			node2 = atoi(arg + 4) - 1;
 			if (node2 >= nodes)
 				return false;
-			network->get_node(node)->set_refclock_base(network->get_node(node2)->get_clock());
+			network->get_node(node)->set_refclock_base(network->get_node(node2)->get_clock(0));
 		} else if (strncmp(var, "refclock", 8) == 0)
 			network->get_node(node)->get_refclock()->set_offset_generator(generator.generate(arg));
 		else
