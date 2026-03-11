@@ -18,7 +18,8 @@
 #include "sysheaders.h"
 #include "network.h"
 
-bool load_config(const char *file, Network *network, unsigned int nodes) {
+bool load_config(const char *file, Network *network, unsigned int nodes,
+		 unsigned int node_clocks) {
 	Generator_generator generator;
 	FILE *f;
 	const char *ws = " \t\n\r";
@@ -58,31 +59,53 @@ bool load_config(const char *file, Network *network, unsigned int nodes) {
 		if (var >= end)
 			return false;
 
-		clock = 0;
-
-		if (strncmp(var, "offset", 6) == 0)
+		if (strncmp(var, "offset", 6) == 0) {
+			var += 6;
+			clock = isdigit(*var) ? atoi(var) - 1 : 0;
+			if (clock >= node_clocks)
+				continue;
 			network->get_node(node)->get_clock(clock)->set_time(atof(arg));
-		else if (strncmp(var, "start", 5) == 0)
+		} else if (strncmp(var, "start", 5) == 0)
 			network->get_node(node)->set_start_time(atof(arg));
 		else if (strncmp(var, "freq", 4) == 0) {
+			var += 4;
+			clock = isdigit(*var) ? atoi(var) - 1 : 0;
+			if (clock >= node_clocks)
+				continue;
 			if (arg[0] == '(')
 				network->get_node(node)->get_clock(clock)->
 					set_freq_generator(generator.generate(arg));
 			else
 				network->get_node(node)->get_clock(clock)->set_freq(atof(arg));
-		} else if (strncmp(var, "step", 4) == 0)
+		} else if (strncmp(var, "step", 4) == 0) {
+			var += 4;
+			clock = isdigit(*var) ? atoi(var) - 1 : 0;
+			if (clock >= node_clocks)
+				continue;
 			network->get_node(node)->get_clock(clock)->
 				set_step_generator(generator.generate(arg));
-		else if (strncmp(var, "shift_pll", 9) == 0)
+		} else if (strncmp(var, "shift_pll", 9) == 0) {
+			var += 9;
+			clock = isdigit(*var) ? atoi(var) - 1 : 0;
+			if (clock >= node_clocks)
+				continue;
 			network->get_node(node)->get_clock(clock)->
 				set_ntp_shift_pll(atoi(arg));
-		else if (strncmp(var, "fll_mode2", 9) == 0)
+		} else if (strncmp(var, "fll_mode2", 9) == 0) {
+			var += 9;
+			clock = isdigit(*var) ? atoi(var) - 1 : 0;
+			if (clock >= node_clocks)
+				continue;
 			network->get_node(node)->get_clock(clock)->
 				set_ntp_flag(atoi(arg), CLOCK_NTP_FLL_MODE2);
-		else if (strncmp(var, "pll_clamp", 9) == 0)
+		} else if (strncmp(var, "pll_clamp", 9) == 0) {
+			var += 9;
+			clock = isdigit(*var) ? atoi(var) - 1 : 0;
+			if (clock >= node_clocks)
+				continue;
 			network->get_node(node)->get_clock(clock)->
 				set_ntp_flag(atoi(arg), CLOCK_NTP_PLL_CLAMP);
-		else if (strncmp(var, "delay_correction", 16) == 0) {
+		} else if (strncmp(var, "delay_correction", 16) == 0) {
 			var += 16;
 			node2 = atoi(var) - 1;
 			if (node2 >= nodes)
@@ -132,7 +155,7 @@ int main(int argc, char **argv) {
 	int r, opt;
 	Network *network;
 
-	while ((opt = getopt(argc, argv, "l:r:R:n:o:f:Gg:p:s:v:e:h")) != -1) {
+	while ((opt = getopt(argc, argv, "l:r:R:n:c:o:f:Gg:p:s:v:e:h")) != -1) {
 		switch (opt) {
 			case 'l':
 				limit = atof(optarg);
@@ -145,6 +168,9 @@ int main(int argc, char **argv) {
 				break;
 			case 'n':
 				subnets = atoi(optarg);
+				break;
+			case 'c':
+				node_clocks = atoi(optarg);
 				break;
 			case 'o':
 				offset_log = optarg;
@@ -183,6 +209,7 @@ int main(int argc, char **argv) {
 		printf("       -r secs       reset clock stats after secs (default 0)\n");
 		printf("       -R rate       set freq/log/stats update rate (default 1 per second)\n");
 		printf("       -n subnets    set number of subnetworks (default 1)\n");
+		printf("       -c clocks     set number of clocks per node (default 1)\n");
 		printf("       -o file       log time offsets to file\n");
 		printf("       -f file       log frequency offsets to file\n");
 		printf("       -g file       log raw (uncorrected) frequency offsets to file\n");
@@ -222,7 +249,7 @@ int main(int argc, char **argv) {
 	if (packet_log)
 		network->open_packet_log(packet_log);
 
-	if (!load_config(config, network, nodes)) {
+	if (!load_config(config, network, nodes, node_clocks)) {
 		fprintf(stderr, "Couldn't parse config %s\n", config);
 		return 1;
 	}
