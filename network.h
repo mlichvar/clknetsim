@@ -53,6 +53,7 @@ class Packet_queue {
 class Network {
 	double time;
 	unsigned int subnets;
+	unsigned int node_clocks;
 	unsigned int update_rate;
 	unsigned int update_count;
 
@@ -61,7 +62,7 @@ class Network {
 	vector<Node *> nodes;
 	vector<Generator *> link_delays;
 	vector<Generator *> link_corrections;
-	vector<Stats> stats;
+	vector<vector<Stats>> stats;
 	
 	Generator_variables link_delay_variables;
 	Generator_variables link_correction_variables;
@@ -78,7 +79,8 @@ class Network {
 	void write_correction(struct Packet *packet, double correction);
 
 	public:
-	Network(const char *socket, const char *executable, unsigned int n, unsigned int s, unsigned int rate);
+	Network(const char *socket, const char *executable, unsigned int n,
+		unsigned int subnets, unsigned int node_clocks, unsigned int rate);
 	~Network();
 	bool prepare_clients();
 	Node *get_node(unsigned int node);

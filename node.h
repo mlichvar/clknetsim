@@ -43,7 +43,7 @@ class Node {
 	vector<struct Packet *> incoming_packets;
 
 	public:
-	Node(int index, Network *network);
+	Node(int index, int clocks, Network *network);
 	~Node();
 	void set_fd(int fd);
 	int get_fd() const;

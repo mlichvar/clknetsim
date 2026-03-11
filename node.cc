@@ -20,8 +20,8 @@
 #include "protocol.h"
 #include "sysheaders.h"
 
-Node::Node(int index, Network *network) {
-	this->clocks.resize(1);
+Node::Node(int index, int node_clocks, Network *network) {
+	this->clocks.resize(node_clocks);
 	this->refclock_base = NULL;
 	this->network = network;
 	this->index = index;

@@ -56,10 +56,11 @@ double Packet_queue::get_timeout(double time) const {
 	return 1e20;
 }
 
-Network::Network(const char *socket, const char *executable,
-		 unsigned int n, unsigned int subnets, unsigned int rate) {
+Network::Network(const char *socket, const char *executable, unsigned int n,
+		 unsigned int subnets, unsigned node_clocks, unsigned int rate) {
        	time = 0.0;
 	this->subnets = subnets;
+	this->node_clocks = node_clocks;
 	socket_name = socket;
 	update_executable = executable;
 	update_rate = rate;
@@ -72,9 +73,11 @@ Network::Network(const char *socket, const char *executable,
 	assert(n > 0);
 
 	while (nodes.size() < n)
-		nodes.push_back(new Node(nodes.size(), this));
+		nodes.push_back(new Node(nodes.size(), this->node_clocks, this));
 
 	stats.resize(n);
+	for (unsigned int i = 0; i < n; i++)
+		stats[i].resize(node_clocks);
 	link_delays.resize(n * n);
 	link_corrections.resize(n * n);
 }
@@ -199,7 +202,7 @@ void Network::set_link_correction_generator(unsigned int from, unsigned int to, 
 }
 
 bool Network::run(double time_limit) {
-	int i, n = nodes.size(), waiting;
+	unsigned int i, j, n = nodes.size(), waiting;
 	bool pending_update;
 	double min_timeout, timeout, next_update;
 
@@ -208,7 +211,7 @@ bool Network::run(double time_limit) {
 			if (nodes[i]->waiting())
 				waiting++;
 			else 
-				stats[i].update_wakeup_stats();
+				stats[i][0].update_wakeup_stats();
 
 		while (waiting < n) {
 			for (i = 0; i < n; i++) {
@@ -252,7 +255,8 @@ bool Network::run(double time_limit) {
 				time += min_timeout;
 
 			for (i = 0; i < n; i++)
-				nodes[i]->get_clock(0)->advance(min_timeout);
+				for (j = 0; j < node_clocks; j++)
+					nodes[i]->get_clock(j)->advance(min_timeout);
 
 			if (pending_update)
 				update();
@@ -264,7 +268,7 @@ bool Network::run(double time_limit) {
 		while (packet_queue.get_timeout(time) <= 0) {
 			assert(packet_queue.get_timeout(time) > -1e-10);
 			struct Packet *packet = packet_queue.dequeue();
-			stats[packet->to].update_packet_stats(true, time, packet->delay);
+			stats[packet->to][0].update_packet_stats(true, time, packet->delay);
 			nodes[packet->to]->receive(packet);
 		}
 	}
@@ -273,13 +277,14 @@ bool Network::run(double time_limit) {
 }
 
 void Network::update() {
-	int i, n = nodes.size();
+	unsigned int i, j, n = nodes.size();
 
 	update_count++;
 	update_count %= update_rate;
 
 	for (i = 0; i < n; i++) {
-		nodes[i]->get_clock(0)->update(update_count == 0);
+		for (j = 0; j < node_clocks; j++)
+			nodes[i]->get_clock(j)->update(update_count == 0);
 		nodes[i]->get_refclock()->update(time, nodes[i]->get_clock(0));
 	}
 
@@ -300,28 +305,35 @@ void Network::update() {
 }
 
 void Network::update_clock_stats() {
-	int i, n = nodes.size();
+	unsigned int i, j, n = nodes.size();
 
 	if (offset_log) {
 		for (i = 0; i < n; i++)
-			fprintf(offset_log, "%.9f%c", nodes[i]->get_clock(0)->get_real_time() - time,
-				i + 1 < n ? '\t' : '\n');
+			for (j = 0; j < node_clocks; j++)
+				fprintf(offset_log, "%.9f%c",
+					nodes[i]->get_clock(j)->get_real_time() - time,
+					i + 1 < n || j + 1 < node_clocks ? '\t' : '\n');
 	}
 	if (freq_log) {
 		for (i = 0; i < n; i++)
-			fprintf(freq_log, "%e%c", nodes[i]->get_clock(0)->get_total_freq() - 1.0,
-				i + 1 < n ? '\t' : '\n');
+			for (j = 0; j < node_clocks; j++)
+				fprintf(freq_log, "%e%c",
+					nodes[i]->get_clock(j)->get_total_freq() - 1.0,
+					i + 1 < n || j + 1 < node_clocks ? '\t' : '\n');
 	}
 	if (rawfreq_log) {
 		for (i = 0; i < n; i++)
-			fprintf(rawfreq_log, "%e%c", nodes[i]->get_clock(0)->get_raw_freq() - 1.0,
-				i + 1 < n ? '\t' : '\n');
+			for (j = 0; j < node_clocks; j++)
+				fprintf(rawfreq_log, "%e%c",
+					nodes[i]->get_clock(j)->get_raw_freq() - 1.0,
+					i + 1 < n || j + 1 < node_clocks ? '\t' : '\n');
 	}
 
 	for (i = 0; i < n; i++)
-		stats[i].update_clock_stats(nodes[i]->get_clock(0)->get_real_time() - time,
-				nodes[i]->get_clock(0)->get_total_freq() - 1.0,
-				nodes[i]->get_clock(0)->get_raw_freq() - 1.0);
+		for (j = 0; j < node_clocks; j++)
+			stats[i][j].update_clock_stats(nodes[i]->get_clock(j)->get_real_time() - time,
+						       nodes[i]->get_clock(j)->get_total_freq() - 1.0,
+						       nodes[i]->get_clock(j)->get_raw_freq() - 1.0);
 }
 
 void Network::write_correction(struct Packet *packet, double correction) {
@@ -358,32 +370,42 @@ void Network::open_packet_log(const char *log) {
 }
 
 void Network::print_stats(int verbosity) const {
-	int i, n = nodes.size();
+	unsigned int i, j, n = nodes.size();
 
 	if (verbosity <= 0)
 		return;
 
 	for (i = 0; i < n; i++) {
-		if (verbosity > 1)
-			printf("\n---------------------- Node %d ----------------------\n\n", i + 1);
-		stats[i].print(verbosity);
+		for (j = 0; j < node_clocks; j++) {
+			if (verbosity > 1) {
+				if (j == 0)
+					printf("\n---------------------- Node %d ----------------------\n\n",
+					       i + 1);
+				else
+					printf("\n---------------- Node %d - clock %d ------------------\n\n",
+					       i + 1, j + 1);
+			}
+			stats[i][j].print(verbosity);
+		}
 	}
 	if (verbosity == 1)
 		printf("\n");
 }
 
 void Network::reset_stats() {
-	int i, n = nodes.size();
+	unsigned int i, j, n = nodes.size();
 
 	for (i = 0; i < n; i++)
-		stats[i].reset();
+		for (j = 0; j < node_clocks; j++)
+			stats[i][j].reset();
 }
 
 void Network::reset_clock_stats() {
-	int i, n = nodes.size();
+	unsigned int i, j, n = nodes.size();
 
 	for (i = 0; i < n; i++)
-		stats[i].reset_clock_stats();
+		for (j = 0; j < node_clocks; j++)
+			stats[i][j].reset_clock_stats();
 }
 
 void Network::send(struct Packet *packet) {
@@ -441,7 +463,7 @@ void Network::send(struct Packet *packet) {
 		write_correction(packet, link_corrections[i]->generate(&link_correction_variables));
 	}
 
-	stats[packet->from].update_packet_stats(false, time, delay);
+	stats[packet->from][0].update_packet_stats(false, time, delay);
 
 	if (packet_log)
 		fprintf(packet_log, "%e\t%d\t%d\t%e\t%d\t%d\t%d\t%d\t%d\n", time,

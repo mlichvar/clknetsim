@@ -123,7 +123,7 @@ void run_generator(char *expr, int num) {
 }
 
 int main(int argc, char **argv) {
-	int nodes, subnets = 1, help = 0, verbosity = 2, generate_only = 0, rate = 1;
+	int nodes, subnets = 1, node_clocks = 1, help = 0, verbosity = 2, generate_only = 0, rate = 1;
 	double limit = 10000.0, reset = 0.0;
 	const char *offset_log = NULL, *freq_log = NULL, *rawfreq_log = NULL,
 	      *packet_log = NULL, *config, *socket = "clknetsim.sock", *env, *executable = NULL;
@@ -211,7 +211,7 @@ int main(int argc, char **argv) {
 		return 0;
 	}
 
-	network = new Network(socket, executable, nodes, subnets, rate);
+	network = new Network(socket, executable, nodes, subnets, node_clocks, rate);
 	
 	if (offset_log)
 		network->open_offset_log(offset_log);
