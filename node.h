@@ -28,7 +28,7 @@ using namespace std;
 class Network;
 
 class Node {
-	Clock clock;
+	vector<Clock> clocks;
 	Refclock refclock;
 	Clock *refclock_base;
 	Network *network;
