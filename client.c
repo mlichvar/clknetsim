@@ -214,6 +214,8 @@ static double network_time = 0.0;
 static double freq_error = 0.0;
 static int local_time_valid = 0;
 
+static long system_tick;
+static long system_scaled_ppm_per_tick;
 static time_t system_time_offset = 1262304000; /* 2010-01-01 0:00 UTC */
 static time_t system_mono_offset = 0;
 
@@ -316,6 +318,7 @@ static void init(void) {
 	struct Reply_register rep;
 	const char *env;
 	char command[64];
+	long hz;
 	FILE *f;
 
 	if (initializing || initialized)
@@ -324,6 +327,11 @@ static void init(void) {
 	initializing = 1;
 
 	init_symbols();
+
+	hz = sysconf(_SC_CLK_TCK);
+	assert(hz > 0);
+	system_tick = (1000000 + hz / 2) / hz;
+	system_scaled_ppm_per_tick = 65536 * hz;
 
 	env = getenv("CLKNETSIM_START_DATE");
 	if (env)
@@ -1157,8 +1165,45 @@ int clock_settime(clockid_t which_clock, const struct timespec *tp) {
 }
 
 int adjtimex(struct timex *buf) {
+	return clock_adjtime(CLOCK_REALTIME, buf);
+}
+
+int ntp_adjtime(struct timex *buf) {
+	return clock_adjtime(CLOCK_REALTIME, buf);
+}
+
+static void convert_timex_to_ticks(struct timex *tx) {
+	if (tx->modes & ADJ_FREQUENCY && !(tx->modes & ADJ_TICK))
+		tx->tick = system_tick, tx->modes |= ADJ_TICK;
+
+	tx->tick += tx->freq / system_scaled_ppm_per_tick;
+	tx->freq = tx->freq % system_scaled_ppm_per_tick;
+}
+
+static void convert_timex_from_ticks(struct timex *tx) {
+	tx->freq += (tx->tick - system_tick) * system_scaled_ppm_per_tick;
+	tx->tick = system_tick;
+}
+
+int clock_adjtime(clockid_t id, struct timex *buf) {
 	struct Request_adjtimex req;
 	struct Reply_adjtimex rep;
+
+	assert(id == CLOCK_REALTIME || id == SYSCLK_CLOCKID || id == REFCLK_ID);
+
+	if (id == REFCLK_ID) {
+		if (buf->modes) {
+			errno = EINVAL;
+			return -1;
+		}
+
+		memset(buf, 0, sizeof (*buf));
+		return 0;
+	}
+
+	/* allow larger frequency adjustment of PTP clocks by setting ticks */
+	if (id != CLOCK_REALTIME)
+		convert_timex_to_ticks(buf);
 
 	if (buf->modes & ADJ_SETOFFSET)
 		local_time_valid = 0;
@@ -1185,54 +1230,14 @@ int adjtimex(struct timex *buf) {
 
 	make_request(REQ_ADJTIMEX, &req, sizeof (req), &rep, sizeof (rep));
 	*buf = rep.timex;
+
+	if (id != CLOCK_REALTIME)
+		convert_timex_from_ticks(buf);
 	
 	if (rep.ret < 0)
 		errno = EINVAL;
 
 	return rep.ret;
-}
-
-int ntp_adjtime(struct timex *buf) {
-	return adjtimex(buf);
-}
-
-int clock_adjtime(clockid_t id, struct timex *tx) {
-	assert(id == CLOCK_REALTIME || id == SYSCLK_CLOCKID || id == REFCLK_ID);
-
-	if (id == SYSCLK_CLOCKID) {
-		/* allow large frequency adjustment by setting ticks */
-
-		long hz, base_tick, scaled_ppm_per_tick;
-		int r;
-
-		hz = sysconf(_SC_CLK_TCK);
-		assert(hz > 0);
-		base_tick = (1000000 + hz / 2) / hz;
-		scaled_ppm_per_tick = 65536 * hz;
-
-		if (tx->modes & ADJ_FREQUENCY && !(tx->modes & ADJ_TICK))
-			tx->tick = base_tick, tx->modes |= ADJ_TICK;
-
-		tx->tick += tx->freq / scaled_ppm_per_tick;
-		tx->freq = tx->freq % scaled_ppm_per_tick;
-
-		r = adjtimex(tx);
-
-		tx->freq += (tx->tick - base_tick) * scaled_ppm_per_tick;
-		tx->tick = base_tick;
-
-		return r;
-	} else if (id == REFCLK_ID) {
-		if (tx->modes) {
-			errno = EINVAL;
-			return -1;
-		}
-
-		memset(tx, 0, sizeof (*tx));
-		return 0;
-	}
-
-	return adjtimex(tx);
 }
 
 int adjtime(const struct timeval *delta, struct timeval *olddelta) {
