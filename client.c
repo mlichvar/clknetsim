@@ -215,7 +215,7 @@ static double freq_error = 0.0;
 static int local_time_valid = 0;
 
 static time_t system_time_offset = 1262304000; /* 2010-01-01 0:00 UTC */
-static time_t system_mono_offset; /* random */
+static time_t system_mono_offset = 0;
 
 #define TIMER_TYPE_SIGNAL 1
 #define TIMER_TYPE_FD 2
@@ -329,6 +329,10 @@ static void init(void) {
 	if (env)
 		system_time_offset = atoll(env);
 
+	env = getenv("CLKNETSIM_START_MONO");
+	if (env)
+		system_mono_offset = atoll(env);
+
 	env = getenv("CLKNETSIM_RANDOM_SEED");
 	if (env)
 		random_seed = atoi(env);
@@ -441,8 +445,6 @@ static void init(void) {
 
 	/* this requires the node variable to be already set */
 	srandom(0);
-
-	system_mono_offset = random() % 100000000;
 
 	initializing = 0;
 	initialized = 1;
