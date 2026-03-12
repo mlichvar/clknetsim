@@ -50,7 +50,7 @@ class Node {
 	void set_start_time(double time);
 	bool process_fd();
 	void reply(void *data, int len, int request);
-	void process_gettime();
+	void process_gettime(Request_gettime *req);
 	void process_settime(Request_settime *req);
 	void process_adjtimex(Request_adjtimex *req);
 	void process_adjtime(Request_adjtime *req);

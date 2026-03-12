@@ -45,6 +45,10 @@ struct Reply_register {
 	unsigned int subnets;
 };
 
+struct Request_gettime {
+	unsigned int clock;
+};
+
 struct Reply_gettime {
 	double real_time;
 	double monotonic_time;
@@ -54,10 +58,13 @@ struct Reply_gettime {
 };
 
 struct Request_settime {
+	unsigned int clock;
 	double time;
 };
 
 struct Request_adjtimex {
+	unsigned int clock;
+	int _pad;
 	struct timex timex;
 };
 
@@ -141,6 +148,7 @@ struct Reply_getrefoffsets {
 
 union Request_data {
 	struct Request_register _register;
+	struct Request_gettime gettime;
 	struct Request_settime settime;
 	struct Request_adjtimex adjtimex;
 	struct Request_adjtime adjtime;

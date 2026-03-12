@@ -520,15 +520,17 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 }
 
 static void fetch_time(void) {
-	struct Reply_gettime r;
+	struct Request_gettime req;
+	struct Reply_gettime rep;
 
 	if (!local_time_valid) {
-		make_request(REQ_GETTIME, NULL, 0, &r, sizeof (r));
-		real_time = r.real_time;
-		monotonic_time = r.monotonic_time;
-		raw_time = r.raw_time;
-		network_time = r.network_time;
-		freq_error = r.freq_error;
+		req.clock = 0;
+		make_request(REQ_GETTIME, &req, sizeof (req), &rep, sizeof (rep));
+		real_time = rep.real_time;
+		monotonic_time = rep.monotonic_time;
+		raw_time = rep.raw_time;
+		network_time = rep.network_time;
+		freq_error = rep.freq_error;
 		local_time_valid = 1;
 	}
 }
@@ -569,6 +571,7 @@ static double get_rtc_time(void) {
 static void settime(double time) {
 	struct Request_settime req;
 
+	req.clock = 0;
 	req.time = time;
 	make_request(REQ_SETTIME, &req, sizeof (req), NULL, 0);
 
@@ -1157,6 +1160,7 @@ int adjtimex(struct timex *buf) {
 		local_time_valid = 0;
 
 	memset(&req, 0, sizeof (req));
+	req.clock = 0;
 	req.timex.modes = buf->modes;
 	if (buf->modes & ADJ_FREQUENCY)
 		req.timex.freq = buf->freq;

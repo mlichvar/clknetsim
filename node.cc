@@ -82,8 +82,8 @@ bool Node::process_fd() {
 
 	switch (pending_request) {
 		case REQ_GETTIME:
-			assert(reqlen == 0);
-			process_gettime();
+			assert(reqlen == sizeof (Request_gettime));
+			process_gettime(&request.data.gettime);
 			break;
 		case REQ_SETTIME:
 			assert(reqlen == sizeof (Request_settime));
@@ -144,19 +144,23 @@ void Node::reply(void *data, int len, int request) {
 }
 
 
-void Node::process_gettime() {
+void Node::process_gettime(Request_gettime *req) {
 	Reply_gettime r;
 
-	r.real_time = clocks[0].get_real_time();
-	r.monotonic_time = clocks[0].get_monotonic_time();
-	r.raw_time = clocks[0].get_raw_time();
+	assert(req->clock < clocks.size());
+
+	r.real_time = clocks[req->clock].get_real_time();
+	r.monotonic_time = clocks[req->clock].get_monotonic_time();
+	r.raw_time = clocks[req->clock].get_raw_time();
 	r.network_time = network->get_time();
-	r.freq_error = clocks[0].get_total_freq() - 1.0;
+	r.freq_error = clocks[req->clock].get_total_freq() - 1.0;
 	reply(&r, sizeof (r), REQ_GETTIME);
 }
 
 void Node::process_settime(Request_settime *req) {
-	clocks[0].set_time(req->time);
+	assert(req->clock < clocks.size());
+
+	clocks[req->clock].set_time(req->time);
 	reply(NULL, 0, REQ_SETTIME);
 }
 
@@ -164,7 +168,9 @@ void Node::process_adjtimex(Request_adjtimex *req) {
 	Reply_adjtimex rep;
 	struct timex *buf = &req->timex;
 
-	rep.ret = clocks[0].adjtimex(buf);
+	assert(req->clock < clocks.size());
+
+	rep.ret = clocks[req->clock].adjtimex(buf);
 	rep.timex = *buf;
 	rep._pad = 0;
 	reply(&rep, sizeof (rep), REQ_ADJTIMEX);
