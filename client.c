@@ -90,14 +90,18 @@
 #define PTP_PRIMARY_MCAST_ADDR6 "\xff\x0e\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x81"
 #define PTP_PDELAY_MCAST_ADDR6 "\xff\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x6b"
 
+#define CLOCKID_FROM_FD(fd) ((clockid_t)(((unsigned int)~(fd) << 3) | 3))
 #define REFCLK_FD 1000
-#define REFCLK_ID ((clockid_t)(((unsigned int)~REFCLK_FD << 3) | 3))
-#define REFCLK_PHC_INDEX 0
-#define SYSCLK_FD 1001
-#define SYSCLK_CLOCKID ((clockid_t)(((unsigned int)~SYSCLK_FD << 3) | 3))
-#define SYSCLK_PHC_INDEX 1
-#define PPS_FD 1002
-#define RTC_FD 1003
+#define REFCLK_ID CLOCKID_FROM_FD(REFCLK_FD)
+#define REFCLK_DEFAULT_PHC_INDEX 0
+
+#define MAX_CLOCKS 7
+#define BASE_CLOCK_FD 1001
+#define CLK_MAIN_INDEX 0
+#define CLK_MAIN_DEFAULT_PHC_INDEX 1
+
+#define PPS_FD 1008
+#define RTC_FD 1009
 #define URANDOM_FD 1010
 #define UNIX_DIR_FD 1011
 
@@ -207,12 +211,22 @@ static struct socket sockets[MAX_SOCKETS];
 static int subnets;
 static int unix_subnet = -1;
 
-static double real_time = 0.0;
-static double monotonic_time = 0.0;
-static double raw_time = 0.0;
-static double network_time = 0.0;
-static double freq_error = 0.0;
-static int local_time_valid = 0;
+struct clock {
+	clockid_t id;
+	int fd;
+	int phc_index;
+	int subnet;
+
+	int valid_time;
+	double real_time;
+	double monotonic_time;
+	double raw_time;
+	double freq_error;
+};
+
+static struct clock clocks[MAX_CLOCKS];
+static int num_clocks;
+static double network_time;
 
 static long system_tick;
 static long system_scaled_ppm_per_tick;
@@ -333,6 +347,28 @@ static void init(void) {
 	system_tick = (1000000 + hz / 2) / hz;
 	system_scaled_ppm_per_tick = 65536 * hz;
 
+	env = getenv("CLKNETSIM_PHC_SWAP");
+	if (env)
+		phc_swap = atoi(env);
+
+	for (i = 0; i < MAX_CLOCKS; i++) {
+		clocks[i].id = -1;
+		clocks[i].fd = -1;
+		clocks[i].phc_index = -1;
+		clocks[i].subnet = -1;
+	}
+
+	assert(CLK_MAIN_INDEX == 0);
+	clocks[CLK_MAIN_INDEX].fd = BASE_CLOCK_FD + CLK_MAIN_INDEX;
+	clocks[CLK_MAIN_INDEX].phc_index = phc_swap ?
+		REFCLK_DEFAULT_PHC_INDEX : CLK_MAIN_DEFAULT_PHC_INDEX;
+	num_clocks = 1;
+
+	for (i = 0; i < num_clocks; i++) {
+		if (clocks[i].id == -1)
+			clocks[i].id = CLOCKID_FROM_FD(clocks[i].fd);
+	}
+
 	env = getenv("CLKNETSIM_START_DATE");
 	if (env)
 		system_time_offset = atoll(env);
@@ -380,10 +416,6 @@ static void init(void) {
 	env = getenv("CLKNETSIM_PHC_JITTER_ON");
 	if (env)
 		phc_jitter_on = atoi(env);
-
-	env = getenv("CLKNETSIM_PHC_SWAP");
-	if (env)
-		phc_swap = atoi(env);
 
 	env = getenv("CLKNETSIM_RTC_OFFSET");
 	if (env)
@@ -461,7 +493,7 @@ static void init(void) {
 	make_request(REQ_REGISTER, &req, sizeof (req), &rep, sizeof (rep));
 
 	subnets = rep.subnets;
-	if (rep.clocks != 1) {
+	if (rep.clocks != num_clocks) {
 		fprintf(stderr, "clknetsim: unexpected number of clocks.\n");
 		exit(1);
 	}
@@ -531,35 +563,82 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 	}
 }
 
-static void fetch_time(void) {
+static int find_clock_by_id(clockid_t id) {
+	int i;
+
+	if (id == CLOCK_REALTIME)
+		return CLK_MAIN_INDEX;
+
+	for (i = 0; i < num_clocks; i++) {
+		if (clocks[i].id == id)
+			return i;
+	}
+
+	return -1;
+}
+
+static int find_clock_by_fd(int fd) {
+	int i;
+
+	for (i = 0; i < num_clocks; i++) {
+		if (clocks[i].fd == fd)
+			return i;
+	}
+
+	return -1;
+}
+
+static int find_clock_by_phc(int index) {
+	int i;
+
+	for (i = 0; i < num_clocks; i++) {
+		if (clocks[i].phc_index == index)
+			return i;
+	}
+
+	return -1;
+}
+
+static int find_clock_by_subnet(int subnet) {
+	int i;
+
+	for (i = 0; i < num_clocks; i++) {
+		if (clocks[i].subnet == subnet)
+			return i;
+	}
+
+	return -1;
+}
+
+static void fetch_time(int clock) {
 	struct Request_gettime req;
 	struct Reply_gettime rep;
 
-	if (!local_time_valid) {
-		req.clock = 0;
+	if (!clocks[clock].valid_time) {
+		req.clock = clock;
 		make_request(REQ_GETTIME, &req, sizeof (req), &rep, sizeof (rep));
-		real_time = rep.real_time;
-		monotonic_time = rep.monotonic_time;
-		raw_time = rep.raw_time;
+		clocks[clock].real_time = rep.real_time;
+		clocks[clock].monotonic_time = rep.monotonic_time;
+		clocks[clock].raw_time = rep.raw_time;
 		network_time = rep.network_time;
-		freq_error = rep.freq_error;
-		local_time_valid = 1;
+		clocks[clock].freq_error = rep.freq_error;
+		clocks[clock].valid_time = 1;
 	}
 }
 
-static double get_real_time(void) {
-	fetch_time();
-	return real_time;
+static double get_real_time(int clock) {
+	fetch_time(clock);
+	return clocks[clock].real_time;
 }
 
-static double get_monotonic_time(void) {
-	fetch_time();
-	return monotonic_time;
+static double get_monotonic_time(int clock) {
+	fetch_time(clock);
+	return clocks[clock].monotonic_time;
 }
 
-static double get_raw_time(void) {
-	fetch_time();
-	return raw_time;
+static double get_raw_time(int clock) {
+	fetch_time(clock);
+	return clocks[clock].raw_time;
 }
 
 static double get_refclock_offset(void) {
@@ -572,22 +651,22 @@ static double get_refclock_offset(void) {
 }
 
 static double get_refclock_time(void) {
-	fetch_time();
+	fetch_time(CLK_MAIN_INDEX);
 	return network_time - get_refclock_offset();
 }
 
 static double get_rtc_time(void) {
-	return get_monotonic_time() + rtc_offset;
+	return get_monotonic_time(CLK_MAIN_INDEX) + rtc_offset;
 }
 
-static void settime(double time) {
+static void settime(int clock, double time) {
 	struct Request_settime req;
 
-	req.clock = 0;
+	req.clock = clock;
 	req.time = time;
 	make_request(REQ_SETTIME, &req, sizeof (req), NULL, 0);
 
-	local_time_valid = 0;
+	clocks[clock].valid_time = 0;
 }
 
 static void fill_refclock_sample(void) {
@@ -610,7 +689,7 @@ static void fill_refclock_sample(void) {
 			receive_time = r.time;
 		} else {
 			clock_time = get_refclock_time();
-			receive_time = get_real_time();
+			receive_time = get_real_time(CLK_MAIN_INDEX);
 		}
 
 		round_corr = (clock_time * 1e6 - floor(clock_time * 1e6) + 0.5) / 1e6;
@@ -956,7 +1035,7 @@ static double get_phc_delay(int dir) {
 	if (count >= phc_jitter_on + phc_jitter_off)
 		count = 0;
 
-	return (delay + phc_delay / 2.0) * (freq_error + 1.0);
+	return (delay + phc_delay / 2.0) * (clocks[CLK_MAIN_INDEX].freq_error + 1.0);
 }
 
 static int generate_eth_frame(unsigned int type, unsigned int subnet, unsigned int from,
@@ -1069,7 +1148,7 @@ int gettimeofday(struct timeval *tv,
 		 ) {
 	double time;
 
-	time = get_real_time() + 0.5e-6;
+	time = get_real_time(CLK_MAIN_INDEX) + 0.5e-6;
 
 	time_to_timeval(time, tv);
 	tv->tv_sec += system_time_offset;
@@ -1084,6 +1163,7 @@ int gettimeofday(struct timeval *tv,
 int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 	time_t offset = 0;
 	double time;
+	int clock;
 
 	/* try to allow reading of the clock from other constructors, but
 	   prevent a recursive call (e.g. due to a special memory allocator) */
@@ -1096,17 +1176,16 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 	switch (which_clock) {
 		case CLOCK_REALTIME:
 		case CLOCK_REALTIME_COARSE:
-		case SYSCLK_CLOCKID:
-			time = get_real_time();
+			time = get_real_time(CLK_MAIN_INDEX);
 			offset = system_time_offset;
 			break;
 		case CLOCK_MONOTONIC:
 		case CLOCK_MONOTONIC_COARSE:
-			time = get_monotonic_time();
+			time = get_monotonic_time(CLK_MAIN_INDEX);
 			offset = system_mono_offset;
 			break;
 		case CLOCK_MONOTONIC_RAW:
-			time = get_raw_time();
+			time = get_raw_time(CLK_MAIN_INDEX);
 			offset = system_mono_offset;
 			break;
 		case REFCLK_ID:
@@ -1114,7 +1193,14 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 			offset = system_time_offset;
 			break;
 		default:
-			assert(0);
+			clock = find_clock_by_id(which_clock);
+			if (clock < 0) {
+				errno = EINVAL;
+				return -1;
+			}
+			time = get_real_time(clock);
+			offset = system_time_offset;
+			break;
 	}
 
 	time += 0.5e-9;
@@ -1136,7 +1222,7 @@ int clock_gettime(clockid_t which_clock, struct timespec *tp) {
 time_t time(time_t *t) {
 	time_t time;
 
-	time = floor(get_real_time());
+	time = floor(get_real_time(CLK_MAIN_INDEX));
 	time += system_time_offset;
 	if (t)
 		*t = time;
@@ -1153,14 +1239,14 @@ int settimeofday(const struct timeval *tv, const struct timezone *tz) {
 }
 
 int clock_settime(clockid_t which_clock, const struct timespec *tp) {
-	assert(which_clock == CLOCK_REALTIME);
+	int clock = find_clock_by_id(which_clock);
 
-	if (tp->tv_sec < 0 || tp->tv_sec > ((1LLU << 63) / 1000000000)) {
+	if (clock < 0 || tp->tv_sec < 0 || tp->tv_sec > ((1LLU << 63) / 1000000000)) {
 		errno = EINVAL;
 		return -1;
 	}
 
-	settime(timespec_to_time(tp, -system_time_offset));
+	settime(clock, timespec_to_time(tp, -system_time_offset));
 	return 0;
 }
 
@@ -1187,10 +1273,9 @@ static void convert_timex_from_ticks(struct timex *tx) {
 }
 
 int clock_adjtime(clockid_t id, struct timex *buf) {
+	int clock = find_clock_by_id(id);
 	struct Request_adjtimex req;
 	struct Reply_adjtimex rep;
-
-	assert(id == CLOCK_REALTIME || id == SYSCLK_CLOCKID || id == REFCLK_ID);
 
 	if (id == REFCLK_ID) {
 		if (buf->modes) {
@@ -1202,8 +1287,13 @@ int clock_adjtime(clockid_t id, struct timex *buf) {
 		return 0;
 	}
 
+	if (clock < 0) {
+		errno = EINVAL;
+		return -1;
+	}
+
 	/* allow larger frequency adjustment of PTP clocks by setting ticks */
-	if (id != CLOCK_REALTIME) {
+	if (id != CLOCK_REALTIME && clocks[clock].phc_index >= 0) {
 		if (buf->modes & ADJ_TICK) {
 			errno = EINVAL;
 			return -1;
@@ -1212,10 +1302,10 @@ int clock_adjtime(clockid_t id, struct timex *buf) {
 	}
 
 	if (buf->modes & ADJ_SETOFFSET)
-		local_time_valid = 0;
+		clocks[clock].valid_time = 0;
 
 	memset(&req, 0, sizeof (req));
-	req.clock = 0;
+	req.clock = clock;
 	req.timex.modes = buf->modes;
 	if (buf->modes & ADJ_FREQUENCY)
 		req.timex.freq = buf->freq;
@@ -1237,7 +1327,7 @@ int clock_adjtime(clockid_t id, struct timex *buf) {
 	make_request(REQ_ADJTIMEX, &req, sizeof (req), &rep, sizeof (rep));
 	*buf = rep.timex;
 
-	if (id != CLOCK_REALTIME)
+	if (id != CLOCK_REALTIME && clocks[clock].phc_index >= 0)
 		convert_timex_from_ticks(buf);
 	
 	if (rep.ret < 0)
@@ -1271,7 +1361,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 	struct Request_select req;
 	struct Reply_select rep;
 	int i, timer, s, recv_fd = -1;
-	double elapsed = 0.0;
+	double monotonic_time, elapsed = 0.0;
 
 	req.read = 0;
 	req._pad = 0;
@@ -1344,13 +1434,14 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struc
 
 	assert(timeout || timer >= 0 || find_recv_socket(NULL) >= 0);
 
-	fetch_time();
+	fetch_time(CLK_MAIN_INDEX);
 
 	if (timeout)
 		req.timeout = timeout->tv_sec + (timeout->tv_usec + 1) / 1e6;
 	else
 		req.timeout = 1e20;
 
+	monotonic_time = clocks[CLK_MAIN_INDEX].monotonic_time;
 try_again:
 	if (timer >= 0 && timers[timer].timeout <= monotonic_time) {
 		/* avoid unnecessary requests */
@@ -1364,12 +1455,15 @@ try_again:
 		elapsed += rep.time.monotonic_time - monotonic_time;
 		req.timeout -= rep.time.monotonic_time - monotonic_time;
 
-		real_time = rep.time.real_time;
+		clocks[CLK_MAIN_INDEX].real_time = rep.time.real_time;
+		clocks[CLK_MAIN_INDEX].monotonic_time = rep.time.monotonic_time;
 		monotonic_time = rep.time.monotonic_time;
-		raw_time = rep.time.raw_time;
+		clocks[CLK_MAIN_INDEX].raw_time = rep.time.raw_time;
 		network_time = rep.time.network_time;
-		freq_error = rep.time.freq_error;
-		local_time_valid = 1;
+		clocks[CLK_MAIN_INDEX].freq_error = rep.time.freq_error;
+
+		for (i = 0; i < num_clocks; i++)
+			clocks[i].valid_time = i == CLK_MAIN_INDEX;
 
 		fill_refclock_sample();
 
@@ -1666,7 +1760,7 @@ int mkdirat(int dirfd, const char *pathname, mode_t mode) {
 }
 
 int open(const char *pathname, int flags, ...) {
-	int r, mode_arg = 0;
+	int r, index, clock, mode_arg = 0;
 	mode_t mode = 0;
 	va_list ap;
 
@@ -1678,12 +1772,18 @@ int open(const char *pathname, int flags, ...) {
 		va_end(ap);
 	}
 
-	assert(REFCLK_PHC_INDEX == 0 && SYSCLK_PHC_INDEX == 1);
-	if (!strcmp(pathname, "/dev/ptp0"))
-		return phc_swap ? SYSCLK_FD : REFCLK_FD;
-	else if (!strcmp(pathname, "/dev/ptp1"))
-		return phc_swap ? REFCLK_FD : SYSCLK_FD;
-	else if (!strcmp(pathname, "/dev/pps0"))
+	if (!strncmp(pathname, "/dev/ptp", 8)) {
+		index = atoi(pathname + 8);
+		if ((index == CLK_MAIN_DEFAULT_PHC_INDEX && phc_swap) ||
+		    (index == REFCLK_DEFAULT_PHC_INDEX && !phc_swap))
+			return REFCLK_FD;
+		clock = find_clock_by_phc(index);
+		if (clock < 0) {
+			errno = ENOENT;
+			return -1;
+		}
+		return clocks[clock].fd;
+	} else if (!strcmp(pathname, "/dev/pps0"))
 		return pps_fds++, PPS_FD;
 	else if (!strcmp(pathname, "/dev/rtc"))
 		return RTC_FD;
@@ -1759,11 +1859,12 @@ ssize_t __read_chk(int fd, void *buf, size_t count, size_t buflen) {
 int close(int fd) {
 	int t, s;
 
-	if (fd == REFCLK_FD || fd == SYSCLK_FD || fd == RTC_FD || fd == URANDOM_FD ||
-	    fd == UNIX_DIR_FD) {
+	if (fd == REFCLK_FD || fd == RTC_FD || fd == URANDOM_FD || fd == UNIX_DIR_FD) {
 		return 0;
 	} else if (fd == PPS_FD) {
 		pps_fds--;
+		return 0;
+	} else if (find_clock_by_fd(fd) >= 0) {
 		return 0;
 	} else if ((t = get_timer_from_fd(fd)) >= 0) {
 		return timer_delete_(get_timerid(t));
@@ -2115,10 +2216,11 @@ int fstat(int fd, struct stat *statbuf) {
 	if (fd == URANDOM_FD)
 		return stat("/dev/urandom", statbuf);
 
-	if (fd == REFCLK_FD || fd == SYSCLK_FD) {
+	if (fd == REFCLK_FD || find_clock_by_fd(fd) >= 0) {
 		memset(statbuf, 0, sizeof (*statbuf));
 		statbuf->st_mode = S_IFCHR | 0660;
-		statbuf->st_rdev = makedev(247, fd == REFCLK_FD ? 0 : 1);
+		statbuf->st_rdev = makedev(247, fd == REFCLK_FD ? REFCLK_DEFAULT_PHC_INDEX :
+					   clocks[find_clock_by_fd(fd)].phc_index);
 		return 0;
 	}
 
@@ -2174,6 +2276,7 @@ int fchmod(int fd, mode_t mode) {
 
 int ioctl(int fd, unsigned long request, ...) {
 	int i, j, n, subnet, ret = 0, s = get_socket_from_fd(fd);
+	int clock = find_clock_by_fd(fd);
 	va_list ap;
 	struct ifconf *conf;
 	struct ifreq *req;
@@ -2253,8 +2356,11 @@ int ioctl(int fd, unsigned long request, ...) {
 			struct ethtool_ts_info *info;
 			info = (struct ethtool_ts_info *)req->ifr_data;
 			memset(info, 0, sizeof (*info));
-			if (get_network_from_iface(req->ifr_name) >= 0) {
-				info->phc_index = timestamping > 1 ? REFCLK_PHC_INDEX : SYSCLK_PHC_INDEX;
+			if ((subnet = get_network_from_iface(req->ifr_name)) >= 0) {
+				i = find_clock_by_subnet(subnet);
+				info->phc_index = timestamping > 1 ?
+					i >= 0 ? clocks[i].phc_index : REFCLK_DEFAULT_PHC_INDEX :
+					CLK_MAIN_DEFAULT_PHC_INDEX;
 				info->so_timestamping = SOF_TIMESTAMPING_SOFTWARE |
 					SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_RX_SOFTWARE |
 					SOF_TIMESTAMPING_RAW_HARDWARE |
@@ -2267,20 +2373,22 @@ int ioctl(int fd, unsigned long request, ...) {
 		} else
 			ret = -1, errno = EINVAL;
 #ifdef PTP_CLOCK_GETCAPS
-	} else if (request == PTP_CLOCK_GETCAPS && (fd == REFCLK_FD || fd == SYSCLK_FD)) {
+	} else if (request == PTP_CLOCK_GETCAPS && (fd == REFCLK_FD || clock >= 0)) {
 		struct ptp_clock_caps *caps = va_arg(ap, struct ptp_clock_caps *);
 		memset(caps, 0, sizeof (*caps));
 		/* maximum frequency in 32-bit timex.freq */
 		caps->max_adj = 32767999;
 #endif
 #ifdef PTP_SYS_OFFSET
-	} else if (request == PTP_SYS_OFFSET && fd == REFCLK_FD) {
+	} else if (request == PTP_SYS_OFFSET && (fd == REFCLK_FD || clock >= 0)) {
 		struct ptp_sys_offset *sys_off = va_arg(ap, struct ptp_sys_offset *);
 		struct timespec ts, ts1, ts2;
+		clockid_t ref_id;
 		double delay;
 		int i;
 
 		precision_hack = 0;
+		ref_id = clock >= 0 ? clocks[clock].id : REFCLK_ID;
 
 		if (sys_off->n_samples > PTP_MAX_SAMPLES)
 			sys_off->n_samples = PTP_MAX_SAMPLES;
@@ -2291,7 +2399,7 @@ int ioctl(int fd, unsigned long request, ...) {
 
 		for (delay = 0.0, i = sys_off->n_samples - 1; i >= 0; i--) {
 			delay += get_phc_delay(1);
-			clock_gettime(REFCLK_ID, &ts1);
+			clock_gettime(ref_id, &ts1);
 			add_to_timespec(&ts1, -delay);
 			ts2 = ts;
 			delay += get_phc_delay(-1);
@@ -2303,20 +2411,22 @@ int ioctl(int fd, unsigned long request, ...) {
 		}
 #endif
 #ifdef PTP_SYS_OFFSET_EXTENDED
-	} else if (request == PTP_SYS_OFFSET_EXTENDED && fd == REFCLK_FD) {
+	} else if (request == PTP_SYS_OFFSET_EXTENDED && (fd == REFCLK_FD || clock >= 0)) {
 		struct ptp_sys_offset_extended *sys_off = va_arg(ap, struct ptp_sys_offset_extended *);
 		struct timespec ts, ts1, ts2;
+		clockid_t ref_id;
 		double delay;
 		int i;
 
 		precision_hack = 0;
+		ref_id = clock >= 0 ? clocks[clock].id : REFCLK_ID;
 
 		if (sys_off->n_samples > PTP_MAX_SAMPLES)
 			sys_off->n_samples = PTP_MAX_SAMPLES;
 
 		for (i = 0; i < sys_off->n_samples; i++) {
 			clock_gettime(CLOCK_REALTIME, &ts2);
-			clock_gettime(REFCLK_ID, &ts);
+			clock_gettime(ref_id, &ts);
 			delay = get_phc_delay(1);
 			add_to_timespec(&ts, -delay);
 			delay += get_phc_delay(-1);
@@ -2331,13 +2441,15 @@ int ioctl(int fd, unsigned long request, ...) {
 		}
 #endif
 #ifdef PTP_SYS_OFFSET_PRECISE
-	} else if (request == PTP_SYS_OFFSET_PRECISE && fd == REFCLK_FD) {
+	} else if (request == PTP_SYS_OFFSET_PRECISE && (fd == REFCLK_FD || clock >= 0)) {
 		struct ptp_sys_offset_precise *sys_off = va_arg(ap, struct ptp_sys_offset_precise *);
 		struct timespec ts;
+		clockid_t ref_id;
 
 		precision_hack = 0;
+		ref_id = clock >= 0 ? clocks[clock].id : REFCLK_ID;
 
-		clock_gettime(REFCLK_ID, &ts);
+		clock_gettime(ref_id, &ts);
 		sys_off->device.sec = ts.tv_sec;
 		sys_off->device.nsec = ts.tv_nsec;
 
@@ -2847,7 +2959,10 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 			memcpy((struct timespec *)CMSG_DATA(cmsg), &ts, sizeof (ts));
 		}
 		if (sockets[s].ts_flags & SOF_TIMESTAMPING_RAW_HARDWARE) {
-			clock_gettime(timestamping > 1 ? REFCLK_ID : CLOCK_REALTIME, &ts);
+			int clock = find_clock_by_subnet(rep.subnet);
+			clock_gettime(timestamping > 1 ?
+				      clock >= 0 ? clocks[clock].id : REFCLK_ID :
+				      CLOCK_REALTIME, &ts);
 			if (!(flags & MSG_ERRQUEUE))
 				add_to_timespec(&ts, -(8 * (msglen + 42 + 4) / (1e6 * link_speed)));
 
@@ -3009,7 +3124,7 @@ static int timer_settime_(timer_t timerid, int flags, const struct itimerspec *v
 		timers[t].expired = 0;
 		timers[t].timeout = timespec_to_time(&value->it_value, 0);
 		if (!(flags & TIMER_ABSTIME))
-			timers[t].timeout += get_monotonic_time();
+			timers[t].timeout += get_monotonic_time(CLK_MAIN_INDEX);
 		timers[t].interval = timespec_to_time(&value->it_interval, 0);
 	} else {
 		timers[t].armed = 0;
@@ -3032,7 +3147,7 @@ int timer_gettime_(timer_t timerid, struct itimerspec *value) {
 	}
 
 	if (timers[t].armed) {
-		timeout = timers[t].timeout - get_monotonic_time();
+		timeout = timers[t].timeout - get_monotonic_time(CLK_MAIN_INDEX);
 		time_to_timespec(timeout, &value->it_value);
 	} else {
 		value->it_value.tv_sec = 0;
