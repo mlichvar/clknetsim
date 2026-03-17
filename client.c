@@ -358,11 +358,44 @@ static void init(void) {
 		clocks[i].subnet = -1;
 	}
 
-	assert(CLK_MAIN_INDEX == 0);
-	clocks[CLK_MAIN_INDEX].fd = BASE_CLOCK_FD + CLK_MAIN_INDEX;
-	clocks[CLK_MAIN_INDEX].phc_index = phc_swap ?
-		REFCLK_DEFAULT_PHC_INDEX : CLK_MAIN_DEFAULT_PHC_INDEX;
-	num_clocks = 1;
+	env = getenv("CLKNETSIM_CLOCKS");
+	if (!env)
+		env = "REALTIME";
+	while (env && *env != '\0') {
+		int index;
+
+		if (num_clocks >= MAX_CLOCKS) {
+			fprintf(stderr, "clknetsim: too many clocks in CLKNETSIM_CLOCKS.\n");
+			exit(1);
+		}
+		if (strncmp(env, "REALTIME", 8) == 0) {
+			clocks[num_clocks].fd = BASE_CLOCK_FD + num_clocks;
+			clocks[num_clocks].phc_index = phc_swap ?
+				REFCLK_DEFAULT_PHC_INDEX : CLK_MAIN_DEFAULT_PHC_INDEX;
+		} else if (num_clocks == CLK_MAIN_INDEX) {
+			fprintf(stderr, "clknetsim: REALTIME must be first in CLKNETSIM_CLOCKS.\n");
+			exit(1);
+		} else if (strncmp(env, "AUX", 3) == 0) {
+			index = atoi(env + 3);
+			clocks[num_clocks].id = 16 + index;
+		} else if (strncmp(env, "ptp", 3) == 0) {
+			index = atoi(env + 3);
+			clocks[num_clocks].fd = BASE_CLOCK_FD + num_clocks;
+			clocks[num_clocks].phc_index = index;
+		} else if (strncmp(env, "eth", 3) == 0) {
+			index = atoi(env + 3);
+			clocks[num_clocks].fd = BASE_CLOCK_FD + num_clocks;
+			clocks[num_clocks].phc_index = 100 + index;
+			clocks[num_clocks].subnet = index;
+		} else {
+			fprintf(stderr, "clknetsim: invalid syntax of CLKNETSIM_CLOCKS.\n");
+			exit(1);
+		}
+		num_clocks++;
+		env = strchr(env, ',');
+		if (env)
+			env++;
+	}
 
 	for (i = 0; i < num_clocks; i++) {
 		if (clocks[i].id == -1)
