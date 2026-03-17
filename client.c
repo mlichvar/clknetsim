@@ -1173,16 +1173,17 @@ int ntp_adjtime(struct timex *buf) {
 }
 
 static void convert_timex_to_ticks(struct timex *tx) {
-	if (tx->modes & ADJ_FREQUENCY && !(tx->modes & ADJ_TICK))
-		tx->tick = system_tick, tx->modes |= ADJ_TICK;
+	if (!(tx->modes & ADJ_FREQUENCY))
+		return;
 
-	tx->tick += tx->freq / system_scaled_ppm_per_tick;
+	tx->modes |= ADJ_TICK;
+	tx->tick = system_tick + tx->freq / system_scaled_ppm_per_tick;
 	tx->freq = tx->freq % system_scaled_ppm_per_tick;
 }
 
 static void convert_timex_from_ticks(struct timex *tx) {
 	tx->freq += (tx->tick - system_tick) * system_scaled_ppm_per_tick;
-	tx->tick = system_tick;
+	tx->tick = 0;
 }
 
 int clock_adjtime(clockid_t id, struct timex *buf) {
@@ -1202,8 +1203,13 @@ int clock_adjtime(clockid_t id, struct timex *buf) {
 	}
 
 	/* allow larger frequency adjustment of PTP clocks by setting ticks */
-	if (id != CLOCK_REALTIME)
+	if (id != CLOCK_REALTIME) {
+		if (buf->modes & ADJ_TICK) {
+			errno = EINVAL;
+			return -1;
+		}
 		convert_timex_to_ticks(buf);
+	}
 
 	if (buf->modes & ADJ_SETOFFSET)
 		local_time_valid = 0;
