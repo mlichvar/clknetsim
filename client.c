@@ -197,7 +197,7 @@ struct socket {
 	int connected;
 	int broadcast;
 	int pkt_info;
-	int time_stamping;
+	int ts_flags;
 	uint32_t last_tx_id;
 	struct message last_ts_msg;
 	struct message buffer;
@@ -2043,7 +2043,7 @@ int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t
 			errno = EINVAL;
 			return -1;
 		}
-		sockets[s].time_stamping = *(int *)optval;
+		sockets[s].ts_flags = *(int *)optval;
 	}
 #endif
 
@@ -2481,10 +2481,10 @@ void freeifaddrs(struct ifaddrs *ifa) {
 }
 
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
+	int i, s = get_socket_from_fd(sockfd), ts_flags;
 	struct Request_send req;
 	struct sockaddr_un *sun;
 	struct cmsghdr *cmsg;
-	int i, s = get_socket_from_fd(sockfd), timestamping;
 
 	if (s < 0) {
 		assert(0);
@@ -2556,13 +2556,13 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 	write_pcap_packet(sockets[s].type, req.subnet, node, req.to,
 			  req.src_port, req.dst_port, req.data, req.len);
 
-	timestamping = sockets[s].time_stamping;
+	ts_flags = sockets[s].ts_flags;
 	for (cmsg = CMSG_FIRSTHDR(msg); cmsg; cmsg = CMSG_NXTHDR((struct msghdr *)msg, cmsg)) {
 		if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_TIMESTAMPING)
-			memcpy(&timestamping, CMSG_DATA(cmsg), sizeof (timestamping));
+			memcpy(&ts_flags, CMSG_DATA(cmsg), sizeof (ts_flags));
 	}
 
-	if (timestamping & (SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_TX_HARDWARE)) {
+	if (ts_flags & (SOF_TIMESTAMPING_TX_SOFTWARE | SOF_TIMESTAMPING_TX_HARDWARE)) {
 		struct message *last_ts_msg = &sockets[s].last_ts_msg;
 
 		assert(req.len <= sizeof (last_ts_msg->data));
@@ -2573,7 +2573,7 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 		last_ts_msg->port = req.dst_port;
 
 #ifdef HAVE_SOF_TS_OPT_ID
-		if (timestamping & SOF_TIMESTAMPING_OPT_ID) {
+		if (ts_flags & SOF_TIMESTAMPING_OPT_ID) {
 			sockets[s].last_tx_id++;
 #ifdef SCM_TS_OPT_ID
 			for (cmsg = CMSG_FIRSTHDR(msg); cmsg; cmsg = CMSG_NXTHDR((struct msghdr *)msg, cmsg)) {
@@ -2809,7 +2809,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 
 #ifdef SO_TIMESTAMPING
 	if (last_ts_msg ||
-	    (sockets[s].time_stamping & (SOF_TIMESTAMPING_RX_SOFTWARE | SOF_TIMESTAMPING_RX_HARDWARE) &&
+	    (sockets[s].ts_flags & (SOF_TIMESTAMPING_RX_SOFTWARE | SOF_TIMESTAMPING_RX_HARDWARE) &&
 	     !(flags & MSG_ERRQUEUE))) {
 		struct timespec ts;
 
@@ -2823,11 +2823,11 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 		cmsg->cmsg_type = SCM_TIMESTAMPING;
 		cmsg->cmsg_len = CMSG_LEN(3 * sizeof (ts));
 
-		if (sockets[s].time_stamping & SOF_TIMESTAMPING_SOFTWARE) {
+		if (sockets[s].ts_flags & SOF_TIMESTAMPING_SOFTWARE) {
 			clock_gettime(CLOCK_REALTIME, &ts);
 			memcpy((struct timespec *)CMSG_DATA(cmsg), &ts, sizeof (ts));
 		}
-		if (sockets[s].time_stamping & SOF_TIMESTAMPING_RAW_HARDWARE) {
+		if (sockets[s].ts_flags & SOF_TIMESTAMPING_RAW_HARDWARE) {
 			clock_gettime(timestamping > 1 ? REFCLK_ID : CLOCK_REALTIME, &ts);
 			if (!(flags & MSG_ERRQUEUE))
 				add_to_timespec(&ts, -(8 * (msglen + 42 + 4) / (1e6 * link_speed)));
@@ -2836,7 +2836,7 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 
 #ifdef SCM_TIMESTAMPING_PKTINFO
 			if (!(flags & MSG_ERRQUEUE) &&
-			    (sockets[s].time_stamping & SOF_TIMESTAMPING_OPT_PKTINFO) ==
+			    (sockets[s].ts_flags & SOF_TIMESTAMPING_OPT_PKTINFO) ==
 			    SOF_TIMESTAMPING_OPT_PKTINFO) {
 				struct scm_ts_pktinfo tpi;
 
