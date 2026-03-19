@@ -43,6 +43,7 @@ struct Request_register {
 
 struct Reply_register {
 	unsigned int subnets;
+	unsigned int clocks;
 };
 
 struct Request_gettime {

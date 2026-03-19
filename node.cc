@@ -339,6 +339,7 @@ void Node::resume() {
 			if (start_time - network->get_time() <= 0.0 || terminate) {
 				Reply_register rep;
 				rep.subnets = network->get_subnets();
+				rep.clocks = this->clocks.size();
 				reply(&rep, sizeof (rep), REQ_REGISTER);
 #ifdef DEBUG
 				printf("starting %d at %f\n", index, network->get_time());

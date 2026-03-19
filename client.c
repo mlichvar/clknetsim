@@ -453,6 +453,10 @@ static void init(void) {
 	make_request(REQ_REGISTER, &req, sizeof (req), &rep, sizeof (rep));
 
 	subnets = rep.subnets;
+	if (rep.clocks != 1) {
+		fprintf(stderr, "clknetsim: unexpected number of clocks.\n");
+		exit(1);
+	}
 }
 
 __attribute__((destructor))
