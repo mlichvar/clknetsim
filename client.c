@@ -1051,10 +1051,10 @@ static double get_random_double(void) {
 	return (double)random() / ((1U << 31) - 1);
 }
 
-static double get_phc_delay(int dir) {
+static double get_phc_delay(clockid_t clock_id, int dir) {
+	double L, p, delay = 0.0, freq_error;
 	static unsigned int count = 0;
-	double L, p, delay = 0.0;
-	int k, lambda = 5;
+	int k, lambda = 5, clock;
 
 	/* Poisson with uniform steps */
 	if (phc_jitter > 0.0 && count >= phc_jitter_off) {
@@ -1068,7 +1068,22 @@ static double get_phc_delay(int dir) {
 	if (count >= phc_jitter_on + phc_jitter_off)
 		count = 0;
 
-	return (delay + phc_delay / 2.0) * (clocks[CLK_MAIN_INDEX].freq_error + 1.0);
+	switch (clock_id) {
+		case CLOCK_MONOTONIC:
+			freq_error = clocks[CLK_MAIN_INDEX].freq_error;
+			break;
+		case CLOCK_MONOTONIC_RAW:
+			/* assume it's small enough to not matter */
+			freq_error = 0.0;
+			break;
+		default:
+			clock = find_clock_by_id(clock_id);
+			assert(clock >= 0);
+			freq_error = clocks[clock].freq_error;
+			break;
+	}
+
+	return (delay + phc_delay / 2.0) * (freq_error + 1.0);
 }
 
 static int generate_eth_frame(unsigned int type, unsigned int subnet, unsigned int from,
@@ -2431,11 +2446,11 @@ int ioctl(int fd, unsigned long request, ...) {
 		sys_off->ts[sys_off->n_samples * 2].nsec = ts.tv_nsec;
 
 		for (delay = 0.0, i = sys_off->n_samples - 1; i >= 0; i--) {
-			delay += get_phc_delay(1);
+			delay += get_phc_delay(CLOCK_REALTIME, 1);
 			clock_gettime(ref_id, &ts1);
 			add_to_timespec(&ts1, -delay);
 			ts2 = ts;
-			delay += get_phc_delay(-1);
+			delay += get_phc_delay(CLOCK_REALTIME, -1);
 			add_to_timespec(&ts2, -delay);
 			sys_off->ts[2 * i + 1].sec = ts1.tv_sec;
 			sys_off->ts[2 * i + 1].nsec = ts1.tv_nsec;
@@ -2447,22 +2462,25 @@ int ioctl(int fd, unsigned long request, ...) {
 	} else if (request == PTP_SYS_OFFSET_EXTENDED && (fd == REFCLK_FD || clock >= 0)) {
 		struct ptp_sys_offset_extended *sys_off = va_arg(ap, struct ptp_sys_offset_extended *);
 		struct timespec ts, ts1, ts2;
-		clockid_t ref_id;
+		clockid_t ref_id, sys_id;
 		double delay;
 		int i;
 
 		precision_hack = 0;
 		ref_id = clock >= 0 ? clocks[clock].id : REFCLK_ID;
+		/* originally it was a reserved field */
+		sys_id = *((int *)sys_off + 1);
 
 		if (sys_off->n_samples > PTP_MAX_SAMPLES)
 			sys_off->n_samples = PTP_MAX_SAMPLES;
 
 		for (i = 0; i < sys_off->n_samples; i++) {
-			clock_gettime(CLOCK_REALTIME, &ts2);
+			if (clock_gettime(sys_id, &ts2) < 0)
+				ret = -1, errno = EINVAL;
 			clock_gettime(ref_id, &ts);
-			delay = get_phc_delay(1);
+			delay = get_phc_delay(sys_id, 1);
 			add_to_timespec(&ts, -delay);
-			delay += get_phc_delay(-1);
+			delay += get_phc_delay(sys_id, -1);
 			ts1 = ts2;
 			add_to_timespec(&ts1, -delay);
 			sys_off->ts[i][0].sec = ts1.tv_sec;
@@ -2489,6 +2507,10 @@ int ioctl(int fd, unsigned long request, ...) {
 		clock_gettime(CLOCK_REALTIME, &ts);
 		sys_off->sys_realtime.sec = ts.tv_sec;
 		sys_off->sys_realtime.nsec = ts.tv_nsec;
+
+		clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+		sys_off->sys_monoraw.sec = ts.tv_sec;
+		sys_off->sys_monoraw.nsec = ts.tv_nsec;
 #endif
 #ifdef SIOCSHWTSTAMP
 	} else if (request == SIOCSHWTSTAMP && s >= 0) {
