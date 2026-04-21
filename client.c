@@ -2092,7 +2092,7 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 			a = ntohl(sin->sin_addr.s_addr);
 
 			if (a == INADDR_ANY) {
-				sockets[s].iface = IFACE_ALL;
+				/* keep the current iface */
 			} else if (a == INADDR_LOOPBACK) {
 				sockets[s].iface = IFACE_LO;
 			} else {
@@ -2117,7 +2117,7 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 				sockets[s].port = port;
 
 			if (memcmp(sin6->sin6_addr.s6_addr, in6addr_any.s6_addr, 16) == 0) {
-				sockets[s].iface = IFACE_ALL;
+				/* keep the current iface */
 			} else if (memcmp(sin6->sin6_addr.s6_addr, in6addr_loopback.s6_addr, 16) == 0) {
 				sockets[s].iface = IFACE_LO;
 			} else {
