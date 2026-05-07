@@ -274,6 +274,7 @@ static int shm_refclocks = 0;
 static double shm_refclock_time = 0.0;
 static struct Reply_getrefoffsets refclock_offsets;
 static int refclock_offsets_used = 0;
+static int refclock_target;
 static int pps_fds = 0;
 
 static FILE *pcap = NULL;
@@ -478,6 +479,7 @@ static void init(void) {
 	if (fuzz_init()) {
 		node = 0;
 		subnets = 2;
+		refclock_target = CLK_MAIN_INDEX;
 		unix_subnet = 1;
 		initialized = 1;
 		return;
@@ -526,6 +528,7 @@ static void init(void) {
 	make_request(REQ_REGISTER, &req, sizeof (req), &rep, sizeof (rep));
 
 	subnets = rep.subnets;
+	refclock_target = rep.refclock_target;
 	if (rep.clocks != num_clocks) {
 		fprintf(stderr, "clknetsim: unexpected number of clocks.\n");
 		exit(1);
@@ -722,7 +725,7 @@ static void fill_refclock_sample(void) {
 			receive_time = r.time;
 		} else {
 			clock_time = get_refclock_time();
-			receive_time = get_real_time(CLK_MAIN_INDEX);
+			receive_time = get_real_time(refclock_target);
 		}
 
 		round_corr = (clock_time * 1e6 - floor(clock_time * 1e6) + 0.5) / 1e6;

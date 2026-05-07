@@ -23,6 +23,7 @@
 Node::Node(int index, int node_clocks, Network *network) {
 	this->clocks.resize(node_clocks);
 	this->refclock_base = NULL;
+	this->refclock_target = &this->clocks[0];
 	this->network = network;
 	this->index = index;
 	fd = -1;
@@ -340,6 +341,7 @@ void Node::resume() {
 				Reply_register rep;
 				rep.subnets = network->get_subnets();
 				rep.clocks = this->clocks.size();
+				rep.refclock_target = refclock_target - &clocks[0];
 				reply(&rep, sizeof (rep), REQ_REGISTER);
 #ifdef DEBUG
 				printf("starting %d at %f\n", index, network->get_time());
@@ -362,6 +364,14 @@ bool Node::waiting() const {
 
 bool Node::finished() const {
 	return pending_request == REQ_DEREGISTER;
+}
+
+void Node::update_clocks(bool second) {
+	unsigned int i;
+
+	for (i = 0; i < clocks.size(); i++)
+		clocks[i].update(second);
+	refclock.update(network->get_time(), refclock_target);
 }
 
 double Node::get_timeout() const {
@@ -387,4 +397,8 @@ Refclock *Node::get_refclock() {
 
 void Node::set_refclock_base(Clock *clock) {
 	refclock_base = clock;
+}
+
+void Node::set_refclock_target(Clock *clock) {
+	refclock_target = clock;
 }

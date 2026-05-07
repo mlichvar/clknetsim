@@ -31,6 +31,7 @@ class Node {
 	vector<Clock> clocks;
 	Refclock refclock;
 	Clock *refclock_base;
+	Clock *refclock_target;
 	Network *network;
 	int index;
 	int fd;
@@ -66,10 +67,12 @@ class Node {
 	bool waiting() const;
 	bool finished() const;
 
+	void update_clocks(bool second);
 	double get_timeout() const;
 	Clock *get_clock(int index);
 	Refclock *get_refclock();
 	void set_refclock_base(Clock *clock);
+	void set_refclock_target(Clock *clock);
 };
 
 #endif

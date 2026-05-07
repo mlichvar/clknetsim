@@ -277,15 +277,13 @@ bool Network::run(double time_limit) {
 }
 
 void Network::update() {
-	unsigned int i, j, n = nodes.size();
+	unsigned int i, n = nodes.size();
 
 	update_count++;
 	update_count %= update_rate;
 
 	for (i = 0; i < n; i++) {
-		for (j = 0; j < node_clocks; j++)
-			nodes[i]->get_clock(j)->update(update_count == 0);
-		nodes[i]->get_refclock()->update(time, nodes[i]->get_clock(0));
+		nodes[i]->update_clocks(update_count == 0);
 	}
 
 	update_clock_stats();

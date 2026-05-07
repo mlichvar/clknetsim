@@ -124,6 +124,11 @@ bool load_config(const char *file, Network *network, unsigned int nodes,
 			if (node2 >= nodes)
 				return false;
 			network->get_node(node)->set_refclock_base(network->get_node(node2)->get_clock(0));
+		} else if (strncmp(var, "refclock_target", 15) == 0) {
+			clock = isdigit(*arg) ? atoi(arg) - 1 : 0;
+			if (clock >= node_clocks)
+				continue;
+			network->get_node(node)->set_refclock_target(network->get_node(node)->get_clock(clock));
 		} else if (strncmp(var, "refclock", 8) == 0)
 			network->get_node(node)->get_refclock()->set_offset_generator(generator.generate(arg));
 		else

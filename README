@@ -139,6 +139,8 @@ Variables:
   via the clock_gettime() function, there is no default (the clock is disabled)
 - nodeX_refclock_base = nodeX
   the base of the reference clock, the default is the network time
+- nodeX_refclock_target = Y
+  the target clock for the reference clock, the default is 1 (CLOCK_REALTIME)
 - nodeX_stepY = expr
   the extra time step applied once per second (or at the rate specified with
   the -R option) in seconds to the Yth clock, there is no default (no extra
