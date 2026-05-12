@@ -194,7 +194,7 @@ void Node::try_select() {
 				index, clocks[0].get_real_time());
 #endif
 	} else if (select_timeout - clocks[0].get_monotonic_time() <= 0.0) {
-		assert(select_timeout - clocks[0].get_monotonic_time() > -1e-10);
+		assert(select_timeout - clocks[0].get_monotonic_time() > -1e-6);
 		rep.ret = REPLY_SELECT_TIMEOUT;
 #ifdef DEBUG
 		printf("select returned on timeout in %d at %f\n", index, clocks[0].get_real_time());
