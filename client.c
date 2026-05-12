@@ -563,8 +563,13 @@ static void make_request(int request_id, const void *request_data, int reqlen, v
 
 	assert(offsetof(struct Request_packet, data) + reqlen <= sizeof (request));
 
-	if (request_data)
+	if (request_data) {
+		if (reqlen < 0 || reqlen > (int)sizeof(request.data)) {
+			fprintf(stderr, "clknetsim: request data too large.\n");
+			exit(1);
+		}
 		memcpy(&request.data, request_data, reqlen);
+	}
 	reqlen += offsetof(struct Request_packet, data);
 
 	if ((sent = _send(clknetsim_fd, &request, reqlen, 0)) <= 0 ||
@@ -2339,14 +2344,14 @@ int ioctl(int fd, unsigned long request, ...) {
 		n = 1 + subnets - (unix_subnet >= 0 ? 1 : 0);
 		assert(conf->ifc_len >= sizeof (struct ifreq) * n);
 		conf->ifc_len = sizeof (struct ifreq) * n;
-		sprintf(conf->ifc_req[0].ifr_name, "lo");
+		snprintf(conf->ifc_req[0].ifr_name, sizeof(conf->ifc_req[0].ifr_name), "lo");
 		((struct sockaddr_in*)&conf->ifc_req[0].ifr_addr)->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 		conf->ifc_req[0].ifr_addr.sa_family = AF_INET;
 
 		for (i = 0, j = 1; i < subnets && j < n; i++) {
 			if (i == unix_subnet)
 				continue;
-			sprintf(conf->ifc_req[j].ifr_name, "eth%d", i);
+			snprintf(conf->ifc_req[j].ifr_name, sizeof(conf->ifc_req[j].ifr_name), "eth%d", i);
 			((struct sockaddr_in *)&conf->ifc_req[j].ifr_addr)->sin_addr.s_addr =
 				htonl(NODE_ADDR(i, node));
 			conf->ifc_req[j].ifr_addr.sa_family = AF_INET;
@@ -2621,7 +2626,7 @@ int getifaddrs(struct ifaddrs **ifap) {
 	} *ifaces;
 	int i, j;
        
-	ifaces = malloc(sizeof (struct iface) * (1 + subnets));
+	ifaces = calloc(1 + subnets, sizeof (struct iface));
 
 	ifaces[0].ifaddrs = (struct ifaddrs){
 		.ifa_next = &ifaces[1].ifaddrs,
@@ -3324,8 +3329,8 @@ int shmdt(const void *shmaddr) {
 
 int uname(struct utsname *buf) {
 	memset(buf, 0, sizeof (*buf));
-	sprintf(buf->sysname, "Linux (clknetsim)");
-	sprintf(buf->release, "4.19");
+	snprintf(buf->sysname, sizeof(buf->sysname), "Linux (clknetsim)");
+	snprintf(buf->release, sizeof(buf->release), "4.19");
 	return 0;
 }
 
