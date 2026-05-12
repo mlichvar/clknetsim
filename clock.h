@@ -30,6 +30,7 @@ class Clock {
 	double mono_time;
 	double raw_time;
 	double freq;
+	double accumulation_error;
 
 	Generator *freq_generator;
 	Generator *step_generator;

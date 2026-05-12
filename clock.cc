@@ -37,6 +37,7 @@ Clock::Clock() {
 	mono_time = 0.0;
 	raw_time = 0.0;
 	freq = 1.0;
+	accumulation_error = 0.0;
 
 	freq_generator = NULL;
 	step_generator = NULL;
@@ -148,11 +149,16 @@ void Clock::set_ntp_flag(int enable, int flag) {
 }
 
 void Clock::advance(double real_interval) {
-	double local_interval = get_local_interval(real_interval); 
+	double local_interval, prev_time;
+
+	prev_time = time;
+	local_interval = get_local_interval(real_interval) + accumulation_error;
 
 	time += local_interval;
 	mono_time += local_interval;
 	raw_time += get_raw_interval(real_interval);
+
+	accumulation_error = local_interval - (time - prev_time);
 }
 
 void Clock::update(bool second) {
