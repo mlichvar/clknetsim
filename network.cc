@@ -441,10 +441,7 @@ void Network::send(struct Packet *packet) {
 
 	i = packet->from * nodes.size() + packet->to;
 
-	if (packet->type != MSG_TYPE_UDP_DATA) {
-		/* constant delay to not break the order of TCP packets */
-		delay = 1.0e-3;
-	} else if (link_delays[i]) {
+	if (link_delays[i]) {
 		link_delay_variables["time"] = time;
 		link_delay_variables["from"] = packet->from + 1;
 		link_delay_variables["to"] = packet->to + 1;
@@ -453,6 +450,11 @@ void Network::send(struct Packet *packet) {
 		link_delay_variables["length"] = packet->len;
 
 		delay = link_delays[i]->generate(&link_delay_variables);
+	}
+
+	if (delay > 0.0 && packet->type != MSG_TYPE_UDP_DATA) {
+		/* constant delay to not break the order of TCP packets */
+		delay = 1.0e-3;
 	}
 
 	if (delay > 0.0 && link_corrections[i]) {
