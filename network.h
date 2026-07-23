@@ -62,7 +62,7 @@ class Network {
 	vector<Node *> nodes;
 	vector<Generator *> link_delays;
 	vector<Generator *> link_corrections;
-	vector<vector<Stats>> stats;
+	vector<vector<Stats> > stats;
 	
 	Generator_variables link_delay_variables;
 	Generator_variables link_correction_variables;
