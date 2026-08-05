@@ -20,6 +20,22 @@
 #include "protocol.h"
 #include "sysheaders.h"
 
+void Node::drop_stale_packets() {
+	struct Packet *packet;
+
+	while (!incoming_packets.empty()) {
+		packet = incoming_packets.back();
+		if (packet->type < MSG_TYPE_TCP_CONNECT ||
+		    packet->receive_time + 0.1 > network->get_time())
+			break;
+		delete packet;
+		incoming_packets.pop_back();
+#ifdef DEBUG
+		printf("dropped stale packet in %d at %f\n", index, clocks[0].get_real_time());
+#endif
+	}
+}
+
 Node::Node(int index, int node_clocks, Network *network) {
 	this->clocks.resize(node_clocks);
 	this->refclock_base = NULL;
@@ -187,6 +203,8 @@ void Node::process_adjtime(Request_adjtime *req) {
 void Node::try_select() {
 	Reply_select rep = {-1, 0, 0};
 
+	drop_stale_packets();
+
 	if (terminate) {
 		rep.ret = REPLY_SELECT_TERMINATE;
 #ifdef DEBUG
@@ -258,6 +276,8 @@ void Node::process_send(Request_send *req) {
 void Node::process_recv() {
 	Reply_recv rep;
 	struct Packet *packet;
+
+	drop_stale_packets();
 
 	if (incoming_packets.empty()) {
 		rep.type = MSG_TYPE_NO_MSG;
