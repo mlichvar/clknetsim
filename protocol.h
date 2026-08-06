@@ -112,6 +112,7 @@ struct Reply_select {
 #define MSG_TYPE_TCP_CONNECT 2
 #define MSG_TYPE_TCP_DATA 3
 #define MSG_TYPE_TCP_DISCONNECT 4
+#define MSG_TYPE_RAW_DATA 5
 
 struct Request_send {
 	unsigned int type;

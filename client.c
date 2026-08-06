@@ -50,6 +50,7 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <netdb.h>
+#include <netpacket/packet.h>
 #include <pwd.h>
 #include <stdarg.h>
 #include <signal.h>
@@ -84,6 +85,7 @@
 #define NODE_FROM_SIN6(sin6) ((sin6)->sin6_addr.s6_addr[15])
 #define SUBNET_FROM_SIN6(sin6) ((sin6)->sin6_addr.s6_addr[14])
 #define ADDR_FROM_SIN6(sin6) (BASE_ADDR + (SUBNET_FROM_SIN6(sin6) << 8) + NODE_FROM_SIN6(sin6))
+#define IS_MAC_MCAST(a) (((char *)(a))[0] & 1)
 
 #define PTP_PRIMARY_MCAST_ADDR 0xe0000181 /* 224.0.1.129 */
 #define PTP_PDELAY_MCAST_ADDR 0xe000006b /* 224.0.0.107 */
@@ -108,6 +110,7 @@
 #define MAX_SOCKETS 20
 #define BASE_SOCKET_FD 100
 #define BASE_SOCKET_DEFAULT_PORT 60000
+#define BASE_SOCKET_RAW_PORT 61000
 
 #define MAX_TIMERS 80
 #define BASE_TIMER_ID 0xC1230123
@@ -921,6 +924,10 @@ static int find_recv_socket(struct Reply_select *rep) {
 				    sockets[i].listening || !sockets[i].connected)
 					continue;
 				break;
+			case MSG_TYPE_RAW_DATA:
+				if (sockets[i].type != SOCK_RAW)
+					continue;
+				break;
 			default:
 				assert(0);
 		}
@@ -933,6 +940,24 @@ static int find_recv_socket(struct Reply_select *rep) {
 	}
 
 	return s;
+}
+
+static int get_free_raw_port(void) {
+	int i, p;
+
+	for (p = BASE_SOCKET_RAW_PORT; p < BASE_SOCKET_RAW_PORT + MAX_SOCKETS; p++) {
+		for (i = 0; i < MAX_SOCKETS; i++) {
+			if (!sockets[i].used || sockets[i].domain != AF_PACKET)
+				continue;
+			if (sockets[i].port == p)
+				break;
+		}
+		if (i == MAX_SOCKETS)
+			return p;
+	}
+
+	assert(0);
+	return 0;
 }
 
 static void send_msg_to_peer(int s, int type) {
@@ -1096,6 +1121,13 @@ static int generate_eth_frame(unsigned int type, unsigned int subnet, unsigned i
 	uint32_t addr1, addr2;
 
 	ip_header_len = ip_family == 6 ? 40 : 20;
+
+	if (type == SOCK_RAW) {
+		if (data_len > buf_len)
+			return 0;
+		memcpy(frame, data, data_len);
+		return data_len;
+	}
 
 	assert(type == SOCK_DGRAM || type == SOCK_STREAM);
 
@@ -1932,10 +1964,11 @@ int close(int fd) {
 int socket(int domain, int type, int protocol) {
 	int s;
 
-	if (((domain != AF_INET || ip_family == 6) &&
-	     (domain != AF_INET6 || ip_family == 4) &&
-	     (domain != AF_UNIX || unix_subnet < 0)) ||
-	    (type != SOCK_DGRAM && type != SOCK_STREAM)) {
+	if ((((domain != AF_INET || ip_family == 6) &&
+	      (domain != AF_INET6 || ip_family == 4) &&
+	      (domain != AF_UNIX || unix_subnet < 0)) ||
+	     (type != SOCK_DGRAM && type != SOCK_STREAM)) &&
+	    (domain != AF_PACKET || type != SOCK_RAW)) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -1950,10 +1983,27 @@ int socket(int domain, int type, int protocol) {
 	sockets[s].used = 1;
 	sockets[s].domain = domain;
 	sockets[s].type = type;
-	sockets[s].port = BASE_SOCKET_DEFAULT_PORT + s;
-	sockets[s].iface = domain == AF_UNIX ? IFACE_UNIX : IFACE_ALL;
 	sockets[s].remote_node = -1;
 	sockets[s].remote_port = -1;
+
+	switch (domain) {
+		case AF_INET:
+		case AF_INET6:
+			sockets[s].port = BASE_SOCKET_DEFAULT_PORT + s;
+			sockets[s].iface = IFACE_ALL;
+			break;
+		case AF_UNIX:
+			sockets[s].port = BASE_SOCKET_DEFAULT_PORT + s;
+			sockets[s].iface = IFACE_UNIX;
+			break;
+		case AF_PACKET:
+			/* ports are given by the order of raw sockets */
+			sockets[s].port = get_free_raw_port();
+			sockets[s].iface = IFACE_ALL;
+			break;
+		default:
+			assert(0);
+	}
 
 	return get_socket_fd(s);
 }
@@ -2075,6 +2125,7 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 	int s = get_socket_from_fd(sockfd), port;
 	struct sockaddr_in6 *sin6;
 	struct sockaddr_in *sin;
+	struct sockaddr_ll *sll;
 	uint32_t a;
 	static int unix_sockets = 0;
 
@@ -2130,6 +2181,16 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 				assert(NODE_FROM_SIN6(sin6) == node);
 				sockets[s].iface = IFACE_ETH0 + subnet;
 			}
+			break;
+		case AF_PACKET:
+			assert(addrlen >= sizeof (*sll));
+			sll = (struct sockaddr_ll *)addr;
+			assert(sll->sll_family == AF_PACKET);
+			assert(sll->sll_protocol == htons(ETH_P_ALL));
+			assert(sll->sll_ifindex >= 1);
+			assert(sockets[s].iface == IFACE_ALL ||
+			       sockets[s].iface == sll->sll_ifindex + IFACE_ETH0 - 1);
+			sockets[s].iface = sll->sll_ifindex + IFACE_ETH0 - 1;
 			break;
 		case AF_UNIX:
 			assert(addrlen > offsetof(struct sockaddr_un, sun_path) + 1);
@@ -2190,7 +2251,8 @@ int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
 int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen) {
 	int subnet, s = get_socket_from_fd(sockfd);
 
-	if (s < 0 || (sockets[s].domain != AF_INET && sockets[s].domain != AF_INET6)) {
+	if (s < 0 || (sockets[s].domain != AF_INET && sockets[s].domain != AF_INET6 &&
+		      sockets[s].domain != AF_PACKET)) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -2205,7 +2267,8 @@ int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t
 			return -1;
 		}
 	}
-	else if (optlen == sizeof (int) && ((level == IPPROTO_IP && optname == IP_PKTINFO) ||
+	else if (sockets[s].domain != AF_PACKET &&
+		 optlen == sizeof (int) && ((level == IPPROTO_IP && optname == IP_PKTINFO) ||
 					    (level == IPPROTO_IPV6 && optname == IPV6_RECVPKTINFO)))
 		sockets[s].pkt_info = !!(int *)optval;
 #ifdef SO_TIMESTAMPING
@@ -2700,6 +2763,15 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 					return -1;
 				}
 				break;
+			case AF_PACKET:
+				assert(!msg->msg_name);
+				assert(msg->msg_iov[0].iov_len >= 14);
+				assert(IS_MAC_MCAST(msg->msg_iov[0].iov_base));
+				assert(sockets[s].iface >= IFACE_ETH0);
+				req.subnet = sockets[s].iface - IFACE_ETH0;
+				req.to = -1;
+				req.dst_port = sockets[s].port;
+				break;
 			case AF_UNIX:
 				sun = msg->msg_name;
 				assert(sun && msg->msg_namelen > offsetof(struct sockaddr_un, sun_path) + 1);
@@ -2724,6 +2796,9 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags) {
 		case SOCK_STREAM:
 			assert(sockets[s].connected);
 			req.type = MSG_TYPE_TCP_DATA;
+			break;
+		case SOCK_RAW:
+			req.type = MSG_TYPE_RAW_DATA;
 			break;
 		default:
 			assert(0);
@@ -2858,8 +2933,16 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 
 		msg->msg_flags = MSG_ERRQUEUE;
 
-		assert(sockets[s].type == SOCK_DGRAM);
-		rep.type = MSG_TYPE_UDP_DATA;
+		switch (sockets[s].type) {
+			case SOCK_DGRAM:
+				rep.type = MSG_TYPE_UDP_DATA;
+				break;
+			case SOCK_RAW:
+				rep.type = MSG_TYPE_RAW_DATA;
+				break;
+			default:
+				assert(0);
+		}
 		rep.subnet = last_ts_msg->subnet;
 		rep.from = last_ts_msg->to_from;
 		rep.src_port = last_ts_msg->port;
@@ -2881,6 +2964,9 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 				break;
 			case SOCK_DGRAM:
 				rep.type = MSG_TYPE_UDP_DATA;
+				break;
+			case SOCK_RAW:
+				rep.type = MSG_TYPE_RAW_DATA;
 				break;
 			default:
 				assert(0);
@@ -2920,6 +3006,9 @@ ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags) {
 					assert(rep.len == 0);
 					sockets[s].connected = 0;
 				}
+				break;
+			case MSG_TYPE_RAW_DATA:
+				assert(sockets[s].type == SOCK_RAW);
 				break;
 			default:
 				assert(0);
