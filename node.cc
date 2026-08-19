@@ -26,6 +26,7 @@ void Node::drop_stale_packets() {
 	while (!incoming_packets.empty()) {
 		packet = incoming_packets.back();
 		if (packet->type < MSG_TYPE_TCP_CONNECT ||
+		    packet->type > MSG_TYPE_TCP_DISCONNECT ||
 		    packet->receive_time + 0.1 > network->get_time())
 			break;
 		delete packet;

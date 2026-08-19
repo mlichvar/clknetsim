@@ -452,7 +452,8 @@ void Network::send(struct Packet *packet) {
 		delay = link_delays[i]->generate(&link_delay_variables);
 	}
 
-	if (delay > 0.0 && packet->type != MSG_TYPE_UDP_DATA) {
+	if (delay > 0.0 && (packet->type >= MSG_TYPE_TCP_CONNECT &&
+			    packet->type <= MSG_TYPE_TCP_DISCONNECT)) {
 		/* constant delay to not break the order of TCP packets */
 		delay = 1.0e-3;
 	}
