@@ -28,10 +28,10 @@ using namespace std;
 class Network;
 
 class Node {
-	vector<Clock> clocks;
+	vector<Clock *> clocks;
 	Refclock refclock;
 	Clock *refclock_base;
-	Clock *refclock_target;
+	int refclock_target;
 	Network *network;
 	int index;
 	int fd;
