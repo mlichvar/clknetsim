@@ -29,6 +29,8 @@ class Network;
 
 class Node {
 	vector<Clock *> clocks;
+	vector<bool> own_clocks;
+	vector<bool> shared_clocks;
 	Refclock refclock;
 	Clock *refclock_base;
 	int refclock_target;
@@ -66,12 +68,16 @@ class Node {
 
 	void receive(struct Packet *packet);
 	void resume();
+	void finish();
 	bool waiting() const;
 	bool finished() const;
 
+	void advance_clocks(double real_interval);
 	void update_clocks(bool second);
 	double get_timeout() const;
 	Clock *get_clock(int index);
+	bool share_clock(int index);
+	bool set_clock(int index, Clock *clock);
 	Refclock *get_refclock();
 	void set_refclock_base(Clock *clock);
 	void set_refclock_target(Clock *clock);

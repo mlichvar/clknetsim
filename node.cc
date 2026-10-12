@@ -42,6 +42,8 @@ Node::Node(int index, int node_clocks, Network *network) {
 
 	for (i = 0; i < node_clocks; i++) {
 		this->clocks.push_back(new Clock);
+		this->own_clocks.push_back(true);
+		this->shared_clocks.push_back(false);
 	}
 	this->refclock_base = NULL;
 	this->refclock_target = 0;
@@ -54,24 +56,14 @@ Node::Node(int index, int node_clocks, Network *network) {
 }
 
 Node::~Node() {
-	while (!incoming_packets.empty()) {
-		delete incoming_packets.back();
-		incoming_packets.pop_back();
-	}
-
-	terminate = true;
-
-	do {
-		if (waiting())
-			resume();
-	} while (process_fd());
-
 	if (fd >= 0)
 		close(fd);
 
 	while (!clocks.empty()) {
-		delete clocks.back();
+		if (own_clocks.back())
+			delete clocks.back();
 		clocks.pop_back();
+		own_clocks.pop_back();
 	}
 }
 
@@ -386,6 +378,20 @@ void Node::resume() {
 	}
 }
 
+void Node::finish() {
+	while (!incoming_packets.empty()) {
+		delete incoming_packets.back();
+		incoming_packets.pop_back();
+	}
+
+	terminate = true;
+
+	do {
+		if (waiting())
+			resume();
+	} while (process_fd());
+}
+
 bool Node::waiting() const {
 	return pending_request == REQ_SELECT ||
 		pending_request == REQ_REGISTER ||
@@ -396,11 +402,23 @@ bool Node::finished() const {
 	return pending_request == REQ_DEREGISTER;
 }
 
+void Node::advance_clocks(double real_interval) {
+	unsigned int i;
+
+	for (i = 0; i < clocks.size(); i++) {
+		if (own_clocks[i])
+			clocks[i]->advance(real_interval);
+	}
+}
+
 void Node::update_clocks(bool second) {
 	unsigned int i;
 
-	for (i = 0; i < clocks.size(); i++)
-		clocks[i]->update(second);
+	for (i = 0; i < clocks.size(); i++) {
+		if (own_clocks[i])
+			clocks[i]->update(second);
+	}
+
 	refclock.update(network->get_time(), clocks[refclock_target]);
 }
 
@@ -420,6 +438,23 @@ double Node::get_timeout() const {
 
 Clock *Node::get_clock(int index) {
 	return clocks[index];
+}
+
+bool Node::share_clock(int index) {
+	if (!own_clocks[index])
+		return false;
+	shared_clocks[index] = true;
+	return true;
+}
+
+bool Node::set_clock(int index, Clock *clock) {
+	if (shared_clocks[index])
+		return false;
+	if (own_clocks[index])
+		delete clocks[index];
+	own_clocks[index] = false;
+	clocks[index] = clock;
+	return true;
 }
 
 Refclock *Node::get_refclock() {

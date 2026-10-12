@@ -83,6 +83,11 @@ Network::Network(const char *socket, const char *executable, unsigned int n,
 }
 
 Network::~Network() {
+	unsigned int i;
+
+	for (i = 0; i < nodes.size(); i++)
+		nodes[i]->finish();
+
 	while (!nodes.empty()) {
 		delete nodes.back();
 		nodes.pop_back();
@@ -202,7 +207,7 @@ void Network::set_link_correction_generator(unsigned int from, unsigned int to, 
 }
 
 bool Network::run(double time_limit) {
-	unsigned int i, j, n = nodes.size(), waiting;
+	unsigned int i, n = nodes.size(), waiting;
 	bool pending_update;
 	double min_timeout, timeout, next_update;
 
@@ -255,8 +260,7 @@ bool Network::run(double time_limit) {
 				time += min_timeout;
 
 			for (i = 0; i < n; i++)
-				for (j = 0; j < node_clocks; j++)
-					nodes[i]->get_clock(j)->advance(min_timeout);
+				nodes[i]->advance_clocks(min_timeout);
 
 			if (pending_update)
 				update();
