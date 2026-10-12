@@ -24,7 +24,7 @@ bool load_config(const char *file, Network *network, unsigned int nodes,
 	FILE *f;
 	const char *ws = " \t\n\r";
 	char line[1000], *var, *arg, *end;
-	unsigned int node, node2, clock;
+	unsigned int node, node2, clock, clock2;
 
 	f = fopen(file, "r");
 	if (!f)
@@ -117,11 +117,35 @@ bool load_config(const char *file, Network *network, unsigned int nodes,
 			if (node2 >= nodes)
 				continue;
 			network->set_link_delay_generator(node, node2, generator.generate(arg));
+		} else if (strncmp(var, "clock", 5) == 0) {
+			var += 5;
+			clock = isdigit(*var) ? atoi(var) - 1 : 0;
+			if (clock >= node_clocks)
+				continue;
+			if (strncmp(arg, "node", 4) != 0)
+				return false;
+			node2 = atoi(arg + 4) - 1;
+			if (node2 >= nodes)
+				continue;
+			arg += strcspn(arg, "_") + 1;
+			if (arg >= end || strncmp(arg, "clock", 5) != 0)
+				return false;
+			arg += 5;
+			clock2 = isdigit(*arg) ? atoi(arg) - 1 : 0;
+			if (clock2 >= node_clocks)
+				continue;
+			if (!network->get_node(node2)->share_clock(clock2))
+				return false;
+			if (!network->get_node(node)->set_clock(clock,
+								network->get_node(node2)->get_clock(clock2)))
+				return false;
 		} else if (strncmp(var, "refclock_base", 13) == 0) {
 			if (strncmp(arg, "node", 4) != 0)
 				return false;
 			node2 = atoi(arg + 4) - 1;
 			if (node2 >= nodes)
+				return false;
+			if (!network->get_node(node2)->share_clock(0))
 				return false;
 			network->get_node(node)->set_refclock_base(network->get_node(node2)->get_clock(0));
 		} else if (strncmp(var, "refclock_target", 15) == 0) {
