@@ -207,9 +207,9 @@ void Network::set_link_correction_generator(unsigned int from, unsigned int to, 
 }
 
 bool Network::run(double time_limit) {
+	double min_timeout, timeout, next_update, prev_time, accumulation_error = 0.0;
 	unsigned int i, n = nodes.size(), waiting;
 	bool pending_update;
-	double min_timeout, timeout, next_update;
 
 	while (time < time_limit) {
 		for (i = 0, waiting = 0; i < n; i++)
@@ -251,16 +251,15 @@ bool Network::run(double time_limit) {
 			} else
 				pending_update = false;
 
-			//min_timeout += 1e-12;
 			assert(min_timeout >= 0.0);
-
-			if (pending_update)
-				time = next_update;
-			else
-				time += min_timeout;
 
 			for (i = 0; i < n; i++)
 				nodes[i]->advance_clocks(min_timeout);
+
+			min_timeout += accumulation_error;
+			prev_time = time;
+			time += min_timeout;
+			accumulation_error = min_timeout - (time - prev_time);
 
 			if (pending_update)
 				update();
@@ -270,7 +269,7 @@ bool Network::run(double time_limit) {
 			nodes[i]->resume();
 
 		while (packet_queue.get_timeout(time) <= 0) {
-			assert(packet_queue.get_timeout(time) > -1e-10);
+			assert(packet_queue.get_timeout(time) > -1e-6);
 			struct Packet *packet = packet_queue.dequeue();
 			stats[packet->to][0].update_packet_stats(true, time, packet->delay);
 			nodes[packet->to]->receive(packet);
