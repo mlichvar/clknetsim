@@ -64,7 +64,7 @@ Network::Network(const char *socket, const char *executable, unsigned int n,
 	socket_name = socket;
 	update_executable = executable;
 	update_rate = rate;
-	update_count = rate - 1;
+	update_count = -1;
 	offset_log = NULL;
 	freq_log = NULL;
 	rawfreq_log = NULL;
@@ -243,7 +243,7 @@ bool Network::run(double time_limit) {
 			if (timeout <= min_timeout)
 				min_timeout = timeout;
 
-			next_update = floor(time) + (double)(update_count + 1) / update_rate;
+			next_update = (double)(update_count + 1) / update_rate;
 			timeout = next_update - time;
 			if (timeout <= min_timeout) {
 				min_timeout = timeout;
@@ -284,10 +284,9 @@ void Network::update() {
 	unsigned int i, n = nodes.size();
 
 	update_count++;
-	update_count %= update_rate;
 
 	for (i = 0; i < n; i++) {
-		nodes[i]->update_clocks(update_count == 0);
+		nodes[i]->update_clocks(update_count % update_rate == 0);
 	}
 
 	update_clock_stats();

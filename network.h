@@ -55,7 +55,7 @@ class Network {
 	unsigned int subnets;
 	unsigned int node_clocks;
 	unsigned int update_rate;
-	unsigned int update_count;
+	uint64_t update_count;
 
 	const char *socket_name;
 	const char *update_executable;
