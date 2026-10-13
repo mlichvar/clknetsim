@@ -64,7 +64,7 @@ Network::Network(const char *socket, const char *executable, unsigned int n,
 	socket_name = socket;
 	update_executable = executable;
 	update_rate = rate;
-	update_count = 0;
+	update_count = rate - 1;
 	offset_log = NULL;
 	freq_log = NULL;
 	rawfreq_log = NULL;
