@@ -337,6 +337,23 @@ double Generator_equal::generate(const Generator_variables *variables) {
 	return max - min <= epsilon ? 1.0 : 0.0;
 }
 
+Generator_lookup::Generator_lookup(const vector<Generator *> *input):
+	Generator(input) {
+	syntax_assert(input && input->size() == 2);
+}
+
+double Generator_lookup::generate(const Generator_variables *variables) {
+	int index = floor(input[0]->generate(variables));
+
+	if (index < 0)
+		index = 0;
+
+	while ((int)data.size() <= index)
+		data.push_back(input[1]->generate(variables));
+
+	return data[index];
+}
+
 Generator_max::Generator_max(const vector<Generator *> *input):
 	Generator(input) {
 	syntax_assert(input && input->size() > 0);
@@ -482,6 +499,8 @@ Generator *Generator_generator::generate(char *code) const {
 		ret = new Generator_wave_triangle(&generators);
 	else if (strcmp(name, "equal") == 0)
 		ret = new Generator_equal(&generators);
+	else if (strcmp(name, "lookup") == 0)
+		ret = new Generator_lookup(&generators);
 	else if (strcmp(name, "max") == 0)
 		ret = new Generator_max(&generators);
 	else if (strcmp(name, "min") == 0)

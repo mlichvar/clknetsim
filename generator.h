@@ -174,6 +174,14 @@ class Generator_equal: public Generator {
 	virtual double generate(const Generator_variables *variables);
 };
 
+class Generator_lookup: public Generator {
+	vector<double> data;
+
+	public:
+	Generator_lookup(const vector<Generator *> *input);
+	virtual double generate(const Generator_variables *variables);
+};
+
 class Generator_max: public Generator {
 	public:
 	Generator_max(const vector<Generator *> *input);
