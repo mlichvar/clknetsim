@@ -142,6 +142,44 @@ double Generator_random_poisson::generate(const Generator_variables *variables) 
 	return k;
 }
 
+Generator_random_gamma::Generator_random_gamma(const vector<Generator *> *input):
+	Generator(input), uniform(NULL), normal(NULL) {
+	syntax_assert(input && input->size() == 1);
+}
+
+double Generator_random_gamma::generate(const Generator_variables *variables) {
+	/* Marsaglia-Tsang method */
+
+	double shape = input[0]->generate(variables);
+	double b, c, d, u, v, x;
+
+	if (shape < 0.0)
+		shape = 0.0;
+
+	if (shape < 1.0) {
+		b = pow(uniform.generate(variables), 1.0 / shape);
+		shape += 1.0;
+	} else {
+		b = 1.0;
+	}
+
+	d = shape - 1.0 / 3.0;
+	c = 1.0 / sqrt(9.0 * d);
+
+	while (1) {
+		do {
+			x = normal.generate(variables);
+			v = 1.0 + c * x;
+		} while (v <= 0.0);
+
+		v = v * v * v;
+		u = uniform.generate(variables);
+
+		if (log(u) < 0.5 * x * x + d * (1.0 - v + log(v)))
+			return b * d * v;
+	}
+}
+
 Generator_file::Generator_file(const char *file): Generator(NULL) {
 	input = fopen(file, "r");
 	if (!input) {
@@ -430,6 +468,8 @@ Generator *Generator_generator::generate(char *code) const {
 		ret = new Generator_random_exponential(&generators);
 	else if (strcmp(name, "poisson") == 0)
 		ret = new Generator_random_poisson(&generators);
+	else if (strcmp(name, "gamma") == 0)
+		ret = new Generator_random_gamma(&generators);
 	else if (strcmp(name, "file") == 0)
 		ret = new Generator_file(string);
 	else if (strcmp(name, "pulse") == 0)

@@ -88,6 +88,15 @@ class Generator_random_poisson: public Generator {
 	virtual double generate(const Generator_variables *variables);
 };
 
+class Generator_random_gamma: public Generator {
+	Generator_random_uniform uniform;
+	Generator_random_normal normal;
+
+	public:
+	Generator_random_gamma(const vector<Generator *> *input);
+	virtual double generate(const Generator_variables *variables);
+};
+
 class Generator_file: public Generator {
 	FILE *input;
 
