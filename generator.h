@@ -182,6 +182,12 @@ class Generator_lookup: public Generator {
 	virtual double generate(const Generator_variables *variables);
 };
 
+class Generator_select: public Generator {
+	public:
+	Generator_select(const vector<Generator *> *input);
+	virtual double generate(const Generator_variables *variables);
+};
+
 class Generator_max: public Generator {
 	public:
 	Generator_max(const vector<Generator *> *input);

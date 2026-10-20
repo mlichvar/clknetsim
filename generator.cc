@@ -354,6 +354,22 @@ double Generator_lookup::generate(const Generator_variables *variables) {
 	return data[index];
 }
 
+Generator_select::Generator_select(const vector<Generator *> *input):
+	Generator(input) {
+	syntax_assert(input && input->size() > 1);
+}
+
+double Generator_select::generate(const Generator_variables *variables) {
+	int index = floor(input[0]->generate(variables));
+
+	if (index < 0)
+		index = 0;
+	else if (index > (int)input.size() - 2)
+		index = input.size() - 2;
+
+	return input[index + 1]->generate(variables);
+}
+
 Generator_max::Generator_max(const vector<Generator *> *input):
 	Generator(input) {
 	syntax_assert(input && input->size() > 0);
@@ -505,6 +521,8 @@ Generator *Generator_generator::generate(char *code) const {
 		ret = new Generator_max(&generators);
 	else if (strcmp(name, "min") == 0)
 		ret = new Generator_min(&generators);
+	else if (strcmp(name, "select") == 0)
+		ret = new Generator_select(&generators);
 	else {
 		ret = NULL;
 		syntax_assert(0);
