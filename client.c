@@ -140,7 +140,9 @@ static int (*_xstat)(int ver, const char *pathname, struct stat *statbuf);
 static char *(*_realpath)(const char *path, char *resolved_path);
 static int (*_mkdir)(const char *pathname, mode_t mode);
 static int (*_mkdirat)(int dirfd, const char *pathname, mode_t mode);
-static int (*_open)(const char *pathname, int flags, ...);
+static int (*_rmdir)(const char *pathname);
+static int (*_unlinkat)(int dirfd, const char *pathname, int flags);
+static int (*_openat)(int dirfd, const char *pathname, int flags, ...);
 static ssize_t (*_read)(int fd, void *buf, size_t count);
 static int (*_close)(int fd);
 static int (*_socket)(int domain, int type, int protocol);
@@ -312,7 +314,9 @@ static void init_symbols(void) {
 	_realpath = (char *(*)(const char *path, char *resolved_path))dlsym(RTLD_NEXT, "realpath");
 	_mkdir = (int (*)(const char *pathname, mode_t mode))dlsym(RTLD_NEXT, "mkdir");
 	_mkdirat = (int (*)(int dirfd, const char *pathname, mode_t mode))dlsym(RTLD_NEXT, "mkdirat");
-	_open = (int (*)(const char *pathname, int flags, ...))dlsym(RTLD_NEXT, "open");
+	_rmdir = (int (*)(const char *pathname))dlsym(RTLD_NEXT, "rmdir");
+	_unlinkat = (int (*)(int dirfd, const char *pathname, int flags))dlsym(RTLD_NEXT, "unlinkat");
+	_openat = (int (*)(int dirfd, const char *pathname, int flags, ...))dlsym(RTLD_NEXT, "openat");
 	_read = (ssize_t (*)(int fd, void *buf, size_t count))dlsym(RTLD_NEXT, "read");
 	_close = (int (*)(int fd))dlsym(RTLD_NEXT, "close");
 	_socket = (int (*)(int domain, int type, int protocol))dlsym(RTLD_NEXT, "socket");
@@ -1842,18 +1846,25 @@ int mkdirat(int dirfd, const char *pathname, mode_t mode) {
 	return _mkdirat(dirfd, pathname, mode);
 }
 
-int open(const char *pathname, int flags, ...) {
-	int r, index, clock, mode_arg = 0;
-	mode_t mode = 0;
-	va_list ap;
+int rmdir(const char *pathname) {
+	if (!strncmp(pathname, "/clknetsim/unix/", 16))
+		return 0;
 
-	mode_arg = flags & O_CREAT || (flags & O_TMPFILE) == O_TMPFILE;
+	return _rmdir(pathname);
+}
 
-	if (mode_arg) {
-		va_start(ap, flags);
-		mode = va_arg(ap, mode_t);
-		va_end(ap);
-	}
+int unlinkat(int dirfd, const char *pathname, int flags) {
+	if (dirfd == UNIX_DIR_FD)
+		return 0;
+
+	return _unlinkat(dirfd, pathname, flags);
+}
+
+static int openat_(int dirfd, const char *pathname, int flags, va_list ap) {
+	int r, index, clock;
+
+	if (dirfd == UNIX_DIR_FD)
+		return UNIX_DIR_FD;
 
 	if (!strncmp(pathname, "/dev/ptp", 8)) {
 		index = atoi(pathname + 8);
@@ -1877,12 +1888,23 @@ int open(const char *pathname, int flags, ...) {
 
 	init_symbols();
 
-	if (mode_arg)
-		r = _open(pathname, flags, mode);
+	if (flags & O_CREAT || (flags & O_TMPFILE) == O_TMPFILE)
+		r = _openat(dirfd, pathname, flags, va_arg(ap, mode_t));
 	else
-		r = _open(pathname, flags);
+		r = _openat(dirfd, pathname, flags);
 
 	assert(r < 0 || (r < BASE_SOCKET_FD && r < BASE_TIMER_FD));
+
+	return r;
+}
+
+int open(const char *pathname, int flags, ...) {
+	va_list ap;
+	int r;
+
+	va_start(ap, flags);
+	r = openat_(AT_FDCWD, pathname, flags, ap);
+	va_end(ap);
 
 	return r;
 }
@@ -1893,6 +1915,25 @@ int __open_2(const char *pathname, int oflag) {
 
 int __open64_2(const char *pathname, int oflag) {
         return open(pathname, oflag);
+}
+
+int openat(int dirfd, const char *pathname, int flags, ...) {
+	va_list ap;
+	int r;
+
+	va_start(ap, flags);
+	r = openat_(dirfd, pathname, flags, ap);
+	va_end(ap);
+
+	return r;
+}
+
+int __openat_2(int dirfd, const char *pathname, int oflag) {
+	return openat(dirfd, pathname, oflag);
+}
+
+int __openat64_2(int dirfd, const char *pathname, int oflag) {
+	return openat(dirfd, pathname, oflag);
 }
 
 ssize_t read(int fd, void *buf, size_t count) {
@@ -2385,6 +2426,10 @@ int chmod(const char *pathname, mode_t mode) {
 }
 
 int fchmod(int fd, mode_t mode) {
+	return 0;
+}
+
+int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags) {
 	return 0;
 }
 
